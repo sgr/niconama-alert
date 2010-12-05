@@ -1,0 +1,93 @@
+;; -*- coding: utf-8-unix -*-
+(ns #^{:author "sgr"
+       :doc "common key-value dialog."}
+  nico.ui.key-val-dlg
+  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
+  (:require [nico.ui.btn :as ub])
+  (:import (java.awt BorderLayout Dimension)
+	   (javax.swing GroupLayout SpringLayout
+			JButton JDialog JLabel JPanel JPasswordField JTextField)
+	   (javax.swing.event DocumentListener)
+	   (javax.swing.text PlainDocument)))
+
+(def *dlg-size* (Dimension. 450 150))
+(def *btn-panel-size* (Dimension. 450 40))
+
+(defn- kv-dlg
+  [parent title label-key key label-val val ok-fn secure]
+  (let [dlg (JDialog. parent title true), cpane (.getContentPane dlg)
+	doc-key (PlainDocument.), doc-val (PlainDocument.)
+	kv-panel (JPanel.), btn-panel (JPanel.), btn-ok (ub/btn "OK")
+	p (.getLocationOnScreen parent)]
+    (letfn [(check [] (if (or (= 0 (.getLength doc-key)) (= 0 (.getLength doc-val)))
+			(.setEnabled btn-ok false) (.setEnabled btn-ok true)))]
+      (doto doc-key
+	(.addDocumentListener (proxy [DocumentListener] []
+				(changedUpdate [_] (check))
+				(insertUpdate [_] (check))
+				(removeUpdate [_] (check)))))
+      (doto doc-val
+	(.addDocumentListener (proxy [DocumentListener] []
+				(changedUpdate [_] (check))
+				(insertUpdate [_] (check))
+				(removeUpdate [_] (check)))))
+      (let [lkey (JLabel. label-key), tkey (JTextField. 25)
+	    lval (JLabel. label-val), tval (if secure (JPasswordField. 25) (JTextField. 25))
+	    layout (GroupLayout. kv-panel)
+	    hgrp (.createSequentialGroup layout), vgrp (.createSequentialGroup layout)]
+	(doto tkey (.setDocument doc-key))
+	(doto tval (.setDocument doc-val))
+	(when key (.setText tkey key))
+	(when val (.setText tval val))
+	(doto hgrp
+	  (.addGroup (.. layout createParallelGroup (addComponent lkey) (addComponent lval)))
+	  (.addGroup (.. layout createParallelGroup (addComponent tkey) (addComponent tval))))
+	(doto vgrp
+	  (.addGroup (.. layout createParallelGroup (addComponent lkey) (addComponent tkey)))
+	  (.addGroup (.. layout createParallelGroup (addComponent lval) (addComponent tval))))
+	(doto layout
+	  (.setHorizontalGroup hgrp) (.setVerticalGroup vgrp)
+	  (.setAutoCreateGaps true) (.setAutoCreateContainerGaps true))
+	(doto kv-panel
+	  (.setLayout layout) (.add lkey) (.add tkey) (.add lval) (.add tval)))
+      (let [btn-cancel (ub/btn "キャンセル")
+	    btn-layout (SpringLayout.)]
+	(doto btn-cancel
+	  (add-action-listener (fn [e] (do-swing (.setVisible dlg false) (.dispose dlg)))))
+	(doto btn-layout
+	  (.putConstraint SpringLayout/NORTH btn-ok 5 SpringLayout/NORTH btn-panel)
+	  (.putConstraint SpringLayout/SOUTH btn-ok -10 SpringLayout/SOUTH btn-panel)
+	  (.putConstraint SpringLayout/NORTH btn-cancel 5 SpringLayout/NORTH btn-panel)
+	  (.putConstraint SpringLayout/SOUTH btn-cancel -10 SpringLayout/SOUTH btn-panel)
+	  (.putConstraint SpringLayout/EAST btn-ok -5 SpringLayout/WEST btn-cancel)
+	  (.putConstraint SpringLayout/EAST btn-cancel -10 SpringLayout/EAST btn-panel))
+	(doto btn-panel
+	  (.setPreferredSize *btn-panel-size*)
+	  (.setLayout btn-layout) (.add btn-ok) (.add btn-cancel)))
+      (doto btn-ok
+	(add-action-listener
+	 (fn [e] (do-swing
+		  (.setVisible dlg false)
+		  (ok-fn
+		   (.getText doc-key 0 (.getLength doc-key))
+		   (.getText doc-val 0 (.getLength doc-val)))
+		  (.dispose dlg)))))
+      (.setDefaultButton (.getRootPane dlg) btn-ok)
+      (check)
+      (doto cpane
+	(.setLayout (BorderLayout.))
+	(.add kv-panel BorderLayout/CENTER)
+	(.add btn-panel BorderLayout/SOUTH))
+      (doto dlg
+	(.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth *dlg-size*)) 2)))
+		      (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight *dlg-size*)) 2))))
+	(.setResizable false)
+	(.setMinimumSize *dlg-size*)))))
+
+(defn user-password-dialog
+  [parent title pref ok-fn]
+  (kv-dlg parent title "Email:" (:email pref) "Password:" (:passwd pref) ok-fn true))
+
+(defn browser-command-dialog
+  [parent title key val ok-fn]
+  (kv-dlg parent title "Browser name:" key "Browser command:" val ok-fn false))
