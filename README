@@ -1,24 +1,24 @@
-# �j�R���A���[�g (J)
+# ニコ生アラート (J)
 
-�j�R�j�R������ (http://live.nicovideo.jp/) �Ō��ݕ������̔ԑg�ꗗ��\�����܂��B
+ニコニコ生放送 (http://live.nicovideo.jp/) で現在放送中の番組一覧を表示します。
 
-�����j�R�j�R����̃A�J�E���g���������̏ꍇ�́A���̃A�J�E���g�̏�������
-�R�~���j�e�B�̕������̔ԑg�ꗗ���A�܂��w�肳�ꂽ�����𖞂����������̔ԑg�ꗗ��
-�\�����邱�Ƃ��ł��܂��B����ɂ����̔ԑg�ɂ��Ă͊J�n�����m�������_�ŁA
-�f�X�N�g�b�v��ɃA���[�g�E�B���h�E��\�����܂��B
+もしニコニコ動画のアカウントをお持ちの場合は、そのアカウントの所属する
+コミュニティの放送中の番組一覧を、また指定された条件を満たす放送中の番組一覧を
+表示することができます。さらにこれらの番組については開始を検知した時点で、
+デスクトップ上にアラートウィンドウを表示します。
 
-���̃\�t�g�E�F�A��JVM��œ��삷�邽�߁AJRE���C���X�g�[������K�v������܂��B
+このソフトウェアはJVM上で動作するため、JREをインストールする必要があります。
 
 ## Usage
 
-JRE���C���X�g�[�����A���̃R�}���h���C���ŋN�����܂��B
-���ɂ���Ă�jar�t�@�C�����_�u���N���b�N���邾���ŋN�����邱�Ƃ��\�ł��B
+JREをインストールし、次のコマンドラインで起動します。
+環境によってはjarファイルをダブルクリックするだけで起動することも可能です。
 
     $ java -jar nicoalert-x.x.x-RELEASE-standalone.jar
 
 ## Installation
 
-�X�^���h�A����jar�t�@�C�����D���ȏꏊ�ɔz�u���܂��B
+スタンドアロンjarファイルを好きな場所に配置します。
 
 ## License
 
