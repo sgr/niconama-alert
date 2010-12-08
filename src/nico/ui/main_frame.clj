@@ -5,6 +5,7 @@
   (:use [clojure.contrib.swing-utils :only [do-swing do-swing*]]
 	[nico.ui.ext-tabbed-pane :only [ext-tabbed-pane add-all-tab add-tab]])
   (:require [nico.prefs :as p]
+	    [nico.pgm :as pgm]
 	    [nico.ui.fetch-panel :as ufp]
 	    [nico.ui.menu :as m])
   (:import (java.awt Dimension Font)
@@ -28,6 +29,7 @@
 	cpane (.getContentPane frame)
 	fetch-panel (ufp/fetch-panel tabbed-pane)
 	layout (SpringLayout.)]
+    (pgm/init-db)
     (add-all-tab tabbed-pane)
     (doseq [tab-pref (:tabs pref)] (add-tab tabbed-pane tab-pref))
     (doto layout
@@ -51,7 +53,8 @@
 		p (.getLocationOnScreen frame), tp (.getTabPrefs tabbed-pane)]
 	    (swap! (p/get-pref) assoc :window {:width w :height h :posx (.x p) :posy (.y p)} :tabs tp)
 	    (p/store-pref)
-	    (do-swing* :now (fn [] (.setVisible frame false) (.dispose frame)))))
+	    (do-swing* :now (fn [] (.setVisible frame false) (.dispose frame)))
+	    (pgm/shutdown-db)))
 	 (windowClosed [e] (System/exit 0))
 	 (windowOpened [e])
 	 (windowIconified [e])

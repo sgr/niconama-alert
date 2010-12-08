@@ -66,7 +66,8 @@
  :constructors {[clojure.lang.IPersistentMap] []}
  :state state
  :init init
- :methods [[isNew [int] boolean]
+ :methods [[close [] void]
+	   [isNew [int] boolean]
 	   [getUrl [int] String]
 	   [getProgramId [int] String]
 	   [getProgramTitle [int] String]
@@ -132,6 +133,8 @@
 
 (defn- ptm-init [pgms]
   [[] (atom (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))])
+
+(defn- ptm-close [this])
 
 (defn- ptm-getUrl [this row]
   (:link (fnext (nth (seq @(.state this)) row))))

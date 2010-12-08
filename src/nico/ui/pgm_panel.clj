@@ -26,7 +26,7 @@
 	   [getPopupMenu [] javax.swing.JPopupMenu]
 	   [getTabPref [] clojure.lang.IPersistentMap]
 	   [updateTitle [String] void]
-	   [updatePrograms [clojure.lang.IPersistentMap] void]])
+	   [updatePrograms [] void]])
 
 (defn- get-init-title [pref]
   (condp = (:type pref)
@@ -49,18 +49,12 @@
 		  (do
 		    (let [user-name (:user_name as) comms (apply hash-set (:comms as))]
 		      [user-name
-		       (fn [pgms]
-			 (select-keys
-			  pgms
-			  (for [[id pgm] pgms :when (contains? comms (:comm_id pgm))] id)))]))
-		  ["login failed" (fn [pgms]) {}]))
+		       (fn [pgm] (contains? comms (:comm_id pgm)))]))
+		  ["login failed" (fn [pgms])]))
 	:kwd (fn []
 	       (let [query (eval (uktd/transq (:query pref)))]
 		 [(:title pref)
-		  (fn [pgms]
-		    (select-keys pgms (for [[id pgm] pgms :when
-					    (some #(if (% pgm) (query (% pgm)))
-						  (:target pref))] id)))])))))
+		  (fn [pgm] (some #(if (% pgm) (query (% pgm))) (:target pref)))])))))
 
 (defn- pp-init [pref]
   [[] (atom {:pref pref :tab nil :tbl nil :filter-fn nil :title (get-init-title pref)})])
@@ -75,8 +69,8 @@
 		       (do
 			 (swap! (.state this) assoc :title title)
 			 (swap! (.state this) assoc :filter-fn filter-fn)
-			 (if (< 0 (count (pgm/pgms)))
-			   (.updatePrograms this (pgm/pgms))
+			 (if (< 0 (pgm/count-pgms))
+			   (.updatePrograms this)
 			   (.updateTitle this title))
 			 (do-swing (.setEnabled (:tbl @(.state this)) true))))))))
 
@@ -102,25 +96,30 @@
 
 (defn- pp-getTabPref [this] (:pref @(.state this)))
 
-(defn- pp-updateTitle
-  [this title]
+(defn- pp-updateTitle [this title]
   (when-let [tab (:tab @(.state this))]
     (swap! (.state this) assoc :title title)
     (do-swing (.setText tab title))))
 
-(defn- pp-updatePrograms
-  [this pgms]
+(defn- pp-updatePrograms [this]
   (let [tab (:tab @(.state this)) title (:title @(.state this))]
-    (if-let [filter-fn (:filter-fn @(.state this))]
-      (let [npgms (filter-fn pgms)]
-	;; alert programs when it is in user-added tabs.
-	(when-not (= :all (-> @(.state this) :pref :type))
-	  (doseq [[id npgm] npgms] (al/alert-pgm id)))
+    (if (= :all (-> @(.state this) :pref :type))
+      (do
 	(do-swing
-	 (.setText tab (format "%s (%d)" title (count npgms)))
-	 (.setModel (:tbl @(.state this)) (upt/pgm-table-model npgms))))
-      (do-swing
-       (.setText tab (format "%s (-)" title))))))
+	 (.setText tab (format "%s (%d)" title (pgm/count-pgms)))
+	 (let [oldModel (.getModel (:tbl @(.state this)))]
+	   (.setModel (:tbl @(.state this)) (pgm/model-all-pgms))
+	   (.close oldModel))))
+      (do
+	(if-let [filter-fn (:filter-fn @(.state this))]
+	  (let [npgms (pgm/get-pgms-by filter-fn)]
+	    ;; alert programs when it is in user-added tabs.
+	    (doseq [[id npgm] npgms] (al/alert-pgm id))
+	    (do-swing
+	     (.setText tab (format "%s (%d)" title (count npgms)))
+	     (.setModel (:tbl @(.state this)) (upt/pgm-table-model npgms))))
+	  (do-swing
+	   (.setText tab (format "%s (-)" title))))))))
 
 (defn- pp-getPopupMenu [this]
   (condp = (-> @(.state this) :pref :type)

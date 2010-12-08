@@ -67,7 +67,7 @@
 		      (fn [cur_pgms acc total page]
 			;; インクリメンタルにpgmsを更新
 			(pgm/add-pgms cur_pgms)
-			(.updateTabs tpane (pgm/pgms) false)
+			(.updateTabs tpane false)
 			;; 状況表示
 			(do-swing
 			 (.setText vstatus (format "番組情報取得中... %d / %d from page %d."
@@ -82,26 +82,26 @@
 			  (.setText vstatus "サーバーとの通信エラー.")
 			  (.setText vpgms (format "%d / %d" (pgm/count-pgms) total))
 			  (.setText vfetched (tu/format-time-long (tu/now)))
-			  (.updateTabs tpane (pgm/pgms) true))
+			  (.updateTabs tpane true))
 			 *timer-max*)
 		     (count fetched) (do ;; fetchedにない番組は削除して良い
-				       (pgm/rem-pgms-without fetched)
+				       (pgm/rem-pgms-without)
 				       (do-swing
 					(.setText vstatus "番組情報取得完了.")
 					(.setText vpgms (format "%d / %d" (pgm/count-pgms) total))
 					(.setText vfetched (tu/format-time-long (tu/now)))
-					(.updateTabs tpane (pgm/pgms) true)
+					(.updateTabs tpane true)
 					(.doClick tbtn))
 				       *timer-max*)
 		     (let [ratio (/ (count fetched) total)]
 		       ;; 90%以上取得できたときは、fetchedのうち最も早い開始時刻より後に開始された番組で、
 		       ;; fetchedにないものは削除
-		       (when (<= 0.9 ratio) (pgm/rem-pgms-without fetched earliest))
+		       (when (<= 0.9 ratio) (pgm/rem-pgms-without earliest))
 		       (do-swing
 			(.setText vstatus "番組情報取得中断. ")
 			(.setText vpgms (format "%d / %d" (pgm/count-pgms) total))
 			(.setText vfetched (tu/format-time-long (tu/now)))
-			(.updateTabs tpane (pgm/pgms) true))
+			(.updateTabs tpane true))
 		       (cond (= 0 (count fetched)) *timer-max*
 			     (> 0.3 ratio) *timer-max*
 			     (<= 0.3 ratio) (int (* *timer-max* ratio))))))

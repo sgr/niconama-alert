@@ -4,7 +4,6 @@
   nico.ui.ext-tabbed-pane
   (:use [clojure.contrib.swing-utils :only [do-swing do-swing* add-action-listener]])
   (:require [time-utils :as tu]
-	    [nico.pgm :as pgm]
 	    [nico.ui.fetch-panel :as ufp]
 	    [nico.ui.pgm-panel])
   (:import (java.awt BorderLayout Dimension)
@@ -21,7 +20,7 @@
  :init init
  :post-init post-init
  :methods [[addExtTab [clojure.lang.Keyword java.awt.Component] void]
-	   [updateTabs [clojure.lang.IPersistentMap boolean] void]
+	   [updateTabs [boolean] void]
 	   [getTabPrefs [] clojure.lang.LazySeq]])
 
 (defn ext-tabbed-pane []
@@ -100,15 +99,15 @@
     (.setTabComponent content ltitle)
     (.setTabComponentAt this (.indexOfComponent this content) tab)))
 
-(defn- etp-update-tabs [this pgms]
-  (doseq [idx (range (.getTabCount this))] (.updatePrograms (.getComponentAt this idx) pgms)))
+(defn- etp-update-tabs [this]
+  (doseq [idx (range (.getTabCount this))] (.updatePrograms (.getComponentAt this idx))))
 
-(defn- etp-updateTabs [this pgms enforce]
+(defn- etp-updateTabs [this enforce]
   (let [last-updated (:last-updated @(.state this))]
     (when (or enforce
 	      (nil? last-updated)
 	      (< 3000 (- (.getTime (tu/now)) (.getTime last-updated))))
-      (do (etp-update-tabs this pgms)
+      (do (etp-update-tabs this)
 	  (swap! (.state this) assoc :last-updated (tu/now))))))
 
 (defn- etp-getTabPrefs [this]
