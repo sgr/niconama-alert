@@ -17,14 +17,18 @@
 (def *dlg-size* (Dimension. 500 250))
 (def *btn-panel-size* (Dimension. 500 40))
 
-(defn- make-model [pref]
+(defn- browsers-to-model [browsers]
   (let [model
 	(proxy [DefaultTableModel][]
 	  (isCellEditable [r c] (if (= 2 c) (if (.getValueAt this r c) false true) false)))]
     (doto model (.addColumn "ブラウザ名") (.addColumn "パス") (.addColumn "アラート"))
-    (doseq [[name cmd alert] pref]
-      (let [a (make-array Object 3)] (aset a 0 name) (aset a 1 cmd) (aset a 2 alert) (.addRow model a)))
+    (doseq [[name cmd alert] browsers]
+      (.addRow model (doto (make-array Object 3) (aset 0 name) (aset 1 cmd) (aset 2 alert))))
     model))
+
+(defn- model-to-browsers [model]
+  (vec (for [r (range (.getRowCount model))]
+	 [(.getValueAt model r 0) (.getValueAt model r 1) (.getValueAt model r 2)])))
 
 (defn- string-renderer []
   (proxy [DefaultTableCellRenderer] []
@@ -78,10 +82,10 @@
       (doto tbl (.setModel model)))))
 
 (defn browsers-dialog
-  [parent title pref ok-fn]
+  [parent title browsers ok-fn]
   (let [dlg (JDialog. parent title true), cpane (.getContentPane dlg)
-	browsers (atom pref), p (.getLocationOnScreen parent)
-	tbl (browser-tbl (make-model @browsers)), tbtn-panel (JPanel.)
+	p (.getLocationOnScreen parent)
+	tbl (browser-tbl (browsers-to-model browsers)), tbtn-panel (JPanel.)
 	btn-panel (JPanel.), btn-ok (ub/btn "OK")]
     (let [tbl-sel-model (DefaultListSelectionModel.)
 	  tbtn-add (JButton. "追加"), tbtn-edit (JButton. "編集"), tbtn-rem (JButton. "削除")
@@ -116,42 +120,35 @@
 	   (let [bcd (ukvd/browser-command-dialog
 		      dlg "ブラウザの追加" nil nil
 		      (fn [name cmd]
-			(swap! browsers conj (vector name cmd))
-			(do-swing (.setModel tbl (make-model @browsers)))))]
+			(.addRow (.getModel tbl)
+				 (doto (make-array Object 3) (aset 0 name) (aset 1 cmd) (aset 2 false)))))]
 	     (do-swing (.setVisible bcd true))))))
       (doto tbtn-edit
 	(add-action-listener
 	 (fn [e]
 	   (let [r (.getSelectedRow tbl)
-		 [old-name old-cmd] (nth @browsers r)
+		 old-name (.getValueAt (.getModel tbl) r 0), old-cmd (.getValueAt (.getModel tbl) r 1)
 		 bcd (ukvd/browser-command-dialog
 		      dlg "ブラウザの編集" old-name old-cmd
 		      (fn [name cmd]
-			(swap! browsers assoc r (vector name cmd))
-			(do-swing (.setModel tbl (make-model @browsers)))))]
+			(doto (.getModel tbl) (.setValueAt name r 0) (.setValueAt cmd r 1))))]
 	     (do-swing (.setVisible bcd true))))))
       (doto tbtn-rem
 	(add-action-listener
-	 (fn [e]
-	   (let [r (.getSelectedRow tbl)]
-	     (reset! browsers (vec (concat (subvec @browsers 0 r) (subvec @browsers (inc r)))))
-	     (do-swing (.setModel tbl (make-model @browsers)))))))
+	 (fn [e] (.removeRow (.getModel tbl) (.getSelectedRow tbl)))))
       (doto tbtn-up
 	(add-action-listener
-	 (fn [e]
-	   (let [r (.getSelectedRow tbl)]
-	     (swap! browsers (fn [brs idx]
-			       (let [uidx (dec idx), uitm (nth brs uidx), bitm (nth brs idx)]
-				 (assoc (assoc brs uidx bitm) idx uitm))) r)
-	     (do-swing (.setModel tbl (make-model @browsers)))))))
+	 (fn [e] (let [r (.getSelectedRow tbl), to-r (dec r)]
+		   (when-not (= 0 r)
+		     (.moveRow (.getModel tbl) r r to-r)
+		     (.setSelectionInterval tbl-sel-model to-r to-r))))))
       (doto tbtn-down
 	(add-action-listener
-	 (fn [e]
-	   (let [r (.getSelectedRow tbl)]
-	     (swap! browsers (fn [brs idx]
-			       (let [bidx (inc idx), uitm (nth brs idx), bitm (nth brs bidx)]
-				 (assoc (assoc brs idx bitm) bidx uitm))) r)
-	     (do-swing (.setModel tbl (make-model @browsers)))))))
+	 (fn [e] (let [r (.getSelectedRow tbl), to-r (inc r)
+		       m (.getModel tbl), maxr (dec (.getRowCount m))]
+		   (when-not (= maxr r)
+		     (.moveRow m r r to-r)
+		     (.setSelectionInterval tbl-sel-model to-r to-r))))))
       (doto hgrp
 	(.addGroup (.. layout createParallelGroup (addComponent tbtn-add) (addComponent tbtn-edit)
 		       (addComponent tbtn-rem) (addComponent tbtn-up) (addComponent tbtn-down))))
@@ -170,7 +167,8 @@
     (let [layout (SpringLayout.), btn-cancel (ub/btn "キャンセル")]
       (doto btn-ok
 	(add-action-listener
-	 (fn [e] (do-swing (.setVisible dlg false) (ok-fn @browsers) (.dispose dlg)))))
+	 (fn [e]
+	   (do-swing (.setVisible dlg false) (ok-fn (model-to-browsers (.getModel tbl))) (.dispose dlg)))))
       (doto btn-cancel
 	(add-action-listener (fn [e] (do-swing (.setVisible dlg false) (.dispose dlg)))))
       (doto layout
