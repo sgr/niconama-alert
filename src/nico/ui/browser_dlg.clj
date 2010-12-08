@@ -6,27 +6,82 @@
   (:require [nico.ui.btn :as ub]
 	    [nico.ui.key-val-dlg :as ukvd])
   (:import (java.awt BorderLayout Dimension)
-	   (javax.swing GroupLayout SpringLayout
-			JButton JDialog JLabel JPanel JScrollPane JTable
+	   (javax.swing DefaultCellEditor GroupLayout SpringLayout SwingConstants
+			JButton JCheckBox JDialog JLabel JPanel JScrollPane JTable
 			ListSelectionModel DefaultListSelectionModel)
-	   (javax.swing.event ListSelectionListener)
-	   (javax.swing.table DefaultTableModel TableColumn)))
+	   (javax.swing.event CellEditorListener ChangeEvent TableModelEvent
+			      ListSelectionListener TableModelListener)
+	   (javax.swing.table DefaultTableCellRenderer DefaultTableModel TableColumn
+			      TableCellEditor TableCellRenderer)))
 
-(def *dlg-size* (Dimension. 450 250))
-(def *btn-panel-size* (Dimension. 450 40))
+(def *dlg-size* (Dimension. 500 250))
+(def *btn-panel-size* (Dimension. 500 40))
 
 (defn- make-model [pref]
-  (let [model (proxy [DefaultTableModel] []
-		(isCellEditable [r c] false))]
-    (doto model (.addColumn "ブラウザ名") (.addColumn "パス"))
-    (doseq [[name cmd] pref] (let [a (make-array Object 2)] (aset a 0 name) (aset a 1 cmd) (.addRow model a)))
+  (let [model
+	(proxy [DefaultTableModel][]
+	  (isCellEditable [r c] (if (= 2 c) (if (.getValueAt this r c) false true) false)))]
+    (doto model (.addColumn "ブラウザ名") (.addColumn "パス") (.addColumn "アラート"))
+    (doseq [[name cmd alert] pref]
+      (let [a (make-array Object 3)] (aset a 0 name) (aset a 1 cmd) (aset a 2 alert) (.addRow model a)))
     model))
+
+(defn- string-renderer []
+  (proxy [DefaultTableCellRenderer] []
+    (getTableCellRendererComponent
+     [tbl val isSelected hasFocus row col]
+     (let [c (proxy-super getTableCellRendererComponent tbl val isSelected hasFocus row col)]
+       (condp = col
+	   0 (when (= :default val) (.setText c "デフォルトブラウザ"))
+	   1 (when (= :default val) (.setText c "-")))
+       c))))
+
+(defn- boolean-renderer []
+  (proxy [TableCellRenderer] []
+    (getTableCellRendererComponent
+     [tbl val isSelected hasFocus row col]
+     (let [c (JCheckBox.), m (.getModel tbl)
+	   mrow (.convertRowIndexToModel tbl row), mcol (.convertColumnIndexToModel tbl col)
+	   b (.getValueAt m mrow mcol)]
+       (if isSelected
+	 (doto c (.setForeground (.getSelectionForeground tbl)) (.setBackground (.getSelectionBackground tbl)))
+	 (doto c (.setForeground (.getForeground tbl)) (.setBackground (.getBackground tbl))))
+       (doto c
+	 (.setOpaque true)
+	 (.setHorizontalAlignment SwingConstants/CENTER)
+	 (.setVerticalAlignment SwingConstants/CENTER)
+       	 (.setSelected b))))))
+
+(defn- set-cols! [tbl cr]
+  (let [cm (.getColumnModel tbl), cb (JCheckBox.), bce (DefaultCellEditor. cb)]
+    (doto bce
+      (.addCellEditorListener
+       (proxy [CellEditorListener][]
+	 (editingStopped [e] (.setValueAt (.getModel tbl) false @cr 2))
+	 (editingCanceled [e]))))
+    (doto cb (.setOpaque true)
+	  (.setHorizontalAlignment SwingConstants/CENTER)
+	  (.setVerticalAlignment SwingConstants/CENTER))
+    (doto (.getColumn cm 0) (.setPreferredWidth 220) (.setCellRenderer (string-renderer)))
+    (doto (.getColumn cm 1) (.setPreferredWidth 220) (.setCellRenderer (string-renderer)))
+    (doto (.getColumn cm 2) (.setPreferredWidth 60)
+	  (.setCellEditor bce) (.setCellRenderer (boolean-renderer)))))
+
+(defn- browser-tbl [model]
+  (letfn [(checked-row [m] (some #(if (.getValueAt m % 2) % false) (range (.getRowCount m))))]
+    (let [cr (atom -1)
+	  tbl (proxy [JTable][]
+		(editCellAt [r c e] (let [result (proxy-super editCellAt r c e)]
+				      (when result (reset! cr (checked-row (.getModel this))))
+				      result))
+		(setModel [m] (proxy-super setModel m) (set-cols! this cr)))]
+      (doto tbl (.setModel model)))))
 
 (defn browsers-dialog
   [parent title pref ok-fn]
   (let [dlg (JDialog. parent title true), cpane (.getContentPane dlg)
 	browsers (atom pref), p (.getLocationOnScreen parent)
-	tbl (JTable. (make-model @browsers)), tbtn-panel (JPanel.)
+	tbl (browser-tbl (make-model @browsers)), tbtn-panel (JPanel.)
 	btn-panel (JPanel.), btn-ok (ub/btn "OK")]
     (let [tbl-sel-model (DefaultListSelectionModel.)
 	  tbtn-add (JButton. "追加"), tbtn-edit (JButton. "編集"), tbtn-rem (JButton. "削除")
@@ -41,18 +96,19 @@
 	(tbtns-enabled true false false false false)
 	(doto tbl-sel-model
 	  (.setSelectionMode ListSelectionModel/SINGLE_SELECTION)
-	  (.addListSelectionListener (proxy [ListSelectionListener] []
-				       (valueChanged
-					[e]
-					(let [i (.getSelectedRow tbl), m (.getRowCount (.getModel tbl))]
-					  (cond (= 0 m) (tbtns-enabled true false false false false)
-						(= 1 m) (if (= -1 i)
-							  (tbtns-enabled true false false false false)
-							  (tbtns-enabled true true true false false))
-						:else (cond (= -1 i) (tbtns-enabled true false false false false)
-							    (= 0 i) (tbtns-enabled true true true false true)
-							    (= (dec m) i) (tbtns-enabled true true true true false)
-							    :else (tbtns-enabled true true true true true)))))))))
+	  (.addListSelectionListener
+	   (proxy [ListSelectionListener] []
+	     (valueChanged
+	      [e]
+	      (let [i (.getSelectedRow tbl), m (.getRowCount (.getModel tbl))]
+		(cond (= 0 m) (tbtns-enabled true false false false false)
+		      (= 1 m) (if (= -1 i)
+				(tbtns-enabled true false false false false)
+				(tbtns-enabled true true true false false))
+		      :else (cond (= -1 i) (tbtns-enabled true false false false false)
+				  (= 0 i) (tbtns-enabled true true true false true)
+				  (= (dec m) i) (tbtns-enabled true true true true false)
+				  :else (tbtns-enabled true true true true true)))))))))
       (doto tbl (.setSelectionModel tbl-sel-model))
       (doto tbtn-add
 	(add-action-listener

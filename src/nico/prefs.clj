@@ -13,7 +13,7 @@
 	p (.getCenterPoint e)]
     {:window {:width *default-frame-width* :height *default-frame-height*
 	      :posx (- (.x p) (int (/ *default-frame-width* 2))) :posy (- (.y p) (int (/ *default-frame-height* 2)))}
-     :tabs [] :browsers []}))
+     :tabs [] :browsers [[:default :default true]]}))
 
 (defn gen-initial-user-tpref []
   {:type :comm :email nil :passwd nil})
