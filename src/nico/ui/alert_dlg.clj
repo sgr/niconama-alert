@@ -3,7 +3,8 @@
        :doc "Alert dialog."}
   nico.ui.alert-dlg
   (:use [clojure.contrib.swing-utils :only [add-action-listener do-swing*]])
-  (:require [time-utils :as tu])
+  (:require [nico.prefs :as p]
+	    [time-utils :as tu])
   (:import (java.awt Desktop Dimension FlowLayout GraphicsEnvironment RenderingHints
 		     GridBagLayout GridBagConstraints Insets)
 	   (java.awt.event ComponentAdapter MouseListener MouseMotionListener)
@@ -28,13 +29,20 @@
       (.setColumns col)
       (.setOpaque false) (.setEditable false) (.setFocusable false) (.setLineWrap true))))
 
-(defn- change-cursor [c l]
+(defn- change-cursor [c url]
   (let [csr (.getCursor c)]
     (doto c
       (.addMouseListener (proxy [MouseListener][]
 			   (mouseEntered [e] (.setCursor (.getSource e) *lcsr*))
 			   (mouseExited [e] (.setCursor (.getSource e) csr))
-			   (mousePressed [e] (.browse (Desktop/getDesktop) (URI. l)))
+			   (mousePressed [e]
+					 ;; 設定でアラート指定されたブラウザで番組URLを開く
+					 (let [[name cmd]
+					       (some #(let [[name cmd alert] %] (if alert % false))
+						     (:browsers @(p/get-pref)))]
+					   (if (= :default cmd)
+					     (.browse (Desktop/getDesktop) (URI. url))
+					     (.start (ProcessBuilder. [cmd url])))))
 			   (mouseClicked [e]) (mouseReleased [e]))))))
 
 (defn- adjust-img [img width height]
@@ -46,10 +54,7 @@
     nimg))
 
 (defn- get-thumbnail [url]
-  (ImageIcon. (adjust-img (try
-			    (ImageIO/read url)
-			    (catch Exception _ *noimg*))
-    64 64)))
+  (ImageIcon. (adjust-img (try (ImageIO/read url) (catch Exception _ *noimg*)) 64 64)))
 
 (defn alert-dlg [pgm extra-close-fn]
   (let [dlg (JDialog.), thumbicn (get-thumbnail (URL. (:thumbnail pgm)))]

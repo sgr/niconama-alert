@@ -114,11 +114,14 @@
 		    (doto pmenu
 		      (.add titem)
 		      (.addSeparator))
-		    (add-action-listener (.add pmenu "デフォルトブラウザで開く")
-					 (fn [e] (.browse (Desktop/getDesktop) (URI. url))))
 		    (doseq [[name cmd] (:browsers @(p/get-pref))]
-		      (add-action-listener (.add pmenu (str name "で開く"))
-					   (fn [e] (.start (ProcessBuilder. [cmd url])))))
+		      (if (= :default cmd)
+			(add-action-listener
+			 (.add pmenu "デフォルトブラウザで開く")
+			 (fn [e] (.browse (Desktop/getDesktop) (URI. url))))
+			(add-action-listener
+			 (.add pmenu (str name "で開く"))
+			 (fn [e] (.start (ProcessBuilder. [cmd url]))))))
 		    (.show pmenu tbl (.getX e) (.getY e))))))
 	 (mouseEntered [e])
 	 (mouseExited [e])
