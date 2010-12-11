@@ -92,27 +92,24 @@
 	  tbtn-up (JButton. "上へ"), tbtn-down (JButton. "下へ")
 	  layout (GroupLayout. tbtn-panel)
 	  hgrp (.createSequentialGroup layout), vgrp (.createSequentialGroup layout)]
-      (letfn [(tbtns-enabled
-	       [add edit rem up down]
-	       (do-swing
-		(.setEnabled tbtn-add add) (.setEnabled tbtn-edit edit) (.setEnabled tbtn-rem rem)
-		(.setEnabled tbtn-up up) (.setEnabled tbtn-down down)))]
-	(tbtns-enabled true false false false false)
+      (letfn [(updown [up down] (do-swing (.setEnabled tbtn-up up) (.setEnabled tbtn-down down)))
+	      (editable [b] (do-swing (.setEnabled tbtn-edit b) (.setEnabled tbtn-rem b)))]
+	(do-swing (.setEnabled tbtn-add true))
 	(doto tbl-sel-model
 	  (.setSelectionMode ListSelectionModel/SINGLE_SELECTION)
 	  (.addListSelectionListener
 	   (proxy [ListSelectionListener] []
 	     (valueChanged
 	      [e]
-	      (let [i (.getSelectedRow tbl), m (.getRowCount (.getModel tbl))]
-		(cond (= 0 m) (tbtns-enabled true false false false false)
-		      (= 1 m) (if (= -1 i)
-				(tbtns-enabled true false false false false)
-				(tbtns-enabled true true true false false))
-		      :else (cond (= -1 i) (tbtns-enabled true false false false false)
-				  (= 0 i) (tbtns-enabled true true true false true)
-				  (= (dec m) i) (tbtns-enabled true true true true false)
-				  :else (tbtns-enabled true true true true true)))))))))
+	      (let [r (.getSelectedRow tbl), m (.getModel tbl), maxrow (.getRowCount m)
+		    mr (.convertRowIndexToModel tbl r)]
+		(if (or (= -1 r) (>= 1 maxrow))
+		  (do-swing (editable false) (updown false false))
+		  (do
+		    (if (= :default (.getValueAt m mr 0)) (editable false) (editable true))
+		    (cond (= 0 r) (updown false true)
+			  (= (dec maxrow) r) (updown true false)
+			  :else (updown true true))))))))))
       (doto tbl (.setSelectionModel tbl-sel-model))
       (doto tbtn-add
 	(add-action-listener
