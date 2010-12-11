@@ -95,6 +95,7 @@
       (letfn [(updown [up down] (do-swing (.setEnabled tbtn-up up) (.setEnabled tbtn-down down)))
 	      (editable [b] (do-swing (.setEnabled tbtn-edit b) (.setEnabled tbtn-rem b)))]
 	(do-swing (.setEnabled tbtn-add true))
+	(updown false false) (editable false)
 	(doto tbl-sel-model
 	  (.setSelectionMode ListSelectionModel/SINGLE_SELECTION)
 	  (.addListSelectionListener
