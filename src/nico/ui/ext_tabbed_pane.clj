@@ -21,7 +21,7 @@
  :init init
  :post-init post-init
  :methods [[addExtTab [clojure.lang.Keyword java.awt.Component] void]
-	   [updateTabs [clojure.lang.IPersistentMap boolean] void]
+	   [updatePgms [clojure.lang.IPersistentMap boolean] void]
 	   [getTabPrefs [] clojure.lang.LazySeq]])
 
 (defn ext-tabbed-pane []
@@ -100,15 +100,15 @@
     (.setTabComponent content ltitle)
     (.setTabComponentAt this (.indexOfComponent this content) tab)))
 
-(defn- etp-update-tabs [this pgms]
+(defn- etp-update-pgms [this pgms]
   (doseq [idx (range (.getTabCount this))] (.updatePrograms (.getComponentAt this idx) pgms)))
 
-(defn- etp-updateTabs [this pgms enforce]
+(defn- etp-updatePgms [this pgms enforce]
   (let [last-updated (:last-updated @(.state this))]
     (when (or enforce
 	      (nil? last-updated)
 	      (< 3000 (- (.getTime (tu/now)) (.getTime last-updated))))
-      (do (etp-update-tabs this pgms)
+      (do (etp-update-pgms this pgms)
 	  (swap! (.state this) assoc :last-updated (tu/now))))))
 
 (defn- etp-getTabPrefs [this]
