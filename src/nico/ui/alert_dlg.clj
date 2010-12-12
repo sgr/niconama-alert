@@ -6,7 +6,7 @@
   (:require [nico.prefs :as p]
 	    [time-utils :as tu])
   (:import (java.awt Desktop Dimension FlowLayout GraphicsEnvironment RenderingHints
-		     GridBagLayout GridBagConstraints Insets)
+		     GridBagLayout GridBagConstraints Insets Window)
 	   (java.awt.event ComponentAdapter MouseListener MouseMotionListener)
 	   (java.awt.geom RoundRectangle2D$Float)
 	   (java.awt.image BufferedImage)
@@ -118,19 +118,20 @@
 	  (.setLayout layout)
 	  (.add tpanel) (.add dpanel) (.add olabel) (.add time))))
     (try
-      (when (com.sun.awt.AWTUtilities/isTranslucencySupported com.sun.awt.AWTUtilities$Translucency/TRANSLUCENT)
-	(com.sun.awt.AWTUtilities/setWindowOpacity dlg 0.9))
-      (doto dlg
-	(.addComponentListener
-	 (proxy [ComponentAdapter][]
-	   (componentResized
-	    [e]
-	    (try
-	      (com.sun.awt.AWTUtilities/setWindowShape
-	       dlg (RoundRectangle2D$Float. 0 0 (.getWidth dlg) (.getHeight dlg) 20 20))
-	      (catch Exception _ (println "This platform doesn't support AWTUtilities/setWindowShape.")))))))
-      (catch Exception e (println "Unknown Exception raised") (.printStackTrace e))
-      (catch NoClassDefFoundError _ (println "This platform doesn't support AWTUtilities/setWindowOpacity.")))
+      (when-let [klazz (Class/forName "com.sun.awt.AWTUtilities")]
+	(let [setwo (.getMethod klazz "setWindowOpacity" (class Window) (class Float))
+	      setws (.getMethod klazz "setWindowShape" (class Window) (class RoundRectangle2D$Float))]
+	  (.invoke setwo nil dlg 0.9)
+	  (doto dlg
+	    (.addComponentListener
+	     (proxy [ComponentAdapter][]
+	       (componentResized
+		[e]
+		(try
+		  (.invoke setws dlg
+			   (RoundRectangle2D$Float. 0 0 (.getWidth dlg) (.getHeight dlg) 20 20))
+		  (catch Exception _ (println "This platform doesn't support AWTUtilities/setWindowShape.")))))))))
+      (catch Exception e (.printStackTrace e)))
     (doto dlg
       (.setFocusableWindowState false)
       (.setAlwaysOnTop true)
