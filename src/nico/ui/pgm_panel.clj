@@ -118,7 +118,7 @@
 	  (doseq [[id npgm] npgms] (al/alert-pgm id)))
 	(do-swing
 	 (.setText tab (format "%s (%d)" title (count npgms)))
-	 (.setModel (:tbl @(.state this)) (upt/pgm-table-model npgms))))
+	 (.updateData (.getModel (:tbl @(.state this))) npgms)))
       (do-swing
        (.setText tab (format "%s (-)" title))))))
 
