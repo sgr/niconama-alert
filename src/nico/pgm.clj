@@ -36,6 +36,7 @@
  :state state
  :init init
  :methods [[close [] void]
+	   [update [] void]
 	   [isNew [int] boolean]
 	   [getUrl [int] String]
 	   [getProgramId [int] String]
@@ -89,9 +90,9 @@
 (let [db-path (let [f (File/createTempFile "nico-" nil)
 		    p (.getCanonicalPath f)]
 		(.delete f) p)
-      db {:classname "org.apache.derby.jdbc.EmbeddedDriver"
+      db {:classname "org.apache.derby.jdbc.ClientDriver"
 	  :subprotocol "derby"
-	  :subname db-path
+	  :subname "//localhost:1527/nico;user=testuser;password=testpasswd"
 	  :create true}
       last-updated (atom (tu/now))]
   (defn- create-tbls* []
@@ -124,6 +125,9 @@
        (create-tbls*)
        (create-idxs*))))
   (defn shutdown-db []
+    (with-connection db
+      (transaction (drop-table :pgms))))
+  (defn shutdown-db-embedded []
     (let [url (format "jdbc:%s:;shutdown=true" (:subprotocol db) (:subname db))]
       (try
 	(RT/loadClassForName (:classname db))
@@ -201,27 +205,31 @@
   (defn model-all-pgms [] (nico.ResultSetModel. db))
   (defn get-pgms-by [filter-fn]
     (with-connection db
-      (let [conn (:connection *db*)
-	    stmt (.createStatement conn ResultSet/TYPE_SCROLL_INSENSITIVE ResultSet/CONCUR_READ_ONLY)
-	    rs (.executeQuery stmt "select * from pgms order by pubdate desc")
-	    npgms (reduce (fn [acc r]
-			    (let [pgm (row-to-pgm r)]
-			      (if (filter-fn pgm) (assoc acc (:id pgm) pgm) acc)))
-			  {} (resultset-seq rs))]
-	(try
-	  (when rs (.close rs)) (when stmt (.close stmt)) npgms
-	  (finally
-	   (try (when conn (.close conn)) npgms (catch Exception e (.printStackTrace e) npgms))))))))
+      (with-query-results res
+	["select * from pgms order by pubdate desc"]
+	(reduce (fn [acc r]
+		  (let [pgm (row-to-pgm r)]
+		    (if (filter-fn pgm) (assoc acc (:id pgm) pgm) acc)))
+		{} res)))))
 
 
 (defn- prs-init [db]
-  (let [conn (get-connection db)
-	stmt (.createStatement conn ResultSet/TYPE_SCROLL_INSENSITIVE ResultSet/CONCUR_READ_ONLY)
-	rs (.executeQuery stmt "select * from pgms order by pubdate desc")]
-    [[] {:conn conn :stmt stmt :rs rs}]))
+  (let [query "select * from pgms order by pubdate desc"
+	conn (get-connection db)
+	stmt (.prepareStatement conn
+				query ResultSet/TYPE_SCROLL_INSENSITIVE ResultSet/CONCUR_READ_ONLY)
+	rs (.executeQuery stmt)]
+    [[] (atom {:query query :conn conn :stmt stmt :rs rs})]))
+
+(defn- prs-update [this]
+  (let [stmt (:stmt @(.state this))
+	oldrs (:rs @(.state this))]
+    (swap! (.state this) assoc :rs (.executeQuery stmt))
+    (.close oldrs)
+    (.fireTableDataChanged this)))
 
 (defn- prs-close [this]
-  (let [conn (:conn (.state this)) stmt (:stmt (.state this)) rs (:rs (.state this))]
+  (let [conn (:conn @(.state this)) stmt (:stmt @(.state this)) rs (:rs @(.state this))]
     (try
       (when rs (.close rs)) (when stmt (.close stmt))
       (finally (try (when conn (.close conn)) (catch Exception e (.printStackTrace e)))))))
@@ -236,13 +244,13 @@
     (apply struct rst (map #(.getObject rs %) cols))))
 
 (defn- prs-getUrl [this row]
-  (:link (get-row-map (:rs (.state this)) row)))
+  (:link (get-row-map (:rs @(.state this)) row)))
 
 (defn- prs-getProgramId [this row]
-  (:id (get-row-map (:rs (.state this)) row)))
+  (:id (get-row-map (:rs @(.state this)) row)))
 
 (defn- prs-getProgramTitle [this row]
-  (:title (get-row-map (:rs (.state this)) row)))
+  (:title (get-row-map (:rs @(.state this)) row)))
 
 (defn- prs-getColumnCount [this] 5)
 
@@ -251,16 +259,16 @@
 
 (defn- prs-getRowCount [this]
   (try
-    (.last (:rs (.state this)))
-    (.getRow (:rs (.state this)))
+    (.last (:rs @(.state this)))
+    (.getRow (:rs @(.state this)))
     (catch Exception e (println (.getMessage e)) 0)))
 
 (defn- prs-isNew [this row]
-  (if (= 0 (:old (get-row-map (:rs (.state this)) row))) true false))
+  (if (= 0 (:old (get-row-map (:rs @(.state this)) row))) true false))
 
 (defn- prs-getValueAt [this row col]
   (try 
-    (let [m (get-row-map (:rs (.state this)) row)]
+    (let [m (get-row-map (:rs @(.state this)) row)]
       (condp = col
 	  0 (if (= 1 (:member_only m)) true false)
 	  1 (:title m)
@@ -271,6 +279,6 @@
     (catch Exception e (println (.getMessage e)) nil)))
 
 (defn- prs-getPgm [this row]
-  (row-to-pgm (get-row-map (:rs (.state this)) row)))
+  (row-to-pgm (get-row-map (:rs @(.state this)) row)))
 
 (defn- prs-isCellEditable [this row col] false)

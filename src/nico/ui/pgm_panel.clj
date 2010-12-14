@@ -108,8 +108,9 @@
 	(do-swing
 	 (.setText tab (format "%s (%d)" title (pgm/count-pgms)))
 	 (let [oldModel (.getModel (:tbl @(.state this)))]
-	   (.setModel (:tbl @(.state this)) (pgm/model-all-pgms))
-	   (.close oldModel))))
+	   (if (= nico.ResultSetModel (class oldModel))
+	     (.update (.getModel (:tbl @(.state this))))
+	     (.setModel (:tbl @(.state this)) (pgm/model-all-pgms))))))
       (do
 	(if-let [filter-fn (:filter-fn @(.state this))]
 	  (let [npgms (pgm/get-pgms-by filter-fn)]
@@ -117,7 +118,8 @@
 	    (doseq [[id npgm] npgms] (al/alert-pgm id))
 	    (do-swing
 	     (.setText tab (format "%s (%d)" title (count npgms)))
-	     (.setModel (:tbl @(.state this)) (upt/pgm-table-model npgms))))
+;	     (.setModel (:tbl @(.state this)) (upt/pgm-table-model npgms))))
+	     (.updateData (.getModel (:tbl @(.state this))) npgms)))
 	  (do-swing
 	   (.setText tab (format "%s (-)" title))))))))
 
