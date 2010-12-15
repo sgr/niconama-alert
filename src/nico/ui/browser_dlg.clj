@@ -23,7 +23,7 @@
 	  (isCellEditable [r c] (if (= 2 c) (if (.getValueAt this r c) false true) false)))]
     (doto model (.addColumn "ブラウザ名") (.addColumn "パス") (.addColumn "アラート"))
     (doseq [[name cmd alert] browsers]
-      (.addRow model (doto (make-array Object 3) (aset 0 name) (aset 1 cmd) (aset 2 alert))))
+      (.addRow model (to-array [name cmd alert])))
     model))
 
 (defn- model-to-browsers [model]
@@ -117,9 +117,7 @@
 	 (fn [e]
 	   (let [bcd (ukvd/browser-command-dialog
 		      dlg "ブラウザの追加" nil nil
-		      (fn [name cmd]
-			(.addRow (.getModel tbl)
-				 (doto (make-array Object 3) (aset 0 name) (aset 1 cmd) (aset 2 false)))))]
+		      (fn [name cmd] (.addRow (.getModel tbl) (to-array [name cmd false]))))]
 	     (do-swing (.setVisible bcd true))))))
       (doto tbtn-edit
 	(add-action-listener
