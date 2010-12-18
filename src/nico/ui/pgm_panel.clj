@@ -21,24 +21,17 @@
  :state state
  :init init
  :post-init post-init
- :methods [[setTabComponent [java.awt.Component] void]
-	   [getTabTitle [] String]
+ :methods [[getTitleLabel [] javax.swing.JLabel]
 	   [getPopupMenu [] javax.swing.JPopupMenu]
 	   [getTabPref [] clojure.lang.IPersistentMap]
 	   [updateTitle [String] void]
 	   [updatePrograms [clojure.lang.IPersistentMap] void]])
 
 (defn- get-init-title [pref]
-  (condp = (:type pref)
-      :all (:title pref)
-      :comm "loading..."
-      :kwd (:title pref)))
+  (condp = (:type pref) :all (:title pref) :comm "loading..." :kwd (:title pref)))
 
 (defn- get-sortability [pref]
-  (condp = (:type pref)
-      :all false
-      :comm true
-      :kwd true))
+  (condp = (:type pref) :all false :comm true :kwd true))
 
 (defn- get-init-fn [this]
   (let [pref (:pref @(.state this))]
@@ -63,9 +56,11 @@
 						  (:target pref))] id)))])))))
 
 (defn- pp-init [pref]
-  [[] (atom {:pref pref :tab nil :tbl nil :filter-fn nil :title (get-init-title pref)})])
+  (let [title (get-init-title pref)]
+    [[] (atom {:pref pref :tbl nil :filter-fn nil
+	       :title title :title-label (JLabel. title)})]))
 
-(defn- pp-getTabTitle [this] (:title @(.state this)))
+(defn- pp-getTitleLabel [this] (:title-label @(.state this)))
 
 (defn- invoke-init-fn [this]
   (.start (Thread. (fn []
@@ -97,30 +92,27 @@
       (.setLayout layout)
       (.add spane))))
 
-(defn- pp-setTabComponent [this component]
-  (swap! (.state this) assoc :tab component))
-
 (defn- pp-getTabPref [this] (:pref @(.state this)))
 
 (defn- pp-updateTitle
   [this title]
-  (when-let [tab (:tab @(.state this))]
+  (when-let [tlabel (:title-label @(.state this))]
     (swap! (.state this) assoc :title title)
-    (do-swing (.setText tab title))))
+    (do-swing (.setText tlabel title))))
 
 (defn- pp-updatePrograms
   [this pgms]
-  (let [tab (:tab @(.state this)) title (:title @(.state this))]
+  (let [tlabel (:title-label @(.state this)) title (:title @(.state this))]
     (if-let [filter-fn (:filter-fn @(.state this))]
       (let [npgms (filter-fn pgms)]
 	;; alert programs when it is in user-added tabs.
 	(when-not (= :all (-> @(.state this) :pref :type))
 	  (doseq [[id npgm] npgms] (al/alert-pgm id)))
 	(do-swing
-	 (.setText tab (format "%s (%d)" title (count npgms)))
+	 (.setText tlabel (format "%s (%d)" title (count npgms)))
 	 (.updateData (.getModel (:tbl @(.state this))) npgms)))
       (do-swing
-       (.setText tab (format "%s (-)" title))))))
+       (.setText tlabel (format "%s (-)" title))))))
 
 (defn- pp-getPopupMenu [this]
   (condp = (-> @(.state this) :pref :type)

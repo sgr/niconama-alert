@@ -44,41 +44,41 @@
 
 (defn- etp-post-init [this commicn kwdicn closeicn]
   (let [tpane this]
-    (.addMouseListener tpane
-		       (proxy [MouseListener] []
-			 (mouseClicked
-			  [e]
-			  (when (SwingUtilities/isRightMouseButton e)
-			    (let [x (.getX e) y (.getY e) idx (.indexAtLocation tpane x y)]
-			      (when-not (= -1 idx)
-				(let [content (.getComponentAt tpane idx)]
-				  (if-let [pmenu (.getPopupMenu content)]
-				    (let [ditem (JMenuItem. "Delete")]
-				      (doto ditem
-					(add-action-listener (confirm-rem-tab-fn tpane content)))
-				      (doto pmenu
-					(.add ditem)
-					(.show tpane (.getX e) (.getY e))))))))))
-			 (mouseEntered [e])
-			 (mouseExited [e])
-			 (mousePressed [e])
-			 (mouseReleased [e])))))
+    (doto tpane
+      (.addMouseListener
+       (proxy [MouseListener] []
+	 (mouseClicked
+	  [e]
+	  (when (SwingUtilities/isRightMouseButton e)
+	    (let [x (.getX e) y (.getY e) idx (.indexAtLocation tpane x y)]
+	      (when-not (= -1 idx)
+		(let [content (.getComponentAt tpane idx)]
+		  (if-let [pmenu (.getPopupMenu content)]
+		    (let [ditem (JMenuItem. "Delete")]
+		      (doto ditem
+			(add-action-listener (confirm-rem-tab-fn tpane content)))
+		      (doto pmenu
+			(.add ditem)
+			(.show tpane (.getX e) (.getY e))))))))))
+	 (mouseEntered [e])
+	 (mouseExited [e])
+	 (mousePressed [e])
+	 (mouseReleased [e]))))))
   
 (defn- etp-tab-panel [this kind content]
   (if (= kind :all)
     (let [tab (JPanel. (BorderLayout.))
-	  ltitle (JLabel. (.getTabTitle content))]
+	  ltitle (.getTitleLabel content)]
       (doto ltitle (.setBorder (BorderFactory/createEmptyBorder 0 4 0 4)))
       (doto tab
 	(.setOpaque false)
 	(.add ltitle BorderLayout/CENTER)
-	(.setBorder (BorderFactory/createEmptyBorder 2 0 0 0)))
-      [ltitle tab])
+	(.setBorder (BorderFactory/createEmptyBorder 2 0 0 0))))
     (let [ticn (kind @(.state this))
 	  cicn (:close @(.state this))
 	  lticn (JLabel. ticn)
 	  tab (JPanel. (BorderLayout.))
-	  ltitle (JLabel. (.getTabTitle content))
+	  ltitle (.getTitleLabel content)
 	  cbtn (JButton. cicn)]
       (doto ltitle (.setBorder (BorderFactory/createEmptyBorder 0 4 0 10)))
       (doto lticn
@@ -91,14 +91,12 @@
 	(.add lticn BorderLayout/WEST)
 	(.add ltitle BorderLayout/CENTER)
 	(.add cbtn BorderLayout/EAST)
-	(.setBorder (BorderFactory/createEmptyBorder 3 0 2 0)))
-      [ltitle tab])))
+	(.setBorder (BorderFactory/createEmptyBorder 3 0 2 0))))))
 
 (defn- etp-addExtTab [this kind content]
-  (let [[ltitle tab] (etp-tab-panel this kind content)]
-    (.addTab this nil content)
-    (.setTabComponent content ltitle)
-    (.setTabComponentAt this (.indexOfComponent this content) tab)))
+  (doto this
+    (.addTab nil content)
+    (.setTabComponentAt (.indexOfComponent this content) (etp-tab-panel this kind content))))
 
 (defn- etp-update-pgms [this pgms]
   (doseq [idx (range (.getTabCount this))] (.updatePrograms (.getComponentAt this idx) pgms)))
