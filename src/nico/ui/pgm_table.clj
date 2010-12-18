@@ -84,6 +84,11 @@
  :state state
  :init init)
 
+(defn- open-url [cmd url]
+  (if (= :default cmd)
+    (.browse (Desktop/getDesktop) (URI. url))
+    (.start (ProcessBuilder. [cmd url]))))
+
 (defn pgm-table
   "番組情報テーブルを生成する"
   []
@@ -103,7 +108,8 @@
 	  [e]
 	  (let [c (.columnAtPoint tbl (.getPoint e)), r (.rowAtPoint tbl (.getPoint e))]
 	    (cond (and (= 2 (.getClickCount e)) (<= 0 c) (<= 0 r))
-		  (.browse (Desktop/getDesktop) (URI. (.getUrl (.getModel tbl) r)))
+		  (let [[name cmd] (first (:browsers @(p/get-pref)))]
+		    (open-url cmd (.getUrl (.getModel tbl) r)))
 		  (and (SwingUtilities/isRightMouseButton e) (<= 0 r))
 		  (let [pmenu (JPopupMenu.)
 			pid (.getProgramId (.getModel tbl) r)
@@ -116,13 +122,11 @@
 		      (.add titem)
 		      (.addSeparator))
 		    (doseq [[name cmd] (:browsers @(p/get-pref))]
-		      (if (= :default cmd)
-			(add-action-listener
-			 (.add pmenu "デフォルトブラウザで開く")
-			 (fn [e] (.browse (Desktop/getDesktop) (URI. url))))
-			(add-action-listener
-			 (.add pmenu (str name "で開く"))
-			 (fn [e] (.start (ProcessBuilder. [cmd url]))))))
+		      (let [mitem (if (= :default cmd)
+				    (JMenuItem. "デフォルトブラウザで開く")
+				    (JMenuItem. (str name "で開く")))]
+			(add-action-listener mitem (fn [e] (open-url cmd url)))
+			(doto pmenu (.add mitem))))
 		    (.show pmenu tbl (.getX e) (.getY e))))))
 	 (mouseEntered [e])
 	 (mouseExited [e])
