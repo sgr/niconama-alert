@@ -24,6 +24,7 @@
  :methods [[getTitleLabel [] javax.swing.JLabel]
 	   [getPopupMenu [] javax.swing.JPopupMenu]
 	   [getTabPref [] clojure.lang.IPersistentMap]
+	   [setTabPref [clojure.lang.IPersistentMap] void]
 	   [updateTitle [String] void]
 	   [updatePrograms [clojure.lang.IPersistentMap] void]])
 
@@ -97,6 +98,10 @@
 
 (defn- pp-getTabPref [this] (:pref @(.state this)))
 
+(defn- pp-setTabPref [this pref]
+  (swap! (.state this) assoc :pref pref)
+  (invoke-init-fn this))
+
 (defn- pp-updateTitle
   [this title]
   (when-let [tlabel (:title-label @(.state this))]
@@ -132,8 +137,7 @@
 				    (.getTopLevelAncestor this) "ユーザー情報の編集" pref
 				    (fn [email passwd]
 				      (let [npref (assoc pref :email email :passwd passwd)]
-					(swap! (.state this) assoc :pref npref)
-					(invoke-init-fn this))))]
+					(.setTabPref this npref))))]
 			   (do-swing (.setVisible dlg true))))))
 	      (doto pmenu
 		(.add ritem)
@@ -146,8 +150,7 @@
 				   (.getTopLevelAncestor this) "番組検索設定の編集"
 				   (:pref @(.state this))
 				   (fn [npref]
-				     (swap! (.state this) assoc :pref npref)
-				     (invoke-init-fn this)))]
+				     (.setTabPref this npref)))]
 			  (do-swing (.setVisible dlg true))))))
 	     (doto pmenu
 	       (.add eitem)))))
