@@ -9,8 +9,12 @@
 	    [nico.ui.key-val-dlg :as ukvd]
 	    [nico.ui.kwd-tab-dlg :as uktd]
 	    [nico.ui.browser-dlg :as ubd])
-  (:import (java.awt.event KeyEvent InputEvent WindowEvent WindowListener)
+  (:import (java.awt Desktop)
+	   (java.awt.event KeyEvent InputEvent WindowEvent WindowListener)
+	   (java.net URI)
 	   (javax.swing JMenuBar JMenu JMenuItem KeyStroke)))
+
+(def *help-url* "https://github.com/sgr/niconama-alert/wiki/Help")
 
 (defn menu-bar [frame tpane]
   (let [menubar (JMenuBar.)
@@ -21,6 +25,7 @@
 	tmenu (JMenu. "ツール (T)")
 	miBrowser (JMenuItem. "ブラウザ設定の編集... (B)" KeyEvent/VK_B)
 	hmenu (JMenu. "ヘルプ (H)")
+	miHelp (JMenuItem. "ヘルプ (H)" KeyEvent/VK_H)
 	miAbout (JMenuItem. "About..." KeyEvent/VK_A)]
     (doto miExit
       (add-action-listener
@@ -49,18 +54,26 @@
 			  frame "ブラウザ設定" (:browsers @(p/get-pref))
 			  (fn [nbpref] (swap! (p/get-pref) assoc :browsers nbpref)))]
 		 (do-swing (.setVisible dlg true))))))
+    (doto miHelp
+      (add-action-listener
+       (fn [e] (.browse (Desktop/getDesktop) (URI. *help-url*))))
+      (.setAccelerator (KeyStroke/getKeyStroke KeyEvent/VK_F1 0)))
     (doto miAbout
       (add-action-listener
        (fn [e] (let [dlg (uad/about-dialog
 			  frame "About this software")]
 		 (do-swing (.setVisible dlg true))))))
-    (doto fmenu (.setMnemonic KeyEvent/VK_F)
+    (doto fmenu
+      (.setMnemonic KeyEvent/VK_F)
       (.add miAUT)
       (.add miAKT)
       (.add miExit))
-    (doto tmenu (.setMnemonic KeyEvent/VK_T)
+    (doto tmenu
+      (.setMnemonic KeyEvent/VK_T)
       (.add miBrowser))
-    (doto hmenu (.setMnemonic KeyEvent/VK_H)
+    (doto hmenu
+      (.setMnemonic KeyEvent/VK_H)
+      (.add miHelp)
       (.add miAbout))
     (doto menubar
       (.add fmenu)
