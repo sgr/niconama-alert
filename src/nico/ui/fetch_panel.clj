@@ -10,7 +10,8 @@
   (:import (java.awt Dimension)
 	   (javax.swing ImageIcon JPanel JButton JProgressBar JLabel SpringLayout GroupLayout)))
 
-(def *timer-max* 60)
+(def *interval-max* 60)
+(def *interval-retry* 30)
 (let [counter (atom 1), timer (atom nil), latch (atom (java.util.concurrent.CountDownLatch. 1))]
   (defn- pause []
     (if (= 1 (.getCount @latch))
@@ -83,7 +84,7 @@
 			  (.setText vpgms (format "%d / %d" (pgm/count-pgms) total))
 			  (.setText vfetched (tu/format-time-long (tu/now)))
 			  (.updatePgms tpane (pgm/pgms) true))
-			 *timer-max*)
+			 *interval-retry*)
 		     (count fetched) (do ;; fetchedにない番組は削除して良い
 				       (pgm/rem-pgms-without fetched)
 				       (do-swing
@@ -92,20 +93,20 @@
 					(.setText vfetched (tu/format-time-long (tu/now)))
 					(.updatePgms tpane (pgm/pgms) true)
 					(.doClick tbtn))
-				       *timer-max*)
+				       *interval-max*)
 		     (let [ratio (/ (count fetched) total)]
-		       ;; 90%以上取得できたときは、fetchedのうち最も早い開始時刻より後に開始された番組で、
+		       ;; 80%以上取得できたときは、fetchedのうち最も早い開始時刻より後に開始された番組で、
 		       ;; fetchedにないものは削除
-		       (when (<= 0.9 ratio) (pgm/rem-pgms-without fetched earliest))
+		       (when (<= 0.8 ratio) (pgm/rem-pgms-without fetched earliest))
 		       (do-swing
 			(.setText vstatus "番組情報取得中断. ")
 			(.setText vpgms (format "%d / %d" (pgm/count-pgms) total))
 			(.setText vfetched (tu/format-time-long (tu/now)))
 			(.updatePgms tpane (pgm/pgms) true))
-		       (cond (= 0 (count fetched)) *timer-max*
-			     (> 0.3 ratio) *timer-max*
-			     (<= 0.3 ratio) (int (* *timer-max* ratio))))))
-	       (catch Exception e (.printStackTrace e) *timer-max*)))
+		       (cond (= 0 (count fetched)) *interval-retry*
+			     (> 0.3 ratio) *interval-retry*
+			     (<= 0.3 ratio) (int (* *interval-max* ratio))))))
+	       (catch Exception e (.printStackTrace e) *interval-max*)))
 	    (periodic-fn
 	     []
 	     (do-swing (.setEnabled rbtn false) (.setEnabled tbtn false))

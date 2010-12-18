@@ -24,9 +24,10 @@
 ;; 以下で使われるpgmsとは、番組IDをキー、pgmを値とするようなマップである。
 (let [id-pgms (ref {}),		;; 番組IDをキー、番組情報を値とするマップ
       comm-pgms (ref {}),	;; コミュニティIDをキー、番組情報を値とするマップ
-      old (ref #{})]		;; 取得済み番組IDの集合
+      old (ref #{})		;; 取得済み番組IDの集合
+      cnt (ref 0)]		;; プログラム数
   (defn pgms [] @id-pgms)
-  (defn count-pgms [] (count @id-pgms))
+  (defn count-pgms [] @cnt)
   (defn new? [id] (not (contains? @old id)))
   (defn- is-to-add?
     "この番組情報を加えるべきか？同じコミュニティの放送が複数あったら、新しいものだけを追加する。
@@ -40,13 +41,13 @@
   (defn get-pgm
     "番組情報を得る"
     [id] (get @id-pgms id nil))
-  (defn rem-pgm
+  (defn- rem-pgm
     "番組情報を削除する"
     [id]
     (dosync
      (alter comm-pgms dissoc (:comm_id (get @id-pgms id)))
      (alter id-pgms dissoc id)))
-  (defn add-pgm
+  (defn- add-pgm
     "番組情報を追加する"
     [pgm]
     (when (is-to-add? pgm)
@@ -63,18 +64,21 @@
   (defn rem-pgms
     "複数の番組を削除する"
     [ids]
-    (doseq [id ids] (rem-pgm id)))
+    (doseq [id ids] (rem-pgm id))
+    (dosync (ref-set cnt (count @id-pgms))))
   (defn add-pgms
     "複数の番組を追加する"
     [pgms]
-    (doseq [pgm pgms] (add-pgm pgm)))
+    (doseq [pgm pgms] (add-pgm pgm))
+    (dosync (ref-set cnt (count @id-pgms))))
   (defn reset-pgms
     "全ての番組情報を与えられた番組情報集合に置き換える"
     [pgms]
     (dosync
      (ref-set id-pgms (reduce #(apply assoc %1 %2) {} (for [pgm pgms] (list (:id pgm) pgm))))
      (ref-set comm-pgms (reduce #(apply assoc %1 %2) {}
-				(for [pgm pgms :when (:comm_id pgm)] (list (:comm_id pgm) pgm))))))
+				(for [pgm pgms :when (:comm_id pgm)] (list (:comm_id pgm) pgm))))
+     (ref-set cnt (count @id-pgms))))
   (defn rem-pgms-without
     "取得済み放送情報を基に、pgmsから不要な番組情報を削除する"
     ([ids]

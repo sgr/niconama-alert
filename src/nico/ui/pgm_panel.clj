@@ -36,24 +36,27 @@
 (defn- get-init-fn [this]
   (let [pref (:pref @(.state this))]
     (condp = (:type pref)
-	:all (fn [] [(:title pref) (fn [pgms] pgms)])
+	:all (fn [] [(:title pref) (fn [pgms] [(pgm/count-pgms) pgms])])
 	:comm (fn []
 		(if-let [as (oa/get-alert-status (oa/get-ticket (:email pref) (:passwd pref)))]
 		  (do
 		    (let [user-name (:user_name as) comms (apply hash-set (:comms as))]
 		      [user-name
 		       (fn [pgms]
-			 (select-keys
-			  pgms
-			  (for [[id pgm] pgms :when (contains? comms (:comm_id pgm))] id)))]))
-		  ["login failed" (fn [pgms]) {}]))
+			 (let [npgms
+			       (select-keys
+				pgms
+				(for [[id pgm] pgms :when (contains? comms (:comm_id pgm))] id))]
+			   [(count npgms) npgms]))]))
+		  ["login failed" (fn [pgms]) [0 {}]]))
 	:kwd (fn []
 	       (let [query (eval (uktd/transq (:query pref)))]
 		 [(:title pref)
 		  (fn [pgms]
-		    (select-keys pgms (for [[id pgm] pgms :when
-					    (some #(if (% pgm) (query (% pgm)))
-						  (:target pref))] id)))])))))
+		    (let [npgms (select-keys pgms (for [[id pgm] pgms :when
+							(some #(if (% pgm) (query (% pgm)))
+							      (:target pref))] id))]
+		      [(count npgms) npgms]))])))))
 
 (defn- pp-init [pref]
   (let [title (get-init-title pref)]
@@ -70,7 +73,7 @@
 		       (do
 			 (swap! (.state this) assoc :title title)
 			 (swap! (.state this) assoc :filter-fn filter-fn)
-			 (if (< 0 (count (pgm/pgms)))
+			 (if (< 0 (pgm/count-pgms))
 			   (.updatePrograms this (pgm/pgms))
 			   (.updateTitle this title))
 			 (do-swing (.setEnabled (:tbl @(.state this)) true))))))))
@@ -104,12 +107,12 @@
   [this pgms]
   (let [tlabel (:title-label @(.state this)) title (:title @(.state this))]
     (if-let [filter-fn (:filter-fn @(.state this))]
-      (let [npgms (filter-fn pgms)]
+      (let [[cnt npgms] (filter-fn pgms)]
 	;; alert programs when it is in user-added tabs.
 	(when-not (= :all (-> @(.state this) :pref :type))
 	  (doseq [[id npgm] npgms] (al/alert-pgm id)))
 	(do-swing
-	 (.setText tlabel (format "%s (%d)" title (count npgms)))
+	 (.setText tlabel (format "%s (%d)" title cnt))
 	 (.updateData (.getModel (:tbl @(.state this))) npgms)))
       (do-swing
        (.setText tlabel (format "%s (-)" title))))))
