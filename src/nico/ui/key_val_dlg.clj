@@ -86,7 +86,8 @@
 
 (defn user-password-dialog
   [parent title pref ok-fn]
-  (kv-dlg parent title "Email:" (:email pref) "Password:" (:passwd pref) ok-fn true))
+  (kv-dlg parent title "Email:" (:email pref) "Password:" (:passwd pref)
+	  (fn [email passwd] (ok-fn (assoc pref :email email :passwd passwd))) true))
 
 (defn browser-command-dialog
   [parent title key val ok-fn]

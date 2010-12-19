@@ -3,7 +3,7 @@
        :doc "main frame"}
   nico.ui.main-frame
   (:use [clojure.contrib.swing-utils :only [do-swing do-swing*]]
-	[nico.ui.ext-tabbed-pane :only [ext-tabbed-pane add-all-tab add-tab]])
+	[nico.ui.ext-tabbed-pane :only [ext-tabbed-pane add-tab]])
   (:require [nico.prefs :as p]
 	    [nico.ui.fetch-panel :as ufp]
 	    [nico.ui.menu :as m])
@@ -28,7 +28,6 @@
 	cpane (.getContentPane frame)
 	fetch-panel (ufp/fetch-panel tabbed-pane)
 	layout (SpringLayout.)]
-    (add-all-tab tabbed-pane)
     (doseq [tab-pref (:tabs pref)] (add-tab tabbed-pane tab-pref))
     (doto layout
       (.putConstraint SpringLayout/NORTH mbar 0 SpringLayout/NORTH cpane)

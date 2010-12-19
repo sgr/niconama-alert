@@ -19,14 +19,20 @@
 (defn menu-bar [frame tpane]
   (let [menubar (JMenuBar.)
 	fmenu (JMenu. "ファイル (F)")
+	miBrowser (JMenuItem. "ブラウザ設定の編集... (B)" KeyEvent/VK_B)
+	miExit (JMenuItem. "終了(X)" KeyEvent/VK_X)
+	tmenu (JMenu. "タブ (T)")
 	miAUT (JMenuItem. "ユーザータブの追加... (U)" KeyEvent/VK_U)
 	miAKT (JMenuItem. "キーワードタブの追加... (K)" KeyEvent/VK_K)
-	miExit (JMenuItem. "終了(X)" KeyEvent/VK_X)
-	tmenu (JMenu. "ツール (T)")
-	miBrowser (JMenuItem. "ブラウザ設定の編集... (B)" KeyEvent/VK_B)
 	hmenu (JMenu. "ヘルプ (H)")
-	miHelp (JMenuItem. "ヘルプ (H)" KeyEvent/VK_H)
+	miHelp (JMenuItem. "ヘルプページの参照 (H)" KeyEvent/VK_H)
 	miAbout (JMenuItem. "About..." KeyEvent/VK_A)]
+    (doto miBrowser
+      (add-action-listener
+       (fn [e] (let [dlg (ubd/browsers-dialog
+			  frame "ブラウザ設定" (:browsers @(p/get-pref))
+			  (fn [nbpref] (swap! (p/get-pref) assoc :browsers nbpref)))]
+		 (do-swing (.setVisible dlg true))))))
     (doto miExit
       (add-action-listener
        (fn [e] (do-swing
@@ -38,8 +44,7 @@
        (fn [e] (let [tpref (p/gen-initial-user-tpref)
 		     dlg (ukvd/user-password-dialog
 			  frame "ユーザー情報の入力" tpref
-			  (fn [email passwd]
-			    (add-tab tpane (assoc tpref :email email :passwd passwd))))]
+			  (fn [ntpref] (add-tab tpane ntpref)))]
 		 (do-swing (.setVisible dlg true))))))
     (doto miAKT
       (add-action-listener
@@ -47,12 +52,6 @@
 		     dlg (uktd/keyword-tab-dialog
 			  frame "番組検索条件の入力" tpref
 			  (fn [ntpref] (add-tab tpane ntpref)))]
-		 (do-swing (.setVisible dlg true))))))
-    (doto miBrowser
-      (add-action-listener
-       (fn [e] (let [dlg (ubd/browsers-dialog
-			  frame "ブラウザ設定" (:browsers @(p/get-pref))
-			  (fn [nbpref] (swap! (p/get-pref) assoc :browsers nbpref)))]
 		 (do-swing (.setVisible dlg true))))))
     (doto miHelp
       (add-action-listener
@@ -65,12 +64,12 @@
 		 (do-swing (.setVisible dlg true))))))
     (doto fmenu
       (.setMnemonic KeyEvent/VK_F)
-      (.add miAUT)
-      (.add miAKT)
+      (.add miBrowser)
       (.add miExit))
     (doto tmenu
       (.setMnemonic KeyEvent/VK_T)
-      (.add miBrowser))
+      (.add miAUT)
+      (.add miAKT))
     (doto hmenu
       (.setMnemonic KeyEvent/VK_H)
       (.add miHelp)

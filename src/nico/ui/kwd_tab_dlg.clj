@@ -51,7 +51,9 @@
 				      (.isSelected cb-owner)
 				      (.isSelected cb-category)
 				      (.isSelected cb-comm-name))]
-		     (if (or (= 0 (.getLength title-doc)) (= 0 (.getLength query-doc)) (false? selected))
+		     (if (or (= 0 (.getLength title-doc))
+			     (= 0 (.getLength query-doc))
+			     (false? selected))
 		       (.setEnabled btn-ok false)
 		       (try
 			 (do (eval (transq (read-query))) (.setEnabled btn-ok true))
@@ -116,7 +118,8 @@
 					        (when (.isSelected cb-desc) :desc)
 					        (when (.isSelected cb-owner) :owner_name)
 						(when (.isSelected cb-category) :category)
-						(when (.isSelected cb-comm-name) :comm_name)))})
+						(when (.isSelected cb-comm-name) :comm_name)))
+			  :alert (:alert pref)})
 		  (.dispose dlg)))))
       (.setDefaultButton (.getRootPane dlg) btn-ok)
       (let [btn-cancel (ub/btn "キャンセル"), layout (SpringLayout.)]

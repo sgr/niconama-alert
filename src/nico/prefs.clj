@@ -12,14 +12,16 @@
   (let [e (GraphicsEnvironment/getLocalGraphicsEnvironment)
 	p (.getCenterPoint e)]
     {:window {:width *default-frame-width* :height *default-frame-height*
-	      :posx (- (.x p) (int (/ *default-frame-width* 2))) :posy (- (.y p) (int (/ *default-frame-height* 2)))}
-     :tabs [] :browsers [[:default :default true]]}))
+	      :posx (- (.x p) (int (/ *default-frame-width* 2)))
+	      :posy (- (.y p) (int (/ *default-frame-height* 2)))}
+     :tabs [{:type :all :title "All" :alert false}]
+     :browsers [[:default :default true]]}))
 
 (defn gen-initial-user-tpref []
-  {:type :comm :email nil :passwd nil})
+  {:type :comm :email nil :passwd nil :alert true})
 
 (defn gen-initial-keyword-tpref []
-  {:type :kwd :title nil :query nil :category '()})
+  {:type :kwd :title nil :query nil :category '() :alert true})
 
 (let [p (atom {})]
   (defn get-pref [] p)

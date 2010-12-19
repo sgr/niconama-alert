@@ -10,7 +10,8 @@
 	    [nico.alert :as al]
 	    [nico.pgm :as pgm])
   (:import (java.awt Dimension)
-	   (javax.swing BorderFactory JLabel JMenuItem JPanel JPopupMenu JScrollPane SpringLayout)
+	   (javax.swing BorderFactory JCheckBoxMenuItem JLabel JMenuItem
+			JPanel JPopupMenu JScrollPane SpringLayout)
 	   (javax.swing.border EtchedBorder)))
 
 (gen-class
@@ -22,7 +23,7 @@
  :init init
  :post-init post-init
  :methods [[getTitleLabel [] javax.swing.JLabel]
-	   [getPopupMenu [] javax.swing.JPopupMenu]
+	   [getTabPopupMenu [] javax.swing.JPopupMenu]
 	   [getTabPref [] clojure.lang.IPersistentMap]
 	   [setTabPref [clojure.lang.IPersistentMap] void]
 	   [updateTitle [String] void]
@@ -113,8 +114,8 @@
   (let [tlabel (:title-label @(.state this)) title (:title @(.state this))]
     (if-let [filter-fn (:filter-fn @(.state this))]
       (let [[cnt npgms] (filter-fn pgms)]
-	;; alert programs when it is in user-added tabs.
-	(when-not (= :all (-> @(.state this) :pref :type))
+	;; alert programs.
+	(when (-> @(.state this) :pref :alert)
 	  (doseq [[id npgm] npgms] (al/alert-pgm id)))
 	(do-swing
 	 (.setText tlabel (format "%s (%d)" title cnt))
@@ -122,12 +123,13 @@
       (do-swing
        (.setText tlabel (format "%s (-)" title))))))
 
-(defn- pp-getPopupMenu [this]
+(defn- pp-getTabPopupMenu [this]
   (condp = (-> @(.state this) :pref :type)
       :all nil
       :comm (let [pmenu (JPopupMenu.)
- 		  ritem (JMenuItem. "Re-login")
-		  eitem (JMenuItem. "Edit")]
+ 		  ritem (JMenuItem. "再ログイン")
+		  aitem (JCheckBoxMenuItem. "アラート" (-> @(.state this) :pref :alert))
+		  eitem (JMenuItem. "編集")]
 	      (doto ritem
 		(add-action-listener (fn [e] (invoke-init-fn this))))
 	      (doto eitem
@@ -139,10 +141,17 @@
 				      (let [npref (assoc pref :email email :passwd passwd)]
 					(.setTabPref this npref))))]
 			   (do-swing (.setVisible dlg true))))))
+	      (doto aitem
+		(add-action-listener
+		 (fn [e] (let [pref (:pref @(.state this))
+			       val (.isSelected aitem)]
+			   (swap! (.state this) assoc :pref (assoc pref :alert val))))))
 	      (doto pmenu
 		(.add ritem)
+		(.add aitem)
 		(.add eitem)))
       :kwd (let [pmenu (JPopupMenu.)
+		 aitem (JCheckBoxMenuItem. "アラート" (-> @(.state this) :pref :alert))
 		 eitem (JMenuItem. "Edit")]
 	     (doto eitem
 	       (add-action-listener
@@ -152,5 +161,11 @@
 				   (fn [npref]
 				     (.setTabPref this npref)))]
 			  (do-swing (.setVisible dlg true))))))
+	      (doto aitem
+		(add-action-listener
+		 (fn [e] (let [pref (:pref @(.state this))
+			       val (.isSelected aitem)]
+			   (swap! (.state this) assoc :pref (assoc pref :alert val))))))
 	     (doto pmenu
+	       (.add aitem)
 	       (.add eitem)))))

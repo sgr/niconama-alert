@@ -22,7 +22,7 @@
  :post-init post-init
  :methods [[addExtTab [clojure.lang.Keyword java.awt.Component] void]
 	   [updatePgms [clojure.lang.IPersistentMap boolean] void]
-	   [getTabPrefs [] clojure.lang.LazySeq]])
+	   [getTabPrefs [] clojure.lang.IPersistentVector]])
 
 (defn ext-tabbed-pane []
   (let [cloader (.getClassLoader (class (fn [])))]
@@ -42,29 +42,6 @@
 	      JOptionPane/OK_CANCEL_OPTION JOptionPane/WARNING_MESSAGE))
       (.removeTabAt tabbed-pane (.indexOfComponent tabbed-pane content)))))
 
-(defn- etp-post-init [this commicn kwdicn closeicn]
-  (let [tpane this]
-    (doto tpane
-      (.addMouseListener
-       (proxy [MouseListener] []
-	 (mouseClicked
-	  [e]
-	  (when (SwingUtilities/isRightMouseButton e)
-	    (let [x (.getX e) y (.getY e) idx (.indexAtLocation tpane x y)]
-	      (when-not (= -1 idx)
-		(let [content (.getComponentAt tpane idx)]
-		  (if-let [pmenu (.getPopupMenu content)]
-		    (let [ditem (JMenuItem. "Delete")]
-		      (doto ditem
-			(add-action-listener (confirm-rem-tab-fn tpane content)))
-		      (doto pmenu
-			(.add ditem)
-			(.show tpane (.getX e) (.getY e))))))))))
-	 (mouseEntered [e])
-	 (mouseExited [e])
-	 (mousePressed [e])
-	 (mouseReleased [e]))))))
-  
 (defn- etp-tab-panel [this kind content]
   (if (= kind :all)
     (let [tab (JPanel. (BorderLayout.))
@@ -93,6 +70,48 @@
 	(.add cbtn BorderLayout/EAST)
 	(.setBorder (BorderFactory/createEmptyBorder 3 0 2 0))))))
 
+(defn- etp-post-init [this commicn kwdicn closeicn]
+  (let [tpane this]
+    (doto tpane
+      (.addMouseListener
+       (proxy [MouseListener] []
+	 (mouseClicked
+	  [e]
+	  (when (SwingUtilities/isRightMouseButton e)
+	    (let [x (.getX e) y (.getY e) idx (.indexAtLocation tpane x y)]
+	      (when-not (= -1 idx)
+		(let [content (.getComponentAt tpane idx)]
+		  (if-let [pmenu (.getTabPopupMenu content)]
+		    (letfn [(swap-fn [idx nidx]
+				     (fn [e]
+				       (let [type (:type (.getTabPref content))]
+					 (doto tpane
+					   (.remove idx)
+					   (.insertTab nil nil content nil nidx)
+					   (.setTabComponentAt
+					    nidx (etp-tab-panel tpane type content))
+					   (.setSelectedIndex nidx)))))]
+		      (when (> (dec (.getTabCount tpane)) idx)
+			(let [ritem (JMenuItem. "右へ")]
+			  (doto ritem
+			    (add-action-listener (swap-fn idx (inc idx))))
+			  (doto pmenu (.add ritem))))
+		      (when (< 1 idx)
+			(let [litem (JMenuItem. "左へ")]
+			  (doto litem
+			    (add-action-listener (swap-fn idx (dec idx))))
+			  (doto pmenu (.add litem))))
+		      (let [ditem (JMenuItem. "削除")]
+			(doto ditem
+			  (add-action-listener (confirm-rem-tab-fn tpane content)))
+			(doto pmenu
+			  (.add ditem)
+			  (.show tpane (.getX e) (.getY e)))))))))))
+	 (mouseEntered [e])
+	 (mouseExited [e])
+	 (mousePressed [e])
+	 (mouseReleased [e]))))))
+  
 (defn- etp-addExtTab [this kind content]
   (doto this
     (.addTab nil content)
@@ -110,13 +129,8 @@
 	  (swap! (.state this) assoc :last-updated (tu/now))))))
 
 (defn- etp-getTabPrefs [this]
-  (map #(.getTabPref (.getComponentAt this %)) (range 1 (.getTabCount this))))
-
-(defn add-all-tab
-  "放送中のすべての番組情報を表示するタブを追加する。
-   現時点で総番組数は3000以上にもなるため、テーブルのソート機能はオフにする"
-  [tpane]
-  (do-swing* :now #(.addExtTab tpane :all (nico.ui.ProgramsPanel. {:type :all :title "All"}))))
+  (vec (map #(.getTabPref (.getComponentAt this %)) (range (.getTabCount this)))))
 
 (defn add-tab [tpane tpref]
   (do-swing* :now #(.addExtTab tpane (:type tpref) (nico.ui.ProgramsPanel. tpref))))
+
