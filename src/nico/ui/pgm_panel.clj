@@ -11,7 +11,7 @@
 	    [nico.pgm :as pgm])
   (:import (java.awt Dimension)
 	   (javax.swing BorderFactory JCheckBoxMenuItem JLabel JMenuItem
-			JPanel JPopupMenu JScrollPane SpringLayout)
+			JPanel JScrollPane SpringLayout)
 	   (javax.swing.border EtchedBorder)))
 
 (gen-class
@@ -23,7 +23,7 @@
  :init init
  :post-init post-init
  :methods [[getTitleLabel [] javax.swing.JLabel]
-	   [getTabPopupMenu [] javax.swing.JPopupMenu]
+	   [getTabMenuItems [] clojure.lang.IPersistentVector]
 	   [getTabPref [] clojure.lang.IPersistentMap]
 	   [setTabPref [clojure.lang.IPersistentMap] void]
 	   [updateTitle [String] void]
@@ -123,11 +123,10 @@
       (do-swing
        (.setText tlabel (format "%s (-)" title))))))
 
-(defn- pp-getTabPopupMenu [this]
+(defn- pp-getTabMenuItems [this]
   (condp = (-> @(.state this) :pref :type)
       :all nil
-      :comm (let [pmenu (JPopupMenu.)
-		  aitem (JCheckBoxMenuItem. "アラート" (-> @(.state this) :pref :alert))
+      :comm (let [aitem (JCheckBoxMenuItem. "アラート" (-> @(.state this) :pref :alert))
  		  ritem (JMenuItem. "再ログイン")
 		  eitem (JMenuItem. "編集")]
 	      (doto ritem
@@ -146,12 +145,8 @@
 		 (fn [e] (let [pref (:pref @(.state this))
 			       val (.isSelected aitem)]
 			   (swap! (.state this) assoc :pref (assoc pref :alert val))))))
-	      (doto pmenu
-		(.add aitem)
-		(.add ritem)
-		(.add eitem)))
-      :kwd (let [pmenu (JPopupMenu.)
-		 aitem (JCheckBoxMenuItem. "アラート" (-> @(.state this) :pref :alert))
+	      [aitem ritem eitem])
+      :kwd (let [aitem (JCheckBoxMenuItem. "アラート" (-> @(.state this) :pref :alert))
 		 eitem (JMenuItem. "編集")]
 	     (doto eitem
 	       (add-action-listener
@@ -166,6 +161,5 @@
 		 (fn [e] (let [pref (:pref @(.state this))
 			       val (.isSelected aitem)]
 			   (swap! (.state this) assoc :pref (assoc pref :alert val))))))
-	     (doto pmenu
-	       (.add aitem)
-	       (.add eitem)))))
+	      [aitem eitem])))
+

@@ -10,7 +10,7 @@
   (:import (java.awt BorderLayout Dimension)
 	   (java.awt.event MouseListener)
 	   (javax.swing BorderFactory ImageIcon JButton JLabel JMenuItem
-			JOptionPane JPanel SwingUtilities)))
+			JOptionPane JPanel JPopupMenu SwingUtilities)))
 
 (gen-class
  :name nico.ui.ExtTabbedPane
@@ -22,6 +22,7 @@
  :post-init post-init
  :methods [[addExtTab [clojure.lang.Keyword java.awt.Component] void]
 	   [updatePgms [clojure.lang.IPersistentMap boolean] void]
+	   [getTabMenuItems [int] clojure.lang.IPersistentVector]
 	   [getTabPrefs [] clojure.lang.IPersistentVector]])
 
 (defn ext-tabbed-pane []
@@ -70,6 +71,29 @@
 	(.add cbtn BorderLayout/EAST)
 	(.setBorder (BorderFactory/createEmptyBorder 3 0 2 0))))))
 
+(defn- etp-getTabMenuItems [this idx]
+  (when-not (= -1 idx)
+    (let [content (.getComponentAt this idx)]
+      (when-let [items (.getTabMenuItems content)]
+	(letfn [(swap-fn
+		 [idx nidx]
+		 (fn [e]
+		   (let [type (:type (.getTabPref content))]
+		     (doto this
+		       (.remove idx)
+		       (.insertTab nil nil content nil nidx)
+		       (.setTabComponentAt nidx (etp-tab-panel this type content))
+		       (.setSelectedIndex nidx)))))]
+	  (when (> (dec (.getTabCount this)) idx)
+	    (conj items
+		  (doto (JMenuItem. "右へ") (add-action-listener (swap-fn idx (inc idx))))))
+	  (when (< 1 idx)
+	    (conj items
+		  (doto (JMenuItem. "左へ") (add-action-listener (swap-fn idx (dec idx))))))
+	  (conj items
+		(doto (JMenuItem. "削除")
+		  (add-action-listener (confirm-rem-tab-fn this content)))))))))
+
 (defn- etp-post-init [this commicn kwdicn closeicn]
   (let [tpane this]
     (doto tpane
@@ -79,34 +103,10 @@
 	  [e]
 	  (when (SwingUtilities/isRightMouseButton e)
 	    (let [x (.getX e) y (.getY e) idx (.indexAtLocation tpane x y)]
-	      (when-not (= -1 idx)
-		(let [content (.getComponentAt tpane idx)]
-		  (if-let [pmenu (.getTabPopupMenu content)]
-		    (letfn [(swap-fn [idx nidx]
-				     (fn [e]
-				       (let [type (:type (.getTabPref content))]
-					 (doto tpane
-					   (.remove idx)
-					   (.insertTab nil nil content nil nidx)
-					   (.setTabComponentAt
-					    nidx (etp-tab-panel tpane type content))
-					   (.setSelectedIndex nidx)))))]
-		      (when (> (dec (.getTabCount tpane)) idx)
-			(let [ritem (JMenuItem. "右へ")]
-			  (doto ritem
-			    (add-action-listener (swap-fn idx (inc idx))))
-			  (doto pmenu (.add ritem))))
-		      (when (< 1 idx)
-			(let [litem (JMenuItem. "左へ")]
-			  (doto litem
-			    (add-action-listener (swap-fn idx (dec idx))))
-			  (doto pmenu (.add litem))))
-		      (let [ditem (JMenuItem. "削除")]
-			(doto ditem
-			  (add-action-listener (confirm-rem-tab-fn tpane content)))
-			(doto pmenu
-			  (.add ditem)
-			  (.show tpane (.getX e) (.getY e)))))))))))
+	      (when-let [items (.getTabMenuItems tpane idx)]
+		(let [pmenu (JPopupMenu.)]
+		  (doseq [item items] (doto pmenu (.add item)))
+		  (.show pmenu tpane (.getX e) (.getY e)))))))
 	 (mouseEntered [e])
 	 (mouseExited [e])
 	 (mousePressed [e])
