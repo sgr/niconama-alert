@@ -78,7 +78,7 @@
 (defn- get-thumbnail [url]
   (ImageIcon. (adjust-img (try (ImageIO/read url) (catch Exception _ *noimg*)) 64 64)))
 
-(defn alert-dlg [pgm extra-close-fn]
+(defn alert-dlg [^nico.pgm.Pgm pgm extra-close-fn]
   (let [dlg (JDialog.), thumbicn (get-thumbnail (URL. (:thumbnail pgm)))]
     (let [tpanel (JPanel.), dpanel (JPanel.)
 	  owner (if-let [n (:owner_name pgm)] n "## NO_OWNER ##")

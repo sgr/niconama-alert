@@ -4,22 +4,22 @@
   nico.pgm
   (:use [time-utils :only [earlier?]]))
 
-(defstruct pgm
-  :id		;; 番組ID
-  :title	;; タイトル
-  :pubdate	;; 開始日時
-  :desc		;; 説明
-  :category	;; カテゴリ
-  :link		;; 番組へのリンク
-  :thumbnail	;; コミュニティのサムネイル
-  :owner_name	;; 放送者名
-  :member_only	;; コミュ限
-  :view		;; 来場者数
-  :type		;; community or channel
-  :num_res	;; コメント数
-  :comm_name	;; コミュニティ名
-  :comm_id	;; コミュニティID
-  :alerted)	;; アラート済み
+(defrecord Pgm
+  [id		;; 番組ID
+   title	;; タイトル
+   pubdate	;; 開始日時
+   desc		;; 説明
+   category	;; カテゴリ
+   link		;; 番組へのリンク
+   thumbnail	;; コミュニティのサムネイル
+   owner_name	;; 放送者名
+   member_only	;; コミュ限
+   view		;; 来場者数
+   type		;; community or channel
+   num_res	;; コメント数
+   comm_name	;; コミュニティ名
+   comm_id	;; コミュニティID
+   alerted])	;; アラート済み
 
 ;; 以下で使われるpgmsとは、番組IDをキー、pgmを値とするようなマップである。
 (let [id-pgms (ref {}),		;; 番組IDをキー、番組情報を値とするマップ
@@ -28,11 +28,11 @@
       cnt (ref 0)]		;; プログラム数
   (defn pgms [] @id-pgms)
   (defn count-pgms [] @cnt)
-  (defn new? [id] (not (contains? @old id)))
+  (defn new? [^String id] (not (contains? @old id)))
   (defn- is-to-add?
     "この番組情報を加えるべきか？同じコミュニティの放送が複数あったら、新しいものだけを追加する。
      既に同じIDの情報があれば追加しない。"
-    [pgm]
+    [^Pgm pgm]
     (if-not (get @id-pgms (:id pgm) false)
       (if-let [apgm (get @comm-pgms (:comm_id pgm))]
 	(earlier? (:pubdate apgm) (:pubdate pgm))
@@ -40,16 +40,16 @@
       false))
   (defn get-pgm
     "番組情報を得る"
-    [id] (get @id-pgms id nil))
+    [^String id] (get @id-pgms id nil))
   (defn- rem-pgm
     "番組情報を削除する"
-    [id]
+    [^String id]
     (dosync
      (alter comm-pgms dissoc (:comm_id (get @id-pgms id)))
      (alter id-pgms dissoc id)))
   (defn- add-pgm
     "番組情報を追加する"
-    [pgm]
+    [^Pgm pgm]
     (when (is-to-add? pgm)
       (dosync
        (when-let [old-pgm (get @comm-pgms (:comm_id pgm))] (rem-pgm (:id old-pgm)))
@@ -57,7 +57,7 @@
        (when-let [cid (:comm_id pgm)] (alter comm-pgms assoc cid pgm)))))
   (defn update-pgm
     "番組情報を更新する"
-    [pgm]
+    [^Pgm pgm]
     (dosync
      (alter id-pgms assoc (:id pgm) pgm)
      (when-let [cid (:comm_id pgm)] (alter comm-pgms assoc cid pgm))))

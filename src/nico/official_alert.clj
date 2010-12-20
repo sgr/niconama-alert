@@ -53,21 +53,22 @@
 (defn- create-pgm
   "getstreaminfoで得られた情報から番組情報を生成する。が、足りない情報がポロポロあって使えない・・・"
   [id comm_id owner_id date zipped-res]
-  (struct pgm/pgm
-	  (str "lv" id)
-	  (first (zf/xml-> zipped-res :streaminfo :title zf/text))
-	  date ;pubdate
-	  (first (zf/xml-> zipped-res :streaminfo :description zf/text))
-	  nil ;category
-	  (str "http://live.nicovideo.jp/watch/lv" id)
-	  (first (zf/xml-> zipped-res :communityinfo :thumbnail zf/text))
-	  owner_id ;owner_name
-	  nil ;member_only
-	  nil ;view
-	  (first (zf/xml-> zipped-res :streaminfo :provider_type zf/text))
-	  nil ;num_res
-	  (first (zf/xml-> zipped-res :communityinfo :name zf/text))
-	  comm_id))
+  (nico.pgm.Pgm.
+   (str "lv" id)
+   (first (zf/xml-> zipped-res :streaminfo :title zf/text))
+   date ;pubdate
+   (first (zf/xml-> zipped-res :streaminfo :description zf/text))
+   nil ;category
+   (str "http://live.nicovideo.jp/watch/lv" id)
+   (first (zf/xml-> zipped-res :communityinfo :thumbnail zf/text))
+   owner_id ;owner_name
+   nil ;member_only
+   nil ;view
+   (first (zf/xml-> zipped-res :streaminfo :provider_type zf/text))
+   nil ;num_res
+   (first (zf/xml-> zipped-res :communityinfo :name zf/text))
+   comm_id
+   false))
 
 (defn- get-stream-info [chat-str]
   (let [chat (xml/parse (java.io.StringBufferInputStream. chat-str))]

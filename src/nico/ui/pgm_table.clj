@@ -71,7 +71,7 @@
 	   [getProgramId [int] String]
 	   [getProgramTitle [int] String]
 	   [updateData [clojure.lang.IPersistentMap] void]
-	   [getPgm [int] clojure.lang.PersistentStructMap]])
+	   [getPgm [int] nico.pgm.Pgm]])
 
 ;; ProgramsTableは、ProgramsTableModelを表示するJXTable。
 ;; ツールチップを表示できる。
