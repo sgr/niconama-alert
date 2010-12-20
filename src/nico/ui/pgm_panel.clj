@@ -127,8 +127,8 @@
   (condp = (-> @(.state this) :pref :type)
       :all nil
       :comm (let [pmenu (JPopupMenu.)
- 		  ritem (JMenuItem. "再ログイン")
 		  aitem (JCheckBoxMenuItem. "アラート" (-> @(.state this) :pref :alert))
+ 		  ritem (JMenuItem. "再ログイン")
 		  eitem (JMenuItem. "編集")]
 	      (doto ritem
 		(add-action-listener (fn [e] (invoke-init-fn this))))
@@ -147,12 +147,12 @@
 			       val (.isSelected aitem)]
 			   (swap! (.state this) assoc :pref (assoc pref :alert val))))))
 	      (doto pmenu
-		(.add ritem)
 		(.add aitem)
+		(.add ritem)
 		(.add eitem)))
       :kwd (let [pmenu (JPopupMenu.)
 		 aitem (JCheckBoxMenuItem. "アラート" (-> @(.state this) :pref :alert))
-		 eitem (JMenuItem. "Edit")]
+		 eitem (JMenuItem. "編集")]
 	     (doto eitem
 	       (add-action-listener
 		(fn [e] (let [dlg (uktd/keyword-tab-dialog
