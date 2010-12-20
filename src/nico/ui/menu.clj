@@ -12,7 +12,8 @@
   (:import (java.awt Desktop)
 	   (java.awt.event KeyEvent InputEvent WindowEvent WindowListener)
 	   (java.net URI)
-	   (javax.swing JMenuBar JMenu JMenuItem KeyStroke)))
+	   (javax.swing JMenuBar JMenu JMenuItem JSeparator KeyStroke)
+	   (javax.swing.event MenuListener)))
 
 (def *help-url* "https://github.com/sgr/niconama-alert/wiki/Help")
 
@@ -69,7 +70,19 @@
     (doto tmenu
       (.setMnemonic KeyEvent/VK_T)
       (.add miAUT)
-      (.add miAKT))
+      (.add miAKT)
+      (.addMenuListener
+       (proxy [MenuListener] []
+	 (menuSelected
+	  [e]
+	  (when-let [items (.getTabMenuItems tpane (.getSelectedIndex tpane))]
+	    (.add tmenu (JSeparator.))
+	    (doseq [item items] (.add tmenu item))))
+	 (menuDeselected
+	  [e]
+	  (doseq [idx (range (dec (.getItemCount tmenu)) 1 -1)]
+	    (.remove tmenu idx)))
+	 (menuCanceled [e]))))
     (doto hmenu
       (.setMnemonic KeyEvent/VK_H)
       (.add miHelp)

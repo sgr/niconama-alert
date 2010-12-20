@@ -74,25 +74,26 @@
 (defn- etp-getTabMenuItems [this idx]
   (when-not (= -1 idx)
     (let [content (.getComponentAt this idx)]
-      (when-let [items (.getTabMenuItems content)]
-	(letfn [(swap-fn
-		 [idx nidx]
-		 (fn [e]
-		   (let [type (:type (.getTabPref content))]
-		     (doto this
-		       (.remove idx)
-		       (.insertTab nil nil content nil nidx)
-		       (.setTabComponentAt nidx (etp-tab-panel this type content))
-		       (.setSelectedIndex nidx)))))]
-	  (when (> (dec (.getTabCount this)) idx)
-	    (conj items
-		  (doto (JMenuItem. "右へ") (add-action-listener (swap-fn idx (inc idx))))))
-	  (when (< 1 idx)
-	    (conj items
-		  (doto (JMenuItem. "左へ") (add-action-listener (swap-fn idx (dec idx))))))
-	  (conj items
-		(doto (JMenuItem. "削除")
-		  (add-action-listener (confirm-rem-tab-fn this content)))))))))
+      (when-let [itms (.getTabMenuItems content)]
+	(let [items (atom itms)]
+	  (letfn [(swap-fn
+		   [idx nidx]
+		   (fn [e]
+		     (let [type (:type (.getTabPref content))]
+		       (doto this
+			 (.remove idx)
+			 (.insertTab nil nil content nil nidx)
+			 (.setTabComponentAt nidx (etp-tab-panel this type content))
+			 (.setSelectedIndex nidx)))))]
+	    (when (> (dec (.getTabCount this)) idx)
+	      (swap! items conj
+		     (doto (JMenuItem. "右へ") (add-action-listener (swap-fn idx (inc idx))))))
+	    (when (< 1 idx)
+	      (swap! items conj
+		     (doto (JMenuItem. "左へ") (add-action-listener (swap-fn idx (dec idx))))))
+	    (conj @items
+		  (doto (JMenuItem. "削除")
+		    (add-action-listener (confirm-rem-tab-fn this content))))))))))
 
 (defn- etp-post-init [this commicn kwdicn closeicn]
   (let [tpane this]
