@@ -24,7 +24,7 @@
 	(.add lapp) (.add lauthor)))
     (let [lclj (JLabel. "Clojure 1.2.0 Copyright (c) Rich Hickey. All rights reserved.")
 	  lcljc (JLabel. "Clojure-contrib 1.2.0 copyrighted by Rich Hickey and the various contributors.")
-	  lsx (JLabel. "SwingX 1.6.1 SwingLabs project")
+	  lsx (JLabel. "SwingX 1.6.2 SwingLabs project")
 	  fnt (Font. "Default" Font/PLAIN 12)
 	  layout (BoxLayout. lib-panel BoxLayout/Y_AXIS)]
       (.setFont lclj fnt) (.setFont lcljc fnt) (.setFont lsx fnt)
