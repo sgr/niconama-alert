@@ -20,27 +20,35 @@
 (def *cicn* (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "closebtn.png")))
 (def *noimg* (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
 
-(try
-  (when-let [cAu (Class/forName "com.sun.awt.AWTUtilities")]
-    (let [cWindow (Class/forName "java.awt.Window")
-	  cShape (Class/forName "java.awt.Shape")
-	  setwo (.getMethod cAu "setWindowOpacity" (into-array Class [cWindow Float/TYPE]))
-	  setws (.getMethod cAu "setWindowShape" (into-array Class [cWindow cShape]))]
-      (defn decorate [dlg]
-	(.invoke setwo nil (to-array [dlg (float 0.9)]))
-	(doto dlg
-	  (.addComponentListener
-	   (proxy [ComponentAdapter][]
-	     (componentResized
-	      [e]
-	      (try
-		(.invoke
-		 setws nil
-		 (to-array
-		  [dlg (RoundRectangle2D$Float. 0 0 (.getWidth dlg) (.getHeight dlg) 20 20)]))
-		(catch Exception _
-		  (println "This platform doesn't support AWTUtilities/setWindowShape."))))))))))
-  (catch Exception e (.printStackTrace e)))
+(let [decorate-fn (atom nil)]
+  (defn- decorate [dlg]
+    (when-not @decorate-fn
+      (try
+	(let [cAu (Class/forName "com.sun.awt.AWTUtilities")
+	      cWindow (Class/forName "java.awt.Window")
+	      cShape (Class/forName "java.awt.Shape")
+	      setwo (.getMethod cAu "setWindowOpacity" (into-array Class [cWindow Float/TYPE]))
+	      setws (.getMethod cAu "setWindowShape" (into-array Class [cWindow cShape]))]
+	  (reset! decorate-fn
+		  (fn [dlg]
+		    (.invoke setwo nil (to-array [dlg (float 0.9)]))
+		    (doto dlg
+		      (.addComponentListener
+		       (proxy [ComponentAdapter][]
+			 (componentResized
+			  [e]
+			  (try
+			    (.invoke
+			     setws nil
+			     (to-array
+			      [dlg (RoundRectangle2D$Float.
+				    0 0
+				    (.getWidth dlg) (.getHeight dlg) 20 20)]))
+			    (catch Exception e (.printStackTrace e))))))))))
+	(catch Exception e
+	  (reset! decorate-fn (fn [dlg]))
+	  (println "This platform doesn't support AWTUtilities."))))
+    (@decorate-fn dlg)))
 
 (defn dlg-width [] (.width *asize*))
 (defn dlg-height [] (.height *asize*))
