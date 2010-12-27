@@ -14,7 +14,7 @@
 JREをインストールし、次のコマンドラインで起動します。
 環境によってはjarファイルをダブルクリックするだけで起動することも可能です。
 
-    $ java -jar nicoalert-x.x.x-beta-standalone.jar
+    $ java -jar nicoalert-1.0.0-standalone.jar
 
 ## Installation
 
