@@ -96,7 +96,7 @@
   (defn- younger?
     "番組開始30分以内なら真。ただし取得日時が古過ぎるものは偽とする。"
     [pgm]
-    (if (> 7200000 (- (.getTime (now)) (.getTime (:fetched_at pgm))))
+    (if (> 1800000 (- (.getTime (now)) (.getTime (:fetched_at pgm))))
       (if (> 1800000 (elapsed-time pgm)) true false)
       false))
   (defn rem-pgms-partial
