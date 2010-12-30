@@ -66,7 +66,7 @@
 (defn- get-child-attr [tag attr node]
   (attr (:attrs (get-child-elm tag node))))
 
-(defn- create-pgm [item]
+(defn- create-pgm [item fetched_at]
   (nico.pgm.Pgm.
    (get-child-content :guid item)
    (get-child-content :title item)
@@ -83,12 +83,13 @@
    (Integer/parseInt (get-child-content :nicolive:num_res item))
    (get-child-content :nicolive:community_name item)
    (get-child-content :nicolive:community_id item)
-   false))
+   false
+   fetched_at))
 
 (defn- get-programs-from-rss-page [rss]
   (for [item (for [x (zfx/xml-> (zip/xml-zip rss) :channel zf/children)
 		   :when (= :item (:tag (first x)))] (first x))]
-    (create-pgm item)))
+    (create-pgm item (tu/now))))
 
 (defn- earliest-pubdate [earliest pgms]
   (reduce #(if (tu/earlier? %1 %2) %1 %2)

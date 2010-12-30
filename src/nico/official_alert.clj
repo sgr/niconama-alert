@@ -5,6 +5,7 @@
              結局、コミュニティ情報の取得までしか使っていない。"}
     nico.official-alert
   (:require [nico.pgm :as pgm]
+	    [time-utils :as tu]
 	    [clojure.xml :as xml]
 	    [clojure.zip :as zip]
 	    [clojure.contrib.zip-filter.xml :as zf]
@@ -52,11 +53,11 @@
 
 (defn- create-pgm
   "getstreaminfoで得られた情報から番組情報を生成する。が、足りない情報がポロポロあって使えない・・・"
-  [id comm_id owner_id date zipped-res]
+  [id comm_id owner_id pubdate zipped-res fetched_at]
   (nico.pgm.Pgm.
    (str "lv" id)
    (first (zf/xml-> zipped-res :streaminfo :title zf/text))
-   date ;pubdate
+   pubdate
    (first (zf/xml-> zipped-res :streaminfo :description zf/text))
    nil ;category
    (str "http://live.nicovideo.jp/watch/lv" id)
@@ -68,7 +69,8 @@
    nil ;num_res
    (first (zf/xml-> zipped-res :communityinfo :name zf/text))
    comm_id
-   false))
+   false
+   fetched_at))
 
 (defn- get-stream-info [chat-str]
   (let [chat (xml/parse (java.io.StringBufferInputStream. chat-str))]
@@ -85,7 +87,7 @@
 		res (xml/parse (ha/stream agnt))
 		status (-> res :attrs :status)]
 	    (if (.equalsIgnoreCase status "ok")
-	      (let [xz (zip/xml-zip res), pgm (create-pgm pid cid uid d xz)]
+	      (let [xz (zip/xml-zip res), pgm (create-pgm pid cid uid d xz (tu/now))]
 		(println pgm)
 		pgm)
 	      (let [err (zf/xml-> (zip/xml-zip res) :error :code zf/text)]

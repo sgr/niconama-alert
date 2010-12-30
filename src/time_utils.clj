@@ -9,7 +9,7 @@
 (defn format-time [date fmt]
   (if (instance? java.util.Date date)
     (.format (SimpleDateFormat. fmt) date)
-    (.toString date)))
+    date))
 (defn format-time-long [date] (format-time date "yyyy/MM/dd HH:mm:ss"))
 (defn format-time-short [date] (format-time date "MM/dd HH:mm"))
 

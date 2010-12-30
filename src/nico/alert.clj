@@ -54,16 +54,12 @@
      (Thread.
       (fn []
 	(Thread/sleep 500)
-	(when (= 1 (.getCount @latch))
-	  (do (println "waiting...") (.await @latch)))
-	(println (format "queue: %d" (count @queue)))
+	(when (= 1 (.getCount @latch)) (.await @latch))
 	(if (< 0 (count @queue))
 	  (do
-	    (print (format "dequeue: %d -> " (count @queue)))
 	    (let [[i plat] (reserve-plat)]
 	      (if i
 		(let [adlg (uad/alert-dlg (dequeue) (fn [] (release-plat i plat)))]
-		  (println (count @queue))
 		  (.start (Thread. (fn []
 				     (do-swing* :now
 						(fn []

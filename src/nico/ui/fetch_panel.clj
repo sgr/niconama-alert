@@ -95,9 +95,9 @@
 					(.doClick tbtn))
 				       *interval-max*)
 		     (let [ratio (/ (count fetched) total)]
-		       ;; 80%以上取得できたときは、fetchedのうち最も早い開始時刻より後に開始された番組で、
-		       ;; fetchedにないものは削除
-		       (when (<= 0.8 ratio) (pgm/rem-pgms-without fetched earliest))
+		       (pgm/rem-pgms-partial fetched total)
+		       (println (format " fetched / count-pgms / total: %d / %d / %d"
+					(count fetched) (pgm/count-pgms) total))
 		       (do-swing
 			(.setText vstatus "番組情報取得中断. ")
 			(.setText vpgms (format "%d / %d" (pgm/count-pgms) total))
