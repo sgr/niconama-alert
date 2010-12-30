@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "ニコニコ生放送の番組情報とその操作"}
   nico.pgm
-  (:use [time-utils :only [earlier?]]))
+  (:use [time-utils :only [earlier? now]]))
 
 (defrecord Pgm
   [id		;; 番組ID
@@ -68,10 +68,20 @@
     "複数の番組を追加する"
     [pgms]
     (doseq [pgm pgms] (add-pgm pgm)))
+  (defn- detect-dup-pgms
+    [pgms]
+    (let [detect-dup-aux (fn [pgms s]
+			   (if (= 0 (count pgms)) s
+			       (let [p (first pgms)]
+				 (when (contains? s (:id p))
+				   (println (format " -> dup: %s %s" (:id p) (:title p))))
+				 (recur (rest pgms) (conj s (:id p))))))]
+      (detect-dup-aux pgms #{})))
   (defn reset-pgms
     "全ての番組情報を与えられた番組情報集合に置き換える"
     [pgms]
     (println (format " reset-pgms: %d" (count pgms)))
+    (detect-dup-pgms pgms)
     (dosync
      (ref-set id-pgms (reduce #(apply assoc %1 %2) {} (for [pgm pgms] (list (:id pgm) pgm))))
      (ref-set comm-pgms (reduce #(apply assoc %1 %2) {}
@@ -84,37 +94,43 @@
     [pgm]
     (- (.getTime (:fetched_at pgm)) (.getTime (:pubdate pgm))))
   (defn- younger?
-    "番組開始30分以内なら真"
+    "番組開始30分以内なら真。ただし取得日時が古過ぎるものは偽とする。"
     [pgm]
-    (if (> 1800000 (elapsed-time pgm)) true false))
+    (if (> 7200000 (- (.getTime (now)) (.getTime (:fetched_at pgm))))
+      (if (> 1800000 (elapsed-time pgm)) true false)
+      false))
   (defn rem-pgms-partial
     "部分的に取得された番組情報を基に、pgmsから不要そうな番組情報を削除する。
-     番組情報を全て取得しないと終了した番組情報を削除できないと、
+     正確には、番組情報を全て取得しないと終了した番組情報を削除できないが、
      繁忙期はサーバーも負荷が高く全ての番組を取得することが困難であるため、
      中々全ての番組情報を取得出来無い状態が続き、結果として番組情報が総番組数の２倍を超えることもある。
-     その結果ヒープ領域が必要以上に消費されることにもなるため、
-     なんとかしてこのような繁忙期であっても終了した番組を推定するヒューリスティックスを適用する。"
+     これを防ぐため、終了した番組を推定するヒューリスティックスを用いて、
+     繁忙期であっても余計な番組情報を持ちすぎないようにする。"
     [ids total]
     (when (> (count-pgms) total)	;; 取得番組数が総番組数より少いうちはなにもしない
       ;; 取得された番組は残す
       (let [fetched-pgms (select-keys @id-pgms ids)]
 	(println (format "fetched-pgms: %d" (count fetched-pgms)))
 	(if (> total (count fetched-pgms))
-	  ;; 開始から30分経ってない番組は残す
+	  ;; 開始から30分経っていないと思われる番組は残す
 	  (let [younger-pgms (select-keys @id-pgms
 					  (for [[id pgm] @id-pgms :when
 						(and (not (contains? ids id))
 						     (younger? pgm))] id))]
 	    (println (format " younger-pgms: %d" (count younger-pgms)))
 	    (if (> total (+ (count fetched-pgms) (count younger-pgms)))
-	      ;; 延長してる番組を延長時間の長い順に残す
+	      ;; 延長していると思われる番組を、延長時間の長い順に残す
 	      (let [rest (- total (+ (count fetched-pgms) (count younger-pgms)))
-		    oids (into (keys fetched-pgms) (keys younger-pgms))
+		    oids (into ids (keys younger-pgms))
 		    sids (sort #(> (elapsed-time (get @id-pgms %1))
 				   (elapsed-time (get @id-pgms %2)))
 			       (filter #(not (contains? oids %)) (keys @id-pgms)))
 		    extended-pgms (select-keys @id-pgms (take rest sids))]
 		(println (format " extended-pgms: %d" (count extended-pgms)))
+		(println " *detecting dups between younger-pgms and extended-pgms:")
+		(detect-dup-pgms (into (vals younger-pgms) (vals extended-pgms)))
+		(println " *detecting dups between fetched-pgms and extended-pgms:")
+		(detect-dup-pgms (into (vals fetched-pgms) (vals extended-pgms)))
 		(reset-pgms (into (vals fetched-pgms)
 				  (into (vals younger-pgms) (vals extended-pgms)))))
 	      (reset-pgms (into (vals fetched-pgms) (vals younger-pgms)))))
