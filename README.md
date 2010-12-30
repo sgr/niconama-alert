@@ -21,7 +21,7 @@ JREをインストールし、次のコマンドラインで起動します。
 
 ## 使い方
 
-[[https://github.com/sgr/niconama-alert/wiki/Help]]をご覧ください。
+ヘルプページ (https://github.com/sgr/niconama-alert/wiki/Help) をご覧ください。
 
 ## License
 
