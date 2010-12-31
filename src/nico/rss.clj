@@ -19,6 +19,10 @@
 	   (java.net SocketTimeoutException)
 	   (java.util Locale)))
 
+(defn- printe
+  [^Exception e]
+  (println (.getMessage e)))
+
 (defn- cleanup
   "絵文字など制御文字扱いになる文字を削除する"
   [s]
@@ -30,7 +34,7 @@
     (let [s (ds/slurp* (format "http://live.nicovideo.jp/recent/rss?p=%s" page))
 	  cs (cleanup s)]
       (xml/parse (ByteArrayInputStream. (.getBytes cs "UTF-8"))))
-    (catch Exception e (do (.printStackTrace e) {}))))
+    (catch Exception e (do (printe e) {}))))
 
 (defn- get-nico-rss-old
   "get a RSS page of nicolive info and parse it to RSS map."
@@ -47,7 +51,7 @@
 	  (println (format "errors: %s" er))
 	  (println "done"))
 	(xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8")))))
-    (catch Exception e (do (.printStackTrace e) {}))))
+    (catch Exception e (do (printe e) {}))))
 
 (defn- get-programs-count
   "get the total programs count."
@@ -55,7 +59,7 @@
   ([rss] (try
 	   (Integer/parseInt
 	    (first (zfx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count zfx/text)))
-	   (catch NumberFormatException e (do (.printStackTrace e) 0)))))
+	   (catch NumberFormatException e (do (printe e) 0)))))
 
 (defn- get-child-elm [tag node]
   (some #(if (= tag (:tag %)) %) (:content node)))
@@ -116,4 +120,4 @@
 	 (list earliest-updated fetched-updated total)
 	 :else ;; そうでなければ次のページを取得しに行く
 	 (recur (inc page) earliest-updated fetched-updated total))))
-    (catch Exception e (.printStackTrace e) (list (tu/now) #{} 0))))
+    (catch Exception e (printe e) (list (tu/now) #{} 0))))
