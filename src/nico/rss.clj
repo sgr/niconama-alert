@@ -21,7 +21,7 @@
 
 (defn- printe
   [^Exception e]
-  (println (.getMessage e)))
+  (println (format " thrown: %s: %s" (-> e .getClass .getName) (.getMessage e))))
 
 (defn- cleanup
   "絵文字など制御文字扱いになる文字を削除する"
