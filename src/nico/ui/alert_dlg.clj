@@ -84,7 +84,12 @@
     nimg))
 
 (defn- get-thumbnail [url]
-  (ImageIcon. (adjust-img (try (ImageIO/read url) (catch Exception _ *noimg*)) 64 64)))
+  (ImageIcon. (adjust-img
+	       (try (ImageIO/read url)
+		    (catch Exception e
+		      (println (format " failed loading icon: %s: %s"
+                                       (-> e .getClass .getName) (.getMessage e)))
+		      *noimg*)) 64 64)))
 
 (defn alert-dlg [^nico.pgm.Pgm pgm extra-close-fn]
   (let [dlg (JDialog.), thumbicn (get-thumbnail (URL. (:thumbnail pgm)))]
