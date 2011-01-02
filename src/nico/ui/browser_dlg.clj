@@ -85,7 +85,9 @@
   [parent title browsers ok-fn]
   (let [dlg (JDialog. parent title true), cpane (.getContentPane dlg)
 	p (.getLocationOnScreen parent)
-	tbl (browser-tbl (browsers-to-model browsers)), tbtn-panel (JPanel.)
+	tbl (browser-tbl (browsers-to-model browsers)), tbl-pane (JScrollPane. tbl)
+	tbl-panel (JPanel.), tbl-layout (SpringLayout.)
+	tbtn-panel (JPanel.)
 	btn-panel (JPanel.), btn-ok (ub/btn "OK")]
     (let [tbl-sel-model (DefaultListSelectionModel.)
 	  tbtn-add (JButton. "追加"), tbtn-edit (JButton. "編集"), tbtn-rem (JButton. "削除")
@@ -164,7 +166,9 @@
       (doto btn-ok
 	(add-action-listener
 	 (fn [e]
-	   (do-swing (.setVisible dlg false) (ok-fn (model-to-browsers (.getModel tbl))) (.dispose dlg)))))
+	   (do-swing (.setVisible dlg false)
+		     (ok-fn (model-to-browsers (.getModel tbl)))
+		     (.dispose dlg)))))
       (doto btn-cancel
 	(add-action-listener (fn [e] (do-swing (.setVisible dlg false) (.dispose dlg)))))
       (doto layout
@@ -177,9 +181,19 @@
       (doto btn-panel
 	(.setPreferredSize *btn-panel-size*)
 	(.setLayout layout) (.add btn-ok) (.add btn-cancel)))
+    (doto tbl-layout
+      (.putConstraint SpringLayout/NORTH tbl-pane 5 SpringLayout/NORTH tbl-panel)
+      (.putConstraint SpringLayout/SOUTH tbl-pane -5 SpringLayout/SOUTH tbl-panel)
+      (.putConstraint SpringLayout/WEST tbl-pane 5 SpringLayout/WEST tbl-panel)
+      (.putConstraint SpringLayout/EAST tbl-pane -5 SpringLayout/EAST tbl-panel))
+    (doto tbl-panel
+      (.add tbl-pane)
+      (.setLayout tbl-layout))
     (doto cpane
-      (.setLayout (BorderLayout.)) (.add (JScrollPane. tbl) BorderLayout/CENTER)
-      (.add tbtn-panel BorderLayout/EAST) (.add btn-panel BorderLayout/SOUTH))
+      (.setLayout (BorderLayout.))
+      (.add tbl-panel BorderLayout/CENTER)
+      (.add tbtn-panel BorderLayout/EAST)
+      (.add btn-panel BorderLayout/SOUTH))
     (doto dlg
       (.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth *dlg-size*)) 2)))
 		    (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight *dlg-size*)) 2))))
