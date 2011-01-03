@@ -11,4 +11,6 @@
   (let [b (JButton.)]
     (doto b
       (.setText text)
+      (.setMaximumSize *btn-size*)
+      (.setMinimumSize *btn-size*)
       (.setPreferredSize *btn-size*))))

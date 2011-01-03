@@ -10,7 +10,7 @@
 	   (javax.swing.event DocumentListener)
 	   (javax.swing.text PlainDocument)))
 
-(def *dlg-size* (Dimension. 450 320))
+(def *dlg-size* (Dimension. 450 330))
 (def *btn-panel-size* (Dimension. 450 40))
 
 (defn transq
@@ -42,9 +42,10 @@
 	       (if (= :EOF o) lst
 		   (recur (read r nil :EOF) (conj lst (trans-item o)))))))]
     (let [rr (transq-aux q)]
-      (if (= 1 (count rr))
-	(list 'fn '[s] (first rr))
-	(list 'fn '[s] (conj rr 'and))))))
+      (condp = (count rr)
+	  0 (throw (IllegalArgumentException. "Empty query."))
+	  1 (list 'fn '[s] (first rr))
+	  (list 'fn '[s] (conj rr 'and))))))
 
 (defn keyword-tab-dialog
   [parent title pref ok-fn]
@@ -76,19 +77,20 @@
 		     (if (false? selected)
 		       (.setBorder target-panel (BorderFactory/createLineBorder Color/RED))
 		       (.setBorder target-panel target-border))
+		     (try
+		       (do
+			 (println (format "query: %s" (transq (read-query))))
+			 (eval (transq (read-query)))
+			 (.setBorder query-area query-border)
+			 (.setEnabled btn-ok true))
+		       (catch Exception e
+			 (println (.getMessage e))
+			 (.setBorder query-area (BorderFactory/createLineBorder Color/RED))
+			 (.setEnabled btn-ok false)))
 		     (if (or (= 0 (.getLength title-doc))
 			     (= 0 (.getLength query-doc))
 			     (false? selected))
-		       (.setEnabled btn-ok false)
-		       (try
-			 (do
-			   (eval (transq (read-query)))
-			   (.setBorder query-area query-border)
-			   (.setEnabled btn-ok true))
-			 (catch Exception e
-			   (println (.getMessage e))
-			   (.setBorder query-area (BorderFactory/createLineBorder Color/RED))
-			   (.setEnabled btn-ok false))))))]
+		       (.setEnabled btn-ok false))))]
       (doto title-doc
 	(.addDocumentListener (proxy [DocumentListener] []
 				(changedUpdate [_] (check))
@@ -128,7 +130,7 @@
       (doto query-area
 	(.setLineWrap true)
 	(.setDocument query-doc))
-      (when-let [q (:query pref)] (.setText query-area q))
+      (if-let [q (:query pref)] (.setText query-area q) (.setText query-area " "))
       (doto query-panel
 	(.setBorder (BorderFactory/createTitledBorder "検索条件"))
 	(.add (JScrollPane. query-area)))
