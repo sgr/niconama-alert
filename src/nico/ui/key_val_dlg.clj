@@ -4,8 +4,8 @@
   nico.ui.key-val-dlg
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.ui.btn :as ub])
-  (:import (java.awt BorderLayout Dimension)
-	   (javax.swing GroupLayout SpringLayout
+  (:import (java.awt BorderLayout Color Dimension)
+	   (javax.swing BorderFactory GroupLayout SpringLayout
 			JButton JDialog JLabel JPanel JPasswordField JTextField)
 	   (javax.swing.event DocumentListener)
 	   (javax.swing.text PlainDocument)))
@@ -16,10 +16,19 @@
 (defn- kv-dlg
   [parent title label-key key label-val val ok-fn secure]
   (let [dlg (JDialog. parent title true), cpane (.getContentPane dlg)
+	tkey (JTextField. 25), tval (if secure (JPasswordField. 25) (JTextField. 25))
+	tkey-border (.getBorder tkey), tval-border (.getBorder tval)
 	doc-key (PlainDocument.), doc-val (PlainDocument.)
 	kv-panel (JPanel.), btn-panel (JPanel.), btn-ok (ub/btn "OK")
 	p (.getLocationOnScreen parent)]
-    (letfn [(check [] (if (or (= 0 (.getLength doc-key)) (= 0 (.getLength doc-val)))
+    (letfn [(check []
+		   (if (= 0 (.getLength doc-key))
+		     (.setBorder tkey (BorderFactory/createLineBorder Color/RED))
+		     (.setBorder tkey tkey-border))
+		   (if (= 0 (.getLength doc-val))
+		     (.setBorder tval (BorderFactory/createLineBorder Color/RED))
+		     (.setBorder tval tkey-border))
+		   (if (or (= 0 (.getLength doc-key)) (= 0 (.getLength doc-val)))
 			(.setEnabled btn-ok false) (.setEnabled btn-ok true)))]
       (doto doc-key
 	(.addDocumentListener (proxy [DocumentListener] []
@@ -31,8 +40,7 @@
 				(changedUpdate [_] (check))
 				(insertUpdate [_] (check))
 				(removeUpdate [_] (check)))))
-      (let [lkey (JLabel. label-key), tkey (JTextField. 25)
-	    lval (JLabel. label-val), tval (if secure (JPasswordField. 25) (JTextField. 25))
+      (let [lkey (JLabel. label-key), lval (JLabel. label-val)
 	    layout (GroupLayout. kv-panel)
 	    hgrp (.createSequentialGroup layout), vgrp (.createSequentialGroup layout)]
 	(doto tkey (.setDocument doc-key))
