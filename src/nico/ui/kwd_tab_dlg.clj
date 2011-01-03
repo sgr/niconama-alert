@@ -20,18 +20,31 @@
   \"word\" -> (fn [s] (re-find #\"(?i)word\" s))
   (and \"a\" (not \"b\")) -> (fn [s] (and (re-find #\"(?i)a\") (not (re-find #\"(?i)b\")))) "
   [q]
-  (letfn [(tq [q]
-	      (cond (list? q) (if (< 1 (count q))
-				(let [op (first q)]
-				  (if (or (= 'and op) (= 'or op) (= 'not op))
-				    (cons op (map tq (rest q)))
-				    (throw (IllegalArgumentException. "Malformed list was given."))))
-				(throw (IllegalArgumentException. "Almost empty list was given.")))
-		    (string? q) (if-not (empty? q)
-				  (list 're-find (list 're-pattern (str "(?i)" q)) 's)
-				  (throw (IllegalArgumentException. "Empty string was given.")))
-		    :else (list 're-find (list 're-pattern (str "(?i)" q)) 's)))]
-    (list 'fn '[s] (tq q))))
+  (letfn [(trans-item
+	   [o]
+	   (cond (list? o) (if (< 1 (count o))
+			     (let [op (first o)]
+			       (if (or (= 'and op) (= 'or op) (= 'not op))
+				 (cons op (map trans-item (rest o)))
+				 (throw (IllegalArgumentException.
+					 (format "Invalid operator: %s" op)))))
+			     (throw (IllegalArgumentException.
+				     (format "Almost empty list was given: %s" (pr-str o)))))
+		 (string? o) (if-not (empty? o)
+			       (list 're-find (list 're-pattern (str "(?i)" o)) 's)
+			       (throw (IllegalArgumentException. "Empty string was given.")))
+		 (symbol? o) (list 're-find (list 're-pattern (str "(?i)" (str o))) 's)
+		 :else (list 're-find (list 're-pattern (str "(?i)" (str o))) 's)))
+	  (transq-aux
+	   [q]
+	   (with-open [r (java.io.PushbackReader. (java.io.StringReader. q))]
+	     (loop [o (read r nil :EOF), lst '()]
+	       (if (= :EOF o) lst
+		   (recur (read r nil :EOF) (conj lst (trans-item o)))))))]
+    (let [rr (transq-aux q)]
+      (if (= 1 (count rr))
+	(list 'fn '[s] (first rr))
+	(list 'fn '[s] (conj rr 'and))))))
 
 (defn keyword-tab-dialog
   [parent title pref ok-fn]
@@ -43,8 +56,8 @@
 	cb-category (JCheckBox. "カテゴリ"), cb-comm-name (JCheckBox. "コミュ名")
 	btn-panel (JPanel.), btn-ok (ub/btn "OK")
 	p (.getLocationOnScreen parent)]
-    (letfn [(read-title [] (read-string (.getText title-doc 0 (.getLength title-doc))))
-	    (read-query [] (read-string (.getText query-doc 0 (.getLength query-doc))))
+    (letfn [(read-title [] (.getText title-doc 0 (.getLength title-doc)))
+	    (read-query [] (.getText query-doc 0 (.getLength query-doc)))
 	    (check []
 		   (let [selected (or (.isSelected cb-title)
 				      (.isSelected cb-desc)
@@ -98,7 +111,7 @@
 	(doto query-area
 	  (.setLineWrap true)
 	  (.setDocument query-doc))
-	(when-let [q (:query pref)] (.setText query-area (pr-str q)))
+	(when-let [q (:query pref)] (.setText query-area q))
 	(doto query-panel
 	  (.setBorder (BorderFactory/createTitledBorder "検索条件"))
 	  (.add (JScrollPane. query-area))))
@@ -111,7 +124,7 @@
 	 (fn [e] (do-swing
 		  (.setVisible dlg false)
 		  (ok-fn {:type :kwd
-			  :title (str (read-title))
+			  :title (read-title)
 			  :query (read-query)
 			  :target (filter #(not (nil? %))
 					  (list (when (.isSelected cb-title) :title)
