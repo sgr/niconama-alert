@@ -4,7 +4,7 @@
   nico.ui.kwd-tab-dlg
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.ui.btn :as ub])
-  (:import (java.awt BorderLayout FlowLayout Dimension)
+  (:import (java.awt BorderLayout Color FlowLayout Dimension)
 	   (javax.swing BorderFactory GroupLayout SpringLayout
 			JButton JCheckBox JDialog JLabel JPanel JScrollPane JTextArea JTextField)
 	   (javax.swing.event DocumentListener)
@@ -49,9 +49,12 @@
 (defn keyword-tab-dialog
   [parent title pref ok-fn]
   (let [dlg (JDialog. parent title true)
-	title-panel (JPanel.), title-doc (PlainDocument.)
-	query-panel (JPanel.), query-doc (PlainDocument.)
-	target-panel (JPanel.)
+	title-panel (JPanel.), title-field (JTextField. 25), title-doc (PlainDocument.)
+	title-border (.getBorder title-field)
+	query-panel (JPanel.), query-area (JTextArea. 5 38), query-doc (PlainDocument.)
+	query-border (.getBorder query-area)
+	target-outer-panel (JPanel.), target-panel (JPanel.)
+	target-border (.getBorder target-panel)
 	cb-title (JCheckBox. "タイトル"), cb-desc (JCheckBox. "説明"), cb-owner (JCheckBox. "放送主")
 	cb-category (JCheckBox. "カテゴリ"), cb-comm-name (JCheckBox. "コミュ名")
 	btn-panel (JPanel.), btn-ok (ub/btn "OK")
@@ -64,13 +67,28 @@
 				      (.isSelected cb-owner)
 				      (.isSelected cb-category)
 				      (.isSelected cb-comm-name))]
+		     (if (= 0 (.getLength title-doc))
+		       (.setBorder title-field (BorderFactory/createLineBorder Color/RED))
+		       (.setBorder title-field title-border))
+		     (if (= 0 (.getLength query-doc))
+		       (.setBorder query-area (BorderFactory/createLineBorder Color/RED))
+		       (.setBorder query-area query-border))
+		     (if (false? selected)
+		       (.setBorder target-panel (BorderFactory/createLineBorder Color/RED))
+		       (.setBorder target-panel target-border))
 		     (if (or (= 0 (.getLength title-doc))
 			     (= 0 (.getLength query-doc))
 			     (false? selected))
 		       (.setEnabled btn-ok false)
 		       (try
-			 (do (eval (transq (read-query))) (.setEnabled btn-ok true))
-			 (catch Exception e (println (.getMessage e)) (.setEnabled btn-ok false))))))]
+			 (do
+			   (eval (transq (read-query)))
+			   (.setBorder query-area query-border)
+			   (.setEnabled btn-ok true))
+			 (catch Exception e
+			   (println (.getMessage e))
+			   (.setBorder query-area (BorderFactory/createLineBorder Color/RED))
+			   (.setEnabled btn-ok false))))))]
       (doto title-doc
 	(.addDocumentListener (proxy [DocumentListener] []
 				(changedUpdate [_] (check))
@@ -91,7 +109,7 @@
 					  :category (.setSelected cb-category true)
 					  :comm_name (.setSelected cb-comm-name true)
 					  nil))))
-      (let [title-label (JLabel. "タブタイトル"), title-field (JTextField. 25)
+      (let [title-label (JLabel. "タブタイトル")
 	    layout (GroupLayout. title-panel)
 	    hgrp (.createSequentialGroup layout)
 	    vgrp (.createSequentialGroup layout)]
@@ -107,18 +125,19 @@
 	  (.setHorizontalGroup hgrp) (.setVerticalGroup vgrp)
 	  (.setAutoCreateGaps true) (.setAutoCreateContainerGaps true))
 	(doto title-panel (.setLayout layout)))
-      (let [query-area (JTextArea. 5 38)]
-	(doto query-area
-	  (.setLineWrap true)
-	  (.setDocument query-doc))
-	(when-let [q (:query pref)] (.setText query-area q))
-	(doto query-panel
-	  (.setBorder (BorderFactory/createTitledBorder "検索条件"))
-	  (.add (JScrollPane. query-area))))
+      (doto query-area
+	(.setLineWrap true)
+	(.setDocument query-doc))
+      (when-let [q (:query pref)] (.setText query-area q))
+      (doto query-panel
+	(.setBorder (BorderFactory/createTitledBorder "検索条件"))
+	(.add (JScrollPane. query-area)))
       (doto target-panel
-	(.setBorder (BorderFactory/createTitledBorder "検索対象"))
 	(.setLayout (FlowLayout.))
 	(.add cb-title) (.add cb-desc) (.add cb-owner) (.add cb-category) (.add cb-comm-name))
+      (doto target-outer-panel
+	(.setBorder (BorderFactory/createTitledBorder "検索対象"))
+	(.add target-panel))
       (doto btn-ok
 	(add-action-listener
 	 (fn [e] (do-swing
@@ -155,17 +174,17 @@
 	  (.putConstraint SpringLayout/EAST title-panel -5 SpringLayout/EAST cpane)
 	  (.putConstraint SpringLayout/WEST query-panel 5 SpringLayout/WEST cpane)
 	  (.putConstraint SpringLayout/EAST query-panel -5 SpringLayout/EAST cpane)
-	  (.putConstraint SpringLayout/WEST target-panel 5 SpringLayout/WEST cpane)
-	  (.putConstraint SpringLayout/EAST target-panel -5 SpringLayout/EAST cpane)
+	  (.putConstraint SpringLayout/WEST target-outer-panel 5 SpringLayout/WEST cpane)
+	  (.putConstraint SpringLayout/EAST target-outer-panel -5 SpringLayout/EAST cpane)
 	  (.putConstraint SpringLayout/WEST btn-panel 5 SpringLayout/WEST cpane)
 	  (.putConstraint SpringLayout/EAST btn-panel -5 SpringLayout/EAST cpane)
 	  (.putConstraint SpringLayout/NORTH title-panel 5 SpringLayout/NORTH cpane)
 	  (.putConstraint SpringLayout/NORTH query-panel 5 SpringLayout/SOUTH title-panel)
-	  (.putConstraint SpringLayout/NORTH target-panel 5 SpringLayout/SOUTH query-panel)
-	  (.putConstraint SpringLayout/NORTH btn-panel 5 SpringLayout/SOUTH target-panel)
+	  (.putConstraint SpringLayout/NORTH target-outer-panel 5 SpringLayout/SOUTH query-panel)
+	  (.putConstraint SpringLayout/NORTH btn-panel 5 SpringLayout/SOUTH target-outer-panel)
 	  (.putConstraint SpringLayout/SOUTH btn-panel -5 SpringLayout/SOUTH cpane))
 	(doto cpane
-	  (.add title-panel) (.add query-panel) (.add target-panel) (.add btn-panel)
+	  (.add title-panel) (.add query-panel) (.add target-outer-panel) (.add btn-panel)
 	  (.setLayout layout)))
       (check)
       (doto dlg
