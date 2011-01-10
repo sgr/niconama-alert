@@ -55,9 +55,11 @@
 	       (let [query (eval (uktd/transq (:query pref)))]
 		 [(:title pref)
 		  (fn [pgms]
-		    (let [npgms (select-keys pgms (for [[id pgm] pgms :when
-							(some #(if (% pgm) (query (% pgm)))
-							      (:target pref))] id))]
+		    (let [npgms (select-keys pgms
+					     (for [[id pgm] pgms :when
+						   (query
+						    (reduce #(str %1 " " %2)
+							    (map #(% pgm) (:target pref))))] id))]
 		      [(count npgms) npgms]))])))))
 
 (defn- pp-init [pref]
