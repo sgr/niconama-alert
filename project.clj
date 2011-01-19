@@ -1,4 +1,4 @@
-(defproject nicoalert "1.0.0-rc5"
+(defproject nicoalert "1.0.0-rc6"
   :description "FIXME: write"
   :dependencies [[org.clojure/clojure "1.2.0"]
                  [org.clojure/clojure-contrib "1.2.0"]
