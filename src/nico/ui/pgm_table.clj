@@ -106,15 +106,16 @@
        (proxy [MouseListener] []
 	 (mouseClicked
 	  [e]
-	  (let [c (.columnAtPoint tbl (.getPoint e)), r (.rowAtPoint tbl (.getPoint e))]
-	    (cond (and (= 2 (.getClickCount e)) (<= 0 c) (<= 0 r))
+	  (let [c (.columnAtPoint tbl (.getPoint e)), r (.rowAtPoint tbl (.getPoint e))
+		mc (.convertColumnIndexToModel tbl c), mr (.convertRowIndexToModel tbl r)]
+	    (cond (and (= 2 (.getClickCount e)) (<= 0 mc) (<= 0 mr))
 		  (let [[name cmd] (first (:browsers @(p/get-pref)))]
-		    (open-url cmd (.getUrl (.getModel tbl) r)))
-		  (and (SwingUtilities/isRightMouseButton e) (<= 0 r))
+		    (open-url cmd (.getUrl (.getModel tbl) mr)))
+		  (and (SwingUtilities/isRightMouseButton e) (<= 0 mr))
 		  (let [pmenu (JPopupMenu.)
-			pid (.getProgramId (.getModel tbl) r)
-			ptitle (.getProgramTitle (.getModel tbl) r)
-			url (.getUrl (.getModel tbl) r)
+			pid (.getProgramId (.getModel tbl) mr)
+			ptitle (.getProgramTitle (.getModel tbl) mr)
+			url (.getUrl (.getModel tbl) mr)
 			titem (JMenuItem. (format "%s (%s)" ptitle pid))]
 		    (doto titem
 		      (.setEnabled false))
@@ -179,9 +180,10 @@
   [[ptm pcm] nil])
 
 (defn- pt-getToolTipText [this e]
-  (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))]
-    (if (and (>= c 0) (>= r 0))
-      (let [pgm (.getPgm (.getModel this) r)]
+  (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))
+	mc (.convertColumnIndexToModel this c), mr (.convertRowIndexToModel this r)]
+    (if (and (>= mc 0) (>= mr 0))
+      (let [pgm (.getPgm (.getModel this) mr)]
 	(str (format "<html>番組タイトル: %s<br>" (:title pgm))
 	     (format "%s: %s<br>"
 		     (if (= "channel" (:type pgm)) "チャンネル" "コミュ名") (:comm_name pgm))
