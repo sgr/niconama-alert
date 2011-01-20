@@ -100,35 +100,37 @@
 	(proxy [HighlightPredicate] []
 	  (isHighlighted
 	   [renderer adapter]
-	   (.isNew (.getModel tbl) (.row adapter))))
+	   (let [r (.row adapter)]
+	     (if (<= 0 r) (.isNew (.getModel tbl) (.convertRowIndexToModel tbl r)) false))))
 	(Font. Font/DIALOG Font/BOLD 12)))
       (.addMouseListener
        (proxy [MouseListener] []
 	 (mouseClicked
 	  [e]
-	  (let [c (.columnAtPoint tbl (.getPoint e)), r (.rowAtPoint tbl (.getPoint e))
-		mc (.convertColumnIndexToModel tbl c), mr (.convertRowIndexToModel tbl r)]
-	    (cond (and (= 2 (.getClickCount e)) (<= 0 mc) (<= 0 mr))
-		  (let [[name cmd] (first (:browsers @(p/get-pref)))]
-		    (open-url cmd (.getUrl (.getModel tbl) mr)))
-		  (and (SwingUtilities/isRightMouseButton e) (<= 0 mr))
-		  (let [pmenu (JPopupMenu.)
-			pid (.getProgramId (.getModel tbl) mr)
-			ptitle (.getProgramTitle (.getModel tbl) mr)
-			url (.getUrl (.getModel tbl) mr)
-			titem (JMenuItem. (format "%s (%s)" ptitle pid))]
-		    (doto titem
-		      (.setEnabled false))
-		    (doto pmenu
-		      (.add titem)
-		      (.addSeparator))
-		    (doseq [[name cmd] (:browsers @(p/get-pref))]
-		      (let [mitem (if (= :default cmd)
-				    (JMenuItem. "デフォルトブラウザで開く")
-				    (JMenuItem. (str name "で開く")))]
-			(add-action-listener mitem (fn [e] (open-url cmd url)))
-			(doto pmenu (.add mitem))))
-		    (.show pmenu tbl (.getX e) (.getY e))))))
+	  (let [c (.columnAtPoint tbl (.getPoint e)), r (.rowAtPoint tbl (.getPoint e))]
+	    (when (and (<= 0 c) (<= 0 r))
+	      (let [mc (.convertColumnIndexToModel tbl c), mr (.convertRowIndexToModel tbl r)]
+		(cond (and (= 2 (.getClickCount e)) (<= 0 mc) (<= 0 mr))
+		      (let [[name cmd] (first (:browsers @(p/get-pref)))]
+			(open-url cmd (.getUrl (.getModel tbl) mr)))
+		      (and (SwingUtilities/isRightMouseButton e) (<= 0 mr))
+		      (let [pmenu (JPopupMenu.)
+			    pid (.getProgramId (.getModel tbl) mr)
+			    ptitle (.getProgramTitle (.getModel tbl) mr)
+			    url (.getUrl (.getModel tbl) mr)
+			    titem (JMenuItem. (format "%s (%s)" ptitle pid))]
+			(doto titem
+			  (.setEnabled false))
+			(doto pmenu
+			  (.add titem)
+			  (.addSeparator))
+			(doseq [[name cmd] (:browsers @(p/get-pref))]
+			  (let [mitem (if (= :default cmd)
+					(JMenuItem. "デフォルトブラウザで開く")
+					(JMenuItem. (str name "で開く")))]
+			    (add-action-listener mitem (fn [e] (open-url cmd url)))
+			    (doto pmenu (.add mitem))))
+			(.show pmenu tbl (.getX e) (.getY e))))))))
 	 (mouseEntered [e])
 	 (mouseExited [e])
 	 (mousePressed [e])
@@ -180,15 +182,16 @@
   [[ptm pcm] nil])
 
 (defn- pt-getToolTipText [this e]
-  (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))
-	mc (.convertColumnIndexToModel this c), mr (.convertRowIndexToModel this r)]
-    (if (and (>= mc 0) (>= mr 0))
-      (let [pgm (.getPgm (.getModel this) mr)]
-	(str (format "<html>番組タイトル: %s<br>" (:title pgm))
-	     (format "%s: %s<br>"
-		     (if (= "channel" (:type pgm)) "チャンネル" "コミュ名") (:comm_name pgm))
-	     (format "放送主: %s<br>" (:owner_name pgm))
-	     (format "%s<br>" (:desc pgm))
-	     (format "カテゴリ: %s<br>" (:category pgm))
-	     (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))
+  (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))]
+    (when (and (<= 0 c) (<= 0 r))
+      (let [mc (.convertColumnIndexToModel this c), mr (.convertRowIndexToModel this r)]
+	(if (and (<= 0 mc) (<= 0 mr))
+	  (let [pgm (.getPgm (.getModel this) mr)]
+	    (str (format "<html>番組タイトル: %s<br>" (:title pgm))
+		 (format "%s: %s<br>"
+			 (if (= "channel" (:type pgm)) "チャンネル" "コミュ名") (:comm_name pgm))
+		 (format "放送主: %s<br>" (:owner_name pgm))
+		 (format "%s<br>" (:desc pgm))
+		 (format "カテゴリ: %s<br>" (:category pgm))
+		 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))))
 
