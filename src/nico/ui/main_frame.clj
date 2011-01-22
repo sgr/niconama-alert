@@ -18,6 +18,9 @@
 	      "List.font" "TableHeader.font" "ComboBox.font"])
 
 (defn main-frame []
+  (UIManager/setLookAndFeel (UIManager/getSystemLookAndFeelClassName))
+  (UIManager/put "OptionPane.okButtonText" "OK")
+  (UIManager/put "OptionPane.cancelButtonText" "キャンセル")
   (doseq [k *fkeys*] (UIManager/put k (Font. "Default" Font/PLAIN 12)))
   (let [appicn (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "dempakun.png"))
 	pref @(p/get-pref)
