@@ -5,7 +5,8 @@
   (:import (java.awt Dimension)
 	   (javax.swing JButton)))
 
-(def *btn-size* (Dimension. 100 20))
+(def *btn-height* 25)
+(def *btn-size* (Dimension. 100 *btn-height*))
 
 (defn btn [text]
   (let [b (JButton.)]

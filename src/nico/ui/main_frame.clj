@@ -42,7 +42,7 @@
       (.putConstraint SpringLayout/SOUTH tabbed-pane -5 SpringLayout/NORTH fetch-panel)
       (.putConstraint SpringLayout/WEST fetch-panel 5 SpringLayout/WEST cpane)
       (.putConstraint SpringLayout/EAST fetch-panel -5 SpringLayout/EAST cpane)
-      (.putConstraint SpringLayout/SOUTH fetch-panel -5 SpringLayout/SOUTH cpane))
+      (.putConstraint SpringLayout/SOUTH fetch-panel -10 SpringLayout/SOUTH cpane))
     (doto tm (.setInitialDelay 100))
     (doto frame
       (.addWindowListener

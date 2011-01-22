@@ -5,7 +5,7 @@
   (:use [clojure.contrib.swing-utils :only [add-action-listener do-swing*]])
   (:require [nico.prefs :as p]
 	    [time-utils :as tu])
-  (:import (java.awt Desktop Dimension FlowLayout GraphicsEnvironment RenderingHints
+  (:import (java.awt Desktop Dimension FlowLayout Font GraphicsEnvironment RenderingHints
 		     GridBagLayout GridBagConstraints Insets)
 	   (java.awt.event ComponentAdapter MouseListener MouseMotionListener)
 	   (java.awt.geom RoundRectangle2D$Float)
@@ -16,6 +16,7 @@
 	   (javax.imageio ImageIO)))
 
 (def *asize* (Dimension. 220 130))
+(def *font* (Font. "Default" Font/PLAIN 12))
 (def *lcsr* (.getLinkCursor (HTMLEditorKit.)))
 (def *cicn* (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "closebtn.png")))
 (def *noimg* (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
@@ -56,7 +57,7 @@
 (defn- mlabel [col text]
   (let [l (JTextArea. text)]
     (doto l
-      (.setColumns col)
+      (.setColumns col) (.setFont *font*)
       (.setOpaque false) (.setEditable false) (.setFocusable false) (.setLineWrap true))))
 
 (defn- change-cursor [c url]
@@ -102,6 +103,7 @@
 				(tu/minute (tu/interval (:pubdate pgm) (tu/now)))))]
       (let [title (JLabel. (if-let [t (:title pgm)] t "## NO_TITLE ##"))
 	    cbtn (JButton. *cicn*), layout (SpringLayout.)]
+	(doto title (.setFont *font*))
 	(doto layout
 	  (.putConstraint SpringLayout/NORTH title 0 SpringLayout/NORTH tpanel)
 	  (.putConstraint SpringLayout/SOUTH title 0 SpringLayout/SOUTH tpanel)
@@ -133,7 +135,8 @@
 	(change-cursor thumbnail (:link pgm)) (change-cursor desc (:link pgm))
 	(doto dpanel
 	  (.setLayout layout) (.add thumbnail) (.add desc)))
-      (doto time (.setHorizontalAlignment (JLabel/RIGHT)))
+      (doto time (.setHorizontalAlignment (JLabel/RIGHT)) (.setFont *font*))
+      (doto olabel (.setFont *font*))
       (let [cpane (.getContentPane dlg), layout (SpringLayout.), s 5, ns -5, is 2]
 	(doto layout
 	  (.putConstraint SpringLayout/WEST tpanel s SpringLayout/WEST cpane)

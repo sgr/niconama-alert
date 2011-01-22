@@ -10,8 +10,10 @@
 	   (javax.swing.event DocumentListener)
 	   (javax.swing.text PlainDocument)))
 
-(def *dlg-size* (Dimension. 450 330))
-(def *btn-panel-size* (Dimension. 450 40))
+(def *dlg-size* (Dimension. 450 340))
+(def *title-panel-size* (Dimension. 440 40))
+(def *query-panel-size* (Dimension. 440 130))
+(def *btn-panel-size* (Dimension. 440 30))
 
 (defn transq
   "translate query string into function sexp.
@@ -47,12 +49,25 @@
 	  1 (list 'fn '[s] (first rr))
 	  (list 'fn '[s] (conj rr 'and))))))
 
+(defn- do-add-expand
+  "関数にしてみたが、このままではあまり使い道がなさそうである。"
+  [parent child pad]
+  (let [layout (SpringLayout.)]
+    (doto layout
+      (.putConstraint SpringLayout/NORTH child pad SpringLayout/NORTH parent)
+      (.putConstraint SpringLayout/SOUTH child (* -1 pad) SpringLayout/SOUTH parent)
+      (.putConstraint SpringLayout/WEST child pad SpringLayout/WEST parent)
+      (.putConstraint SpringLayout/EAST child (* -1 pad) SpringLayout/EAST parent))
+    (doto parent
+      (.setLayout layout)
+      (.add child))))
+
 (defn keyword-tab-dialog
   [parent title pref ok-fn]
   (let [dlg (JDialog. parent title true)
-	title-panel (JPanel.), title-field (JTextField. 25), title-doc (PlainDocument.)
+	title-panel (JPanel.), title-field (JTextField.), title-doc (PlainDocument.)
 	title-border (.getBorder title-field)
-	query-panel (JPanel.), query-area (JTextArea. 5 38), query-doc (PlainDocument.)
+	query-panel (JPanel.), query-area (JTextArea.), query-doc (PlainDocument.)
 	query-border (.getBorder query-area)
 	target-outer-panel (JPanel.)
 	target-panel (doto (JPanel.) (.setBorder (BorderFactory/createEmptyBorder 1 1 1 1)))
@@ -112,29 +127,28 @@
 					  :category (.setSelected cb-category true)
 					  :comm_name (.setSelected cb-comm-name true)
 					  nil))))
-      (let [title-label (JLabel. "タブタイトル")
-	    layout (GroupLayout. title-panel)
-	    hgrp (.createSequentialGroup layout)
-	    vgrp (.createSequentialGroup layout)]
+      (let [title-label (JLabel. "タブタイトル"), layout (SpringLayout.)]
 	(doto title-field (.setDocument title-doc))
 	(when-let [t (:title pref)] (.setText title-field t))
-	(doto hgrp
-	  (.addGroup (.. layout createParallelGroup (addComponent title-label)))
-	  (.addGroup (.. layout createParallelGroup (addComponent title-field))))
-	(doto vgrp
-	  (.addGroup (.. layout createParallelGroup
-			 (addComponent title-label) (addComponent title-field))))
 	(doto layout
-	  (.setHorizontalGroup hgrp) (.setVerticalGroup vgrp)
-	  (.setAutoCreateGaps true) (.setAutoCreateContainerGaps true))
-	(doto title-panel (.setLayout layout)))
+	  (.putConstraint SpringLayout/NORTH title-label 5 SpringLayout/NORTH title-panel)
+	  (.putConstraint SpringLayout/SOUTH title-label -5 SpringLayout/SOUTH title-panel)
+	  (.putConstraint SpringLayout/NORTH title-field 7 SpringLayout/NORTH title-panel)
+	  (.putConstraint SpringLayout/SOUTH title-field -7 SpringLayout/SOUTH title-panel)
+	  (.putConstraint SpringLayout/WEST title-label 5 SpringLayout/WEST title-panel)
+	  (.putConstraint SpringLayout/WEST title-field 10 SpringLayout/EAST title-label)
+	  (.putConstraint SpringLayout/EAST title-field -10 SpringLayout/EAST title-panel))
+	(doto title-panel
+	  (.setPreferredSize *title-panel-size*)
+	  (.setLayout layout) (.add title-label) (.add title-field)))
       (doto query-area
 	(.setLineWrap true)
 	(.setDocument query-doc))
       (if-let [q (:query pref)] (.setText query-area q) (.setText query-area " "))
       (doto query-panel
 	(.setBorder (BorderFactory/createTitledBorder "検索条件"))
-	(.add (JScrollPane. query-area)))
+	(.setPreferredSize *query-panel-size*)
+	(do-add-expand (JScrollPane. query-area) 5))
       (doto target-panel
 	(.setLayout (FlowLayout.))
 	(.add cb-title) (.add cb-desc) (.add cb-owner) (.add cb-category) (.add cb-comm-name))
@@ -161,9 +175,7 @@
 	(doto btn-cancel
 	  (add-action-listener (fn [e] (do-swing (.setVisible dlg false) (.dispose dlg)))))
 	(doto layout
-	  (.putConstraint SpringLayout/NORTH btn-ok 5 SpringLayout/NORTH btn-panel)
 	  (.putConstraint SpringLayout/SOUTH btn-ok -10 SpringLayout/SOUTH btn-panel)
-	  (.putConstraint SpringLayout/NORTH btn-cancel 5 SpringLayout/NORTH btn-panel)
 	  (.putConstraint SpringLayout/SOUTH btn-cancel -10 SpringLayout/SOUTH btn-panel)
 	  (.putConstraint SpringLayout/EAST btn-ok -5 SpringLayout/WEST btn-cancel)
 	  (.putConstraint SpringLayout/EAST btn-cancel -10 SpringLayout/EAST btn-panel))

@@ -14,7 +14,7 @@
 	   (javax.swing.table DefaultTableCellRenderer DefaultTableModel TableColumn
 			      TableCellEditor TableCellRenderer)))
 
-(def *dlg-size* (Dimension. 500 250))
+(def *dlg-size* (Dimension. 500 270))
 (def *btn-panel-size* (Dimension. 500 40))
 
 (defn- browsers-to-model [browsers]
@@ -66,8 +66,8 @@
     (doto cb (.setOpaque true)
 	  (.setHorizontalAlignment SwingConstants/CENTER)
 	  (.setVerticalAlignment SwingConstants/CENTER))
-    (doto (.getColumn cm 0) (.setPreferredWidth 220) (.setCellRenderer (string-renderer)))
-    (doto (.getColumn cm 1) (.setPreferredWidth 220) (.setCellRenderer (string-renderer)))
+    (doto (.getColumn cm 0) (.setPreferredWidth 140) (.setCellRenderer (string-renderer)))
+    (doto (.getColumn cm 1) (.setPreferredWidth 200) (.setCellRenderer (string-renderer)))
     (doto (.getColumn cm 2) (.setPreferredWidth 60)
 	  (.setCellEditor bce) (.setCellRenderer (boolean-renderer)))))
 
