@@ -36,6 +36,10 @@
       (xml/parse (ByteArrayInputStream. (.getBytes cs "UTF-8"))))
     (catch Exception e (do (printe e) {}))))
 
+;; タイムアウト値を設定。これ、SunのJREでないときはどうしたらよいだろうか？
+(System/setProperty "sun.net.client.defaultConnectTimeout" "10000")
+(System/setProperty "sun.net.client.defaultReadTimeout" "10000")
+
 (defn- get-nico-rss-old
   "get a RSS page of nicolive info and parse it to RSS map."
   [page]
