@@ -3,7 +3,7 @@
        :doc "keyword tab preference dialog."}
   nico.ui.kwd-tab-dlg
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
-  (:require [nico.ui.btn :as ub])
+  (:require [nico.ui.util :as uu])
   (:import (java.awt BorderLayout Color FlowLayout Dimension)
 	   (javax.swing BorderFactory GroupLayout SpringLayout
 			JButton JCheckBox JDialog JLabel JPanel JScrollPane JTextArea JTextField)
@@ -49,19 +49,6 @@
 	  1 (list 'fn '[s] (first rr))
 	  (list 'fn '[s] (conj rr 'and))))))
 
-(defn- do-add-expand
-  "関数にしてみたが、このままではあまり使い道がなさそうである。"
-  [parent child pad]
-  (let [layout (SpringLayout.)]
-    (doto layout
-      (.putConstraint SpringLayout/NORTH child pad SpringLayout/NORTH parent)
-      (.putConstraint SpringLayout/SOUTH child (* -1 pad) SpringLayout/SOUTH parent)
-      (.putConstraint SpringLayout/WEST child pad SpringLayout/WEST parent)
-      (.putConstraint SpringLayout/EAST child (* -1 pad) SpringLayout/EAST parent))
-    (doto parent
-      (.setLayout layout)
-      (.add child))))
-
 (defn keyword-tab-dialog
   [parent title pref ok-fn]
   (let [dlg (JDialog. parent title true)
@@ -74,7 +61,7 @@
 	target-border (.getBorder target-panel)
 	cb-title (JCheckBox. "タイトル"), cb-desc (JCheckBox. "説明"), cb-owner (JCheckBox. "放送主")
 	cb-category (JCheckBox. "カテゴリ"), cb-comm-name (JCheckBox. "コミュ名")
-	btn-panel (JPanel.), btn-ok (ub/btn "OK")
+	btn-panel (JPanel.), btn-ok (uu/btn "OK")
 	p (.getLocationOnScreen parent)]
     (letfn [(read-title [] (.getText title-doc 0 (.getLength title-doc)))
 	    (read-query [] (.getText query-doc 0 (.getLength query-doc)))
@@ -144,12 +131,11 @@
       (doto query-area
 	(.setLineWrap true)
 	(.setDocument query-doc))
-;      (if-let [q (:query pref)] (.setText query-area q) (.setText query-area " "))
       (when-let [q (:query pref)] (.setText query-area q))
       (doto query-panel
 	(.setBorder (BorderFactory/createTitledBorder "検索条件"))
 	(.setPreferredSize *query-panel-size*)
-	(do-add-expand (JScrollPane. query-area) 5))
+	(uu/do-add-expand (JScrollPane. query-area) 5))
       (doto target-panel
 	(.setLayout (FlowLayout.))
 	(.add cb-title) (.add cb-desc) (.add cb-owner) (.add cb-category) (.add cb-comm-name))
@@ -172,7 +158,7 @@
 			  :alert (:alert pref)})
 		  (.dispose dlg)))))
       (.setDefaultButton (.getRootPane dlg) btn-ok)
-      (let [btn-cancel (ub/btn "キャンセル"), layout (SpringLayout.)]
+      (let [btn-cancel (uu/btn "キャンセル"), layout (SpringLayout.)]
 	(doto btn-cancel
 	  (add-action-listener (fn [e] (do-swing (.setVisible dlg false) (.dispose dlg)))))
 	(doto layout

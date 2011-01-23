@@ -3,7 +3,7 @@
        :doc "common key-value dialog."}
   nico.ui.key-val-dlg
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
-  (:require [nico.ui.btn :as ub])
+  (:require [nico.ui.util :as uu])
   (:import (java.awt BorderLayout Color Dimension)
 	   (javax.swing BorderFactory GroupLayout SpringLayout
 			JButton JDialog JLabel JPanel JPasswordField JTextField)
@@ -19,7 +19,7 @@
 	tkey (JTextField. 25), tval (if secure (JPasswordField. 25) (JTextField. 25))
 	tkey-border (.getBorder tkey), tval-border (.getBorder tval)
 	doc-key (PlainDocument.), doc-val (PlainDocument.)
-	kv-panel (JPanel.), btn-panel (JPanel.), btn-ok (ub/btn "OK")
+	kv-panel (JPanel.), btn-panel (JPanel.), btn-ok (uu/btn "OK")
 	p (.getLocationOnScreen parent)]
     (letfn [(check []
 		   (if (= 0 (.getLength doc-key))
@@ -58,7 +58,7 @@
 	  (.setAutoCreateGaps true) (.setAutoCreateContainerGaps true))
 	(doto kv-panel
 	  (.setLayout layout) (.add lkey) (.add tkey) (.add lval) (.add tval)))
-      (let [btn-cancel (ub/btn "キャンセル")
+      (let [btn-cancel (uu/btn "キャンセル")
 	    btn-layout (SpringLayout.)]
 	(doto btn-cancel
 	  (add-action-listener (fn [e] (do-swing (.setVisible dlg false) (.dispose dlg)))))

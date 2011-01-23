@@ -4,6 +4,7 @@
   nico.ui.alert-dlg
   (:use [clojure.contrib.swing-utils :only [add-action-listener do-swing*]])
   (:require [nico.prefs :as p]
+	    [nico.ui.util :as uu]
 	    [time-utils :as tu])
   (:import (java.awt Desktop Dimension FlowLayout Font GraphicsEnvironment RenderingHints
 		     GridBagLayout GridBagConstraints Insets)
@@ -16,7 +17,6 @@
 	   (javax.imageio ImageIO)))
 
 (def *asize* (Dimension. 220 130))
-(def *font* (Font. "Default" Font/PLAIN 12))
 (def *lcsr* (.getLinkCursor (HTMLEditorKit.)))
 (def *cicn* (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "closebtn.png")))
 (def *noimg* (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
@@ -53,12 +53,6 @@
 
 (defn dlg-width [] (.width *asize*))
 (defn dlg-height [] (.height *asize*))
-
-(defn- mlabel [col text]
-  (let [l (JTextArea. text)]
-    (doto l
-      (.setColumns col) (.setFont *font*)
-      (.setOpaque false) (.setEditable false) (.setFocusable false) (.setLineWrap true))))
 
 (defn- change-cursor [c url]
   (let [csr (.getCursor c)]
@@ -103,7 +97,7 @@
 				(tu/minute (tu/interval (:pubdate pgm) (tu/now)))))]
       (let [title (JLabel. (if-let [t (:title pgm)] t "## NO_TITLE ##"))
 	    cbtn (JButton. *cicn*), layout (SpringLayout.)]
-	(doto title (.setFont *font*))
+	(doto title (.setFont uu/*font*))
 	(doto layout
 	  (.putConstraint SpringLayout/NORTH title 0 SpringLayout/NORTH tpanel)
 	  (.putConstraint SpringLayout/SOUTH title 0 SpringLayout/SOUTH tpanel)
@@ -124,7 +118,7 @@
 	(doto tpanel
 	  (.setPreferredSize (Dimension. 210 18))
 	  (.setLayout layout) (.add title) (.add cbtn)))
-      (let [thumbnail (JLabel. thumbicn), desc (mlabel 12 (if-let [d (:desc pgm)] d "## NO_DESC ##"))
+      (let [thumbnail (JLabel. thumbicn), desc (uu/mlabel 12 (if-let [d (:desc pgm)] d "## NO_DESC ##"))
 	    layout (GridBagLayout.), c (GridBagConstraints.)]
 	(letfn [(set-con!
 		 [lt component x y top left bottom right]
@@ -135,8 +129,8 @@
 	(change-cursor thumbnail (:link pgm)) (change-cursor desc (:link pgm))
 	(doto dpanel
 	  (.setLayout layout) (.add thumbnail) (.add desc)))
-      (doto time (.setHorizontalAlignment (JLabel/RIGHT)) (.setFont *font*))
-      (doto olabel (.setFont *font*))
+      (doto time (.setHorizontalAlignment (JLabel/RIGHT)) (.setFont uu/*font*))
+      (doto olabel (.setFont uu/*font*))
       (let [cpane (.getContentPane dlg), layout (SpringLayout.), s 5, ns -5, is 2]
 	(doto layout
 	  (.putConstraint SpringLayout/WEST tpanel s SpringLayout/WEST cpane)

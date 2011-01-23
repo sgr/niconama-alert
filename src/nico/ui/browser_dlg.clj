@@ -3,7 +3,7 @@
        :doc "browser setting dialog."}
   nico.ui.browser-dlg
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
-  (:require [nico.ui.btn :as ub]
+  (:require [nico.ui.util :as uu]
 	    [nico.ui.key-val-dlg :as ukvd])
   (:import (java.awt BorderLayout Dimension)
 	   (javax.swing DefaultCellEditor GroupLayout SpringLayout SwingConstants
@@ -88,7 +88,7 @@
 	tbl (browser-tbl (browsers-to-model browsers)), tbl-pane (JScrollPane. tbl)
 	tbl-panel (JPanel.), tbl-layout (SpringLayout.)
 	tbtn-panel (JPanel.)
-	btn-panel (JPanel.), btn-ok (ub/btn "OK")]
+	btn-panel (JPanel.), btn-ok (uu/btn "OK")]
     (let [tbl-sel-model (DefaultListSelectionModel.)
 	  tbtn-add (JButton. "追加"), tbtn-edit (JButton. "編集"), tbtn-rem (JButton. "削除")
 	  tbtn-up (JButton. "上へ"), tbtn-down (JButton. "下へ")
@@ -162,7 +162,7 @@
       (doto tbtn-panel
 	(.setLayout layout) (.add tbtn-add) (.add tbtn-edit) (.add tbtn-rem)))
     (.setDefaultButton (.getRootPane dlg) btn-ok)
-    (let [layout (SpringLayout.), btn-cancel (ub/btn "キャンセル")]
+    (let [layout (SpringLayout.), btn-cancel (uu/btn "キャンセル")]
       (doto btn-ok
 	(add-action-listener
 	 (fn [e]
