@@ -23,12 +23,26 @@
    fetched_at])	;; 番組取得時刻
 
 ;; 以下で使われるpgmsとは、番組IDをキー、pgmを値とするようなマップである。
-(let [id-pgms (ref {}),		;; 番組IDをキー、番組情報を値とするマップ
-      comm-pgms (ref {}),	;; コミュニティIDをキー、番組情報を値とするマップ
-      old (ref #{})]		;; 取得済み番組IDの集合。番組IDをキー、取得回数を値とするマップ
+(let [id-pgms (ref {})		;; 番組IDをキー、番組情報を値とするマップ
+      comm-pgms (ref {})	;; コミュニティIDをキー、番組情報を値とするマップ
+      old (ref #{})		;; 取得済み番組IDの集合。番組IDをキー、取得回数を値とするマップ
+      last-updated (ref (tu/now))]	;; 番組情報の最終更新時刻
   (defn pgms [] @id-pgms)
   (defn count-pgms [] (count @id-pgms))
   (defn new? [^String id] (not (contains? @old id)))
+  (defn- clear-pgms []
+    (dosync
+     (ref-set id-pgms {})
+     (ref-set comm-pgms {})
+     (ref-set old #{})))
+  (defn- update-updated
+    "最終更新時刻を更新する。もし前の最終更新より時間が経ちすぎていたら、番組情報をクリアする。"
+    []
+    (let [now (tu/now)]
+      (when (< 1800000 (- (.getTime now) (.getTime @last-updated)))
+	(clear-pgms))
+      (dosync
+       (ref-set last-updated now))))
   (defn- is-to-add?
     "この番組情報を加えるべきか？同じコミュニティの放送が複数あったら、新しいものだけを追加する。"
     [^Pgm pgm]
@@ -67,6 +81,7 @@
   (defn add-pgms
     "複数の番組を追加する"
     [pgms]
+    (update-updated)
     (doseq [pgm pgms] (add-pgm pgm)))
   (defn reset-pgms
     "全ての番組情報を与えられた番組情報集合に置き換える"
