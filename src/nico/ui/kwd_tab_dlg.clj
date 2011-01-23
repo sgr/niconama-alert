@@ -133,8 +133,8 @@
 	(doto layout
 	  (.putConstraint SpringLayout/NORTH title-label 5 SpringLayout/NORTH title-panel)
 	  (.putConstraint SpringLayout/SOUTH title-label -5 SpringLayout/SOUTH title-panel)
-	  (.putConstraint SpringLayout/NORTH title-field 7 SpringLayout/NORTH title-panel)
-	  (.putConstraint SpringLayout/SOUTH title-field -7 SpringLayout/SOUTH title-panel)
+	  (.putConstraint SpringLayout/NORTH title-field 10 SpringLayout/NORTH title-panel)
+	  (.putConstraint SpringLayout/SOUTH title-field -10 SpringLayout/SOUTH title-panel)
 	  (.putConstraint SpringLayout/WEST title-label 5 SpringLayout/WEST title-panel)
 	  (.putConstraint SpringLayout/WEST title-field 10 SpringLayout/EAST title-label)
 	  (.putConstraint SpringLayout/EAST title-field -10 SpringLayout/EAST title-panel))
@@ -144,7 +144,8 @@
       (doto query-area
 	(.setLineWrap true)
 	(.setDocument query-doc))
-      (if-let [q (:query pref)] (.setText query-area q) (.setText query-area " "))
+;      (if-let [q (:query pref)] (.setText query-area q) (.setText query-area " "))
+      (when-let [q (:query pref)] (.setText query-area q))
       (doto query-panel
 	(.setBorder (BorderFactory/createTitledBorder "検索条件"))
 	(.setPreferredSize *query-panel-size*)
