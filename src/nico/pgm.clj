@@ -34,7 +34,8 @@
     (dosync
      (ref-set id-pgms {})
      (ref-set comm-pgms {})
-     (ref-set old #{})))
+     (ref-set old #{}))
+    (System/gc))
   (defn- update-updated
     "最終更新時刻を更新する。もし前の最終更新より時間が経ちすぎていたら、番組情報をクリアする。"
     []
