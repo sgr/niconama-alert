@@ -33,7 +33,7 @@
 	(.setPreferredSize *cr-panel-size*)
 	(.add lapp) (.add lauthor)))
     (let [inner-panel (JPanel.)
-	  lclj (uu/mlabel "Clojure 1.2.0 Copyright (c) Rich Hickey. All rights reserved.")
+	  lclj (uu/mlabel "Clojure 1.2.1 Copyright (c) Rich Hickey. All rights reserved.")
 	  lcljc (uu/mlabel "Clojure-contrib 1.2.0 copyrighted by Rich Hickey and the various contributors.")
 	  lsx (uu/mlabel "SwingX 1.6.2 SwingLabs project")
 	  layout (BoxLayout. inner-panel BoxLayout/Y_AXIS)]
