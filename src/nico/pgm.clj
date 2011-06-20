@@ -55,13 +55,13 @@
   (defn get-pgm
     "番組情報を得る"
     [^String id] (get @id-pgms id nil))
-  (defn- rem-pgm
+  (defn rem-pgm
     "番組情報を削除する"
     [^String id]
     (dosync
      (alter comm-pgms dissoc (:comm_id (get @id-pgms id)))
      (alter id-pgms dissoc id)))
-  (defn- add-pgm
+  (defn add-pgm
     "番組情報を追加する"
     [^Pgm pgm]
     (when (is-to-add? pgm)
