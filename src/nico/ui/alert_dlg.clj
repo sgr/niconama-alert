@@ -6,7 +6,7 @@
   (:require [nico.prefs :as p]
 	    [nico.ui.util :as uu]
 	    [time-utils :as tu])
-  (:import (java.awt Desktop Dimension FlowLayout Font GraphicsEnvironment RenderingHints
+  (:import (java.awt Color Desktop Dimension FlowLayout Font GraphicsEnvironment RenderingHints
 		     GridBagLayout GridBagConstraints Insets)
 	   (java.awt.event ComponentAdapter MouseListener MouseMotionListener)
 	   (java.awt.geom RoundRectangle2D$Float)
@@ -20,6 +20,7 @@
 (def *lcsr* (.getLinkCursor (HTMLEditorKit.)))
 (def *cicn* (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "closebtn.png")))
 (def *noimg* (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
+(def *monly-bgcolor* (Color. 165 204 255))
 
 (let [decorate-fn (atom nil)]
   (defn- decorate [dlg]
@@ -115,6 +116,7 @@
 			  (.dispose dlg)))
 	     (extra-close-fn)))
 	  (.setPreferredSize (Dimension. (.getIconWidth *cicn*) (.getIconHeight *cicn*))))
+	(when (:member_only pgm) (.setBackground cbtn *monly-bgcolor*))
 	(doto tpanel
 	  (.setPreferredSize (Dimension. 210 18))
 	  (.setLayout layout) (.add title) (.add cbtn)))
@@ -146,6 +148,10 @@
 	  (.putConstraint SpringLayout/NORTH olabel is SpringLayout/SOUTH dpanel)
 	  (.putConstraint SpringLayout/NORTH time is SpringLayout/SOUTH olabel)
 	  (.putConstraint SpringLayout/SOUTH time ns SpringLayout/SOUTH cpane))
+	(when (:member_only pgm)
+	  (.setBackground cpane *monly-bgcolor*)
+	  (.setBackground tpanel *monly-bgcolor*)
+	  (.setBackground dpanel *monly-bgcolor*))
 	(doto cpane
 	  (.setLayout layout)
 	  (.add tpanel) (.add dpanel) (.add olabel) (.add time))))

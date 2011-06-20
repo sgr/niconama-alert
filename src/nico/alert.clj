@@ -33,14 +33,22 @@
 	    (reset! latch (java.util.concurrent.CountDownLatch. 1))))
 	top)
       nil))
+  (defn- reserve-plat-aux [i]
+    (if-not (:used (nth @plats i))
+      (let [plat (nth @plats i)]
+	(swap! plats assoc i (assoc plat :used true))
+	[i plat])
+      [nil nil]))
   (defn- reserve-plat []
-    (let [iplat (some #(let [[i plat] %] (if-not (:used plat) [i plat] nil))
-		      (cs/indexed @plats))]
-      (if-let [[i plat] iplat]
-	(do
-	  (swap! plats assoc i (assoc plat :used true))
-	  iplat)
-	[nil nil])))
+    (if-let [i (some #(let [[i plat] %] (if (:used plat) i nil))
+		     (reverse (cs/indexed @plats)))]
+      (if (< i (dec (count @plats)))
+	(reserve-plat-aux (inc i))
+	(if-let [i (some #(let [[i plat] %] (if-not (:used plat) i nil))
+			 (cs/indexed @plats))]
+	  (reserve-plat-aux i)
+	  [nil nil]))
+      (reserve-plat-aux 0)))
   (defn- release-plat [i plat]
     (swap! plats assoc i (assoc plat :used false)))
   (defn alert-pgm [id]
