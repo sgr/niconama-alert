@@ -106,22 +106,22 @@
 (defn get-programs-from-rss
   [update-fn]
   (try
-    (loop [page 1, earliest (tu/now), fetched #{}, total (get-programs-count)]
+    (loop [page 1, total (get-programs-count), cur_total total, earliest (tu/now), fetched #{}]
       (let [rss (get-nico-rss page)
 	    cur_pgms (get-programs-from-rss-page rss)
+	    earliest-updated (earliest-pubdate earliest cur_pgms)
 	    fetched-updated (if (pos? (count cur_pgms))
 			      (apply conj fetched (for [pgm cur_pgms] (:id pgm)))
 			      fetched)
-	    earliest-updated (earliest-pubdate earliest cur_pgms)]
-	(update-fn cur_pgms (count fetched) total (inc page))
-	(cond
+	    cur_total (get-programs-count rss)]
+	(update-fn cur_pgms (count fetched) cur_total (inc page))
+	(if
 	 (or 
-	  (>= (+ (count fetched) (count cur_pgms)) total) ;; 総番組数分取得したら、取得完了
+	  (>= (+ (count fetched) (count cur_pgms)) cur_total) ;; 総番組数分取得したら、取得完了
 	  (= (count cur_pgms) 0) ;; ひとつも番組が取れない場合は中止
 	  (> (reduce #(if (contains? fetched (:id %2)) (inc %1) %1) 0 cur_pgms)
-	     (* 0.9 (count cur_pgms))) ;; 取得済みの番組情報との重複率が90%を超えていたら、取得中止
-	  (not (= total (get-programs-count rss)))) ;; 総番組数が変更されていたら、取得中止
-	 (list earliest-updated fetched-updated total)
-	 :else ;; そうでなければ次のページを取得しに行く
-	 (recur (inc page) earliest-updated fetched-updated total))))
+	     (* 0.99 (count cur_pgms)))) ;; 取得済みの番組情報との重複率が99%を超えていたら、取得中止
+;;	  (< 54 (- cur_total total))) ;; 総番組数が大きく増えていたら、取得中止
+	 (list earliest-updated fetched-updated cur_total)
+	 (recur (inc page) total cur_total earliest-updated fetched-updated))))
     (catch Exception e (printe e) (list (tu/now) #{} 0))))
