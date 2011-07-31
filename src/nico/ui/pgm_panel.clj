@@ -117,8 +117,10 @@
     (if-let [filter-fn (:filter-fn @(.state this))]
       (let [[cnt npgms] (filter-fn pgms)]
 	;; alert programs.
-	(when (-> @(.state this) :pref :alert)
-	  (doseq [[id npgm] npgms] (al/alert-pgm id)))
+	(.start (Thread.
+		 (fn [] 
+		   (when (-> @(.state this) :pref :alert)
+		     (doseq [[id npgm] npgms] (al/alert-pgm id))))))
 	(do-swing
 	 (.setText tlabel (format "%s (%d)" title cnt))
 	 (.updateData (.getModel (:tbl @(.state this))) npgms)))
