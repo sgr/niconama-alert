@@ -36,7 +36,7 @@
     (print-cookies)))
 
 ;; 認証APIでチケットを得る
-(defn get-ticket [email passwd]
+(defn- get-ticket [email passwd]
   (let [agnt (ha/http-agent
 	      "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
 	      :headers {"user-agent" *user-agent*}
@@ -51,7 +51,7 @@
 	(print err)
 	nil))))
 
-(defn get-alert-status [ticket]
+(defn- get-alert-status1 [ticket]
   (let [agnt (ha/http-agent
 	      (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
 	      :headers {"user-agent" *user-agent*}
@@ -71,6 +71,9 @@
       (let [err (zfx/xml-> (zip/xml-zip res) :error :code zfx/text)]
 	(println err)
 	nil))))
+
+(defn get-alert-status [email passwd]
+  (get-alert-status1 (get-ticket email passwd)))
 
 (defn- create-pgm-by-getstreaminfo
   "getstreaminfoで得られた情報から番組情報を生成する。が、足りない情報がポロポロあって使えない・・・"

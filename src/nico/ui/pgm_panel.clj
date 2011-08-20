@@ -40,7 +40,7 @@
     (condp = (:type pref)
 	:all (fn [] [(:title pref) (fn [pgms] [(pgm/count-pgms) pgms])])
 	:comm (fn []
-		(if-let [as (oa/get-alert-status (oa/get-ticket (:email pref) (:passwd pref)))]
+		(if-let [as (oa/get-alert-status (:email pref) (:passwd pref))]
 		  (do
 		    (let [user-name (:user_name as) comms (apply hash-set (:comms as))]
 		      [user-name
