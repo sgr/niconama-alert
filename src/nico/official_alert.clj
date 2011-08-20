@@ -5,6 +5,7 @@
              結局、コミュニティ情報の取得までしか使っていない。"}
     nico.official-alert
   (:require [nico.pgm :as pgm]
+	    [str-utils :as s]
 	    [time-utils :as tu]
 	    [clojure.xml :as xml]
 	    [clojure.zip :as zip]
@@ -15,59 +16,57 @@
 
 (def *user-agent* "Niconama-alert J/1.0.0")
 
+(defn- http-req
+  ([url func] (http-req url nil func))	; GET
+  ([url body func]
+     (let [agnt (ha/http-agent
+		 url
+		 :headers {"user-agent" *user-agent*}
+		 :method (if body "POST" "GET")
+		 :body body
+		 :connect-timeout 10000
+		 :read-timeout 10000)
+	   raw-res (s/cleanup (ha/string agnt))]
+       (if-let [err (agent-error agnt)]
+	 (println (format "failed http-req (%s): %s" url err))
+	 (func raw-res)))))
+
+(defn- nico-ans-handler [func]
+  (fn [raw-res]
+    (let [res (xml/parse (s/utf8stream raw-res))
+	  status (-> res :attrs :status)]
+      (if (.equalsIgnoreCase status "ok")
+	(func res)
+	(let [err (zfx/xml-> (zip/xml-zip res) :error :description zfx/text)]
+	  (println (format "returned failure from server: %s" err))
+	  nil)))))
+
 ;; 認証APIでチケットを得る
 (defn- get-ticket [email passwd]
-  (let [agnt (ha/http-agent
-	      "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
-	      :headers {"user-agent" *user-agent*}
-	      :method "POST" :body (format "mail=%s&password=%s" email passwd)
-	      :connect-timeout 10000
-	      :read-timeout 10000)
-	res (xml/parse (ha/stream agnt))
-	status (-> res :attrs :status)]
-    (if (.equalsIgnoreCase status "ok")
-      (zfx/xml1-> (zip/xml-zip res) :ticket zfx/text)
-      (let [err (zfx/xml-> (zip/xml-zip res) :error :description zfx/text)]
-	(print err)
-	nil))))
+  (http-req "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
+	    (format "mail=%s&password=%s" email passwd)
+	    (nico-ans-handler
+	     (fn [res] (zfx/xml1-> (zip/xml-zip res) :ticket zfx/text)))))
 
 (defn- get-alert-status1 [ticket]
-  (let [agnt (ha/http-agent
-	      (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
-	      :headers {"user-agent" *user-agent*}
-	      :method "GET"
-	      :connect-timeout 10000
-	      :read-timeout 10000)
-	res (xml/parse (ha/stream agnt))
-	status (-> res :attrs :status)]
-    (if (.equalsIgnoreCase status "ok")
-      (let [xz (zip/xml-zip res)]
-	{:user_id (zfx/xml1-> xz :user_id zfx/text)
-	 :user_name (zfx/xml1-> xz :user_name zfx/text)
-	 :comms (zfx/xml-> xz :communities :community_id zfx/text)
-	 :addr (zfx/xml1-> xz :ms :addr zfx/text)
-	 :port (Integer/parseInt (zfx/xml1-> xz :ms :port zfx/text))
-	 :thrd (zfx/xml1-> xz :ms :thread zfx/text)})
-      (let [err (zfx/xml-> (zip/xml-zip res) :error :code zfx/text)]
-	(println err)
-	nil))))
+  (http-req (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
+	    (nico-ans-handler
+	     (fn [res]
+	       (let [xz (zip/xml-zip res)]
+		 {:user_id (zfx/xml1-> xz :user_id zfx/text)
+		  :user_name (zfx/xml1-> xz :user_name zfx/text)
+		  :comms (zfx/xml-> xz :communities :community_id zfx/text)
+		  :addr (zfx/xml1-> xz :ms :addr zfx/text)
+		  :port (Integer/parseInt (zfx/xml1-> xz :ms :port zfx/text))
+		  :thrd (zfx/xml1-> xz :ms :thread zfx/text)})))))
 
 (defn get-alert-status [email passwd]
   (get-alert-status1 (get-ticket email passwd)))
 
 (defn- get-stream-info [pid]
-  (let [agnt (ha/http-agent
-	      (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
-	      :headers {"user-agent" *user-agent*}
-	      :connect-timeout 10000
-	      :read-timeout 10000)
-	res (xml/parse (ha/stream agnt))
-	status (-> res :attrs :status)]
-    (if (.equalsIgnoreCase status "ok")
-      (zip/xml-zip res)
-      (let [err (zfx/xml-> (zip/xml-zip res) :error :code zfx/text)]
-	(println err)
-	nil))))
+  (http-req (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
+	    (nico-ans-handler
+	     (fn [res] (zip/xml-zip res)))))
 
 (defn- create-pgm-by-getstreaminfo
   "getstreaminfoで得られた情報から番組情報を生成する。が、足りない情報がポロポロあって使えない・・・"

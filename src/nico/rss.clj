@@ -13,6 +13,7 @@
 	    [clojure.contrib.duck-streams :as ds]
 	    [clojure.contrib.http.agent :as ha]
 	    [nico.pgm :as pgm]
+	    [str-utils :as s]
 	    [time-utils :as tu])
   (:import (java.text SimpleDateFormat)
 	   (java.io ByteArrayInputStream)
@@ -23,16 +24,11 @@
   [^Exception e]
   (println (format " failed fetching RSS: %s: %s" (-> e .getClass .getName) (.getMessage e))))
 
-(defn- cleanup
-  "絵文字など制御文字扱いになる文字を削除する"
-  [s]
-  (.replaceAll s "[\\00-\\x1f\\x7f]" ""))
-
 (defn- get-nico-rss
   [page]
   (try
     (let [s (ds/slurp* (format "http://live.nicovideo.jp/recent/rss?p=%s" page))
-	  cs (cleanup s)]
+	  cs (s/cleanup s)]
       (xml/parse (ByteArrayInputStream. (.getBytes cs "UTF-8"))))
     (catch Exception e (do (printe e) {}))))
 
@@ -50,11 +46,11 @@
 			      :read-timeout 300)
 	  conn (:clojure.contrib.http.agent/connection @agnt)]
       (print (format " conn cto: %d, rto: %d - " (.getConnectTimeout conn) (.getReadTimeout conn)))
-      (let [s (cleanup (ha/string agnt))]
+      (let [s (s/cleanup (ha/string agnt))]
 	(if-let [er (agent-error agnt)]
 	  (println (format "errors: %s" er))
 	  (println "done"))
-	(xml/parse (ByteArrayInputStream. (.getBytes s "UTF-8")))))
+	(xml/parse (s/utf8stream s))))
     (catch Exception e (do (printe e) {}))))
 
 (defn- get-programs-count
