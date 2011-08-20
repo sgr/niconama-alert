@@ -11,29 +11,9 @@
 	    [clojure.contrib.zip-filter :as zf]
 	    [clojure.contrib.zip-filter.xml :as zfx]
 	    [clojure.contrib.http.agent :as ha])
-  (:import (java.util Date)
-	   (java.net CookieHandler CookieManager CookiePolicy)))
+  (:import (java.util Date)))
 
 (def *user-agent* "Niconama-alert J/1.0.0")
-(def *cookie-mgr* (let [cmgr (CookieManager.)]
-		    (.setCookiePolicy cmgr CookiePolicy/ACCEPT_ALL)
-		    (CookieHandler/setDefault cmgr)
-		    cmgr))
-(defn- cookies [] (.getCookies (.getCookieStore *cookie-mgr*)))
-(defn- print-cookies [] (println (count (cookies))) (for [c (cookies)] (println c)))
-
-;; このコードでは認証後のクッキーが取れない。なんでだろう。
-(defn login-nico [email passwd]
-  (let [agnt (ha/http-agent
-	      "https://secure.nicovideo.jp/secure/login?site=nicolive"
-	      :headers {"user-agent" *user-agent*}
-	      :method "POST" :body (format "next_url=&mail=%s&password=%s" email passwd)
-	      :connect-timeout 10000
-	      :read-timeout 10000)
-	s (ha/string agnt)]
-    (println (ha/request-headers agnt))
-    (println s)
-    (print-cookies)))
 
 ;; 認証APIでチケットを得る
 (defn- get-ticket [email passwd]
@@ -46,7 +26,7 @@
 	res (xml/parse (ha/stream agnt))
 	status (-> res :attrs :status)]
     (if (.equalsIgnoreCase status "ok")
-      (first (zfx/xml-> (zip/xml-zip res) :ticket zfx/text))
+      (zfx/xml1-> (zip/xml-zip res) :ticket zfx/text)
       (let [err (zfx/xml-> (zip/xml-zip res) :error :description zfx/text)]
 	(print err)
 	nil))))
@@ -62,12 +42,12 @@
 	status (-> res :attrs :status)]
     (if (.equalsIgnoreCase status "ok")
       (let [xz (zip/xml-zip res)]
-	{:user_id (first (zfx/xml-> xz :user_id zfx/text))
-	 :user_name (first (zfx/xml-> xz :user_name zfx/text))
+	{:user_id (zfx/xml1-> xz :user_id zfx/text)
+	 :user_name (zfx/xml1-> xz :user_name zfx/text)
 	 :comms (zfx/xml-> xz :communities :community_id zfx/text)
-	 :addr (first (zfx/xml-> xz :ms :addr zfx/text))
-	 :port (Integer/parseInt (first (zfx/xml-> xz :ms :port zfx/text)))
-	 :thrd (first (zfx/xml-> xz :ms :thread zfx/text))})
+	 :addr (zfx/xml1-> xz :ms :addr zfx/text)
+	 :port (Integer/parseInt (zfx/xml1-> xz :ms :port zfx/text))
+	 :thrd (zfx/xml1-> xz :ms :thread zfx/text)})
       (let [err (zfx/xml-> (zip/xml-zip res) :error :code zfx/text)]
 	(println err)
 	nil))))
@@ -75,26 +55,41 @@
 (defn get-alert-status [email passwd]
   (get-alert-status1 (get-ticket email passwd)))
 
+(defn- get-stream-info [pid]
+  (let [agnt (ha/http-agent
+	      (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
+	      :headers {"user-agent" *user-agent*}
+	      :connect-timeout 10000
+	      :read-timeout 10000)
+	res (xml/parse (ha/stream agnt))
+	status (-> res :attrs :status)]
+    (if (.equalsIgnoreCase status "ok")
+      (zip/xml-zip res)
+      (let [err (zfx/xml-> (zip/xml-zip res) :error :code zfx/text)]
+	(println err)
+	nil))))
+
 (defn- create-pgm-by-getstreaminfo
   "getstreaminfoで得られた情報から番組情報を生成する。が、足りない情報がポロポロあって使えない・・・"
-  [id comm_id owner_id pubdate zipped-res fetched_at]
-  (nico.pgm.Pgm.
-   (str "lv" id)
-   (first (zfx/xml-> zipped-res :streaminfo :title zfx/text))
-   pubdate
-   (first (zfx/xml-> zipped-res :streaminfo :description zfx/text))
-   nil ;category
-   (str "http://live.nicovideo.jp/watch/lv" id)
-   (first (zfx/xml-> zipped-res :communityinfo :thumbnail zfx/text))
-   owner_id ;owner_name
-   nil ;member_only
-   nil ;view
-   (first (zfx/xml-> zipped-res :streaminfo :provider_type zfx/text))
-   nil ;num_res
-   (first (zfx/xml-> zipped-res :communityinfo :name zfx/text))
-   comm_id
-   false
-   fetched_at))
+  [zipped-res fetched_at]
+  (let [id (zfx/xml1-> zipped-res :request_id zfx/text)]
+    (nico.pgm.Pgm.
+     id
+     (zfx/xml1-> zipped-res :streaminfo :title zfx/text)
+     nil; pubdate
+     (zfx/xml1-> zipped-res :streaminfo :description zfx/text)
+     nil ;category
+     (str "http://live.nicovideo.jp/watch/" id)
+     (zfx/xml1-> zipped-res :communityinfo :thumbnail zfx/text)
+     nil ;owner_name
+     nil ;member_only
+     nil ;view
+     (zfx/xml1-> zipped-res :streaminfo :provider_type zfx/text)
+     nil ;num_res
+     (zfx/xml1-> zipped-res :communityinfo :name zfx/text)
+     (zfx/xml1-> zipped-res :streaminfo :default_community zfx/text)
+     false
+     fetched_at)))
 
 (defn- parse-chat-str [chat-str]
   (let [chat (xml/parse (java.io.StringBufferInputStream. chat-str))]
@@ -106,65 +101,6 @@
 	    (list date pid cid uid))
 	  nil))
       nil)))
-
-(defn- get-player-status [pid]
-  (let [agnt (ha/http-agent
-	      (format "http://watch.live.nicovideo.jp/api/getplayerstatus?v=lv%s" pid)
-	      :headers {"user-agent" *user-agent*}
-	      :connect-timeout 10000
-	      :read-timeout 10000)
-	res (xml/parse (ha/stream agnt))
-	status (-> res :attrs :status)]
-    (if (.equalsIgnoreCase status "ok")
-      (zfx/xml-> (zip/xml-zip res) :stream zf/children) 
-      (let [err (zfx/xml-> (zip/xml-zip res) :error :code zfx/text)]
-	(println err)
-	nil))))
-
-(defn- get-stream-info [pid]
-  (let [agnt (ha/http-agent
-	      (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
-	      :headers {"user-agent" *user-agent*}
-	      :connect-timeout 10000
-	      :read-timeout 10000)
-	res (xml/parse (ha/stream agnt))
-	status (-> res :attrs :status)]
-    (if (.equalsIgnoreCase status "ok")
-      (let [zres (zip/xml-zip res)]
-	{:comm_thumbnail (first (zfx/xml-> zres :communityinfo :thumbnail zfx/text))
-	 :comm_name (first (zfx/xml-> zres :communityinfo :name zfx/text))}
-      (let [err (zfx/xml-> (zip/xml-zip res) :error :code zfx/text)]
-	(println err)
-	nil)))))
-
-
-(defn- get-child-elm [tag node]
-  (some #(if (= tag (:tag %)) %) (:content node)))
-
-(defn- get-child-content [tag node]
-  (first (:content (get-child-elm tag node))))
-
-(defn- get-child-attr [tag attr node]
-  (attr (:attrs (get-child-elm tag node))))
-
-(defn- create-pgm [item info fetched_at]
-  (nico.pgm.Pgm.
-   (get-child-content :id item)
-   (get-child-content :title item)
-   (Date. (Long/parseLong (get-child-content :start_time item)))
-   (get-child-content :description item)
-   (str "") ; カテゴリの取得方法が不明
-   (str "http://live.nicovideo.jp/watch/" (get-child-content :id item))
-   (:comm_thumbnail info)
-   (get-child-content :owner_name item)
-   false ; コミュ限を取る方法が不明
-   (Integer/parseInt (get-child-content :watch_count item))
-   (get-child-content :provider_type item)
-   (Integer/parseInt (get-child-content :comment_count item))
-   (:comm_name info)
-   (get-child-content :default_community item)
-   false
-   fetched_at))
 
 (defn listen [alert-status pgm-fn]
   (try
@@ -179,13 +115,11 @@
 	      (if (= c 0)
 		(do
 		  (if-let [[date pid cid uid] (parse-chat-str s)]
-		    (if-let [ps (get-player-status pid)]
-		      (if-let [info (get-stream-info pid)]
-			(if-let [pgm (create-pgm ps info (tu/now))]
-			  (pgm-fn pgm)
-			  (println "[ERROR] couldn't create pgm!"))
-			(println "[ERROR] couldn't get stream info!"))
-		      (println "[ERROR] couldn't get player status!"))
+		    (if-let [info (get-stream-info pid)]
+		      (if-let [pgm (create-pgm-by-getstreaminfo info (tu/now))]
+			(pgm-fn pgm)
+			(println "[ERROR] couldn't create pgm!"))
+		      (println "[ERROR] couldn't get stream info!"))
 		    (println "[ERROR] couldn't parse the chat str!"))
 		  (recur (.read rdr) nil))
 		(recur (.read rdr) (str s (char c))))))))
