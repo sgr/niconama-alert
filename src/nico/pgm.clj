@@ -14,9 +14,7 @@
    thumbnail	;; コミュニティのサムネイル
    owner_name	;; 放送者名
    member_only	;; コミュ限
-   view		;; 来場者数
    type		;; community or channel
-   num_res	;; コメント数
    comm_name	;; コミュニティ名
    comm_id	;; コミュニティID
    alerted	;; アラート済み

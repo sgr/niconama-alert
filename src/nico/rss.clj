@@ -82,9 +82,7 @@
    (get-child-attr :media:thumbnail :url item)
    (get-child-content :nicolive:owner_name item)
    (Boolean/parseBoolean (get-child-content :nicolive:member_only item))
-   (Integer/parseInt (get-child-content :nicolive:view item))
    (get-child-content :nicolive:type item)
-   (Integer/parseInt (get-child-content :nicolive:num_res item))
    (get-child-content :nicolive:community_name item)
    (get-child-content :nicolive:community_id item)
    false

@@ -36,10 +36,6 @@
 		   SwingConstants/CENTER)}
       {:key :owner_name, :colName "放送主", :width 60,
        :renderer (DefaultTableRenderer. StringValues/TO_STRING)}))
-      ;; {:key :view, :colName "来場者数", :width 30,
-      ;;  :renderer (DefaultTableRenderer. StringValues/TO_STRING SwingConstants/CENTER)}
-      ;; {:key :num_res, :colName "コメ数", :width 30,
-      ;;  :renderer (DefaultTableRenderer. StringValues/TO_STRING SwingConstants/CENTER)}))
 
 (defn- pgm-colnum
   "*pgm-columns*の中から、指定されたキーのカラム番号を得る"

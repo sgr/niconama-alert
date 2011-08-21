@@ -5,6 +5,7 @@
              結局、コミュニティ情報の取得までしか使っていない。"}
     nico.official-alert
   (:require [nico.pgm :as pgm]
+	    [nico.scrape :as ns]
 	    [str-utils :as s]
 	    [time-utils :as tu]
 	    [clojure.xml :as xml]
@@ -82,11 +83,29 @@
      (zfx/xml1-> zipped-res :communityinfo :thumbnail zfx/text)
      nil ;owner_name
      nil ;member_only
-     nil ;view
      (zfx/xml1-> zipped-res :streaminfo :provider_type zfx/text)
-     nil ;num_res
      (zfx/xml1-> zipped-res :communityinfo :name zfx/text)
      (zfx/xml1-> zipped-res :streaminfo :default_community zfx/text)
+     false
+     fetched_at)))
+
+(defn- create-pgm-by-scrapedinfo
+  [pid cid fetched_at]
+  (let [id (str "lv" pid)
+	info (ns/fetch-pgm-info id)]
+    (nico.pgm.Pgm.
+     id
+     (:title info)
+     (:pubdate info)
+     (:desc info)
+     (:category info)
+     (:link info)
+     (:thumbnail info)
+     (:owner_name info)
+     (:member_only info)
+     (:type info)
+     (:comm_name info)
+     cid
      false
      fetched_at)))
 
@@ -114,11 +133,9 @@
 	      (if (= c 0)
 		(do
 		  (if-let [[date pid cid uid] (parse-chat-str s)]
-		    (if-let [info (get-stream-info pid)]
-		      (if-let [pgm (create-pgm-by-getstreaminfo info (tu/now))]
-			(pgm-fn pgm)
-			(println "[ERROR] couldn't create pgm!"))
-		      (println "[ERROR] couldn't get stream info!"))
+		    (if-let [pgm (create-pgm-by-scrapedinfo pid cid (tu/now))]
+		      (pgm-fn pgm)
+		      (println "[ERROR] couldn't create-pgm!"))
 		    (println "[ERROR] couldn't parse the chat str!"))
 		  (recur (.read rdr) nil))
 		(recur (.read rdr) (str s (char c))))))))
