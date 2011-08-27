@@ -32,13 +32,16 @@
 
 (defn mlabel
   "複数行折り返し可能なラベル"
-  ([text]
+  ([^String text]
      (let [l (JTextArea. text)]
        (doto l
 	 (.setFont *font*)
 	 (.setOpaque false) (.setEditable false) (.setFocusable false) (.setLineWrap true))))
-  ([col text]
+  ([^int col ^String text]
      (let [ml (mlabel text)]
        (doto ml
-	 (.setColumns col)))))
-
+	 (.setColumns col))))
+  ([^int col ^String text ^Dimension size]
+     (let [ml (mlabel col text)]
+       (doto ml
+	 (.setPreferredSize size)))))

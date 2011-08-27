@@ -21,6 +21,7 @@
 (def *cicn* (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "closebtn.png")))
 (def *noimg* (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
 (def *monly-bgcolor* (Color. 165 204 255))
+(def *desc-size* (Dimension. 115 64))
 
 (let [decorate-fn (atom nil)]
   (defn- decorate [dlg]
@@ -75,7 +76,8 @@
   (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
 	g2d (.createGraphics nimg)]
     (doto g2d
-      (.setRenderingHint RenderingHints/KEY_INTERPOLATION RenderingHints/VALUE_INTERPOLATION_BILINEAR)
+      (.setRenderingHint RenderingHints/KEY_INTERPOLATION
+			 RenderingHints/VALUE_INTERPOLATION_BILINEAR)
       (.drawImage img 0 0 width height nil))
     nimg))
 
@@ -120,7 +122,8 @@
 	(doto tpanel
 	  (.setPreferredSize (Dimension. 210 18))
 	  (.setLayout layout) (.add title) (.add cbtn)))
-      (let [thumbnail (JLabel. thumbicn), desc (uu/mlabel 12 (if-let [d (:desc pgm)] d "## NO_DESC ##"))
+      (let [thumbnail (JLabel. thumbicn),
+	    desc (uu/mlabel 12 (if-let [d (:desc pgm)] d "## NO_DESC ##") *desc-size*)
 	    layout (GridBagLayout.), c (GridBagConstraints.)]
 	(letfn [(set-con!
 		 [lt component x y top left bottom right]
