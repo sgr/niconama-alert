@@ -23,7 +23,7 @@
 		  (let [[yyyy MM dd] (for [x (rest (re-find #"(\d{4})/(\d{2})/(\d{2})" sday))]
 				       (Integer/parseInt x))
 			[hh mm] (for [x (.split sstart ":")] (Integer/parseInt x))
-			c (doto (GregorianCalendar. yyyy MM dd hh mm)
+			c (doto (GregorianCalendar. yyyy (dec MM) dd hh mm)
 			    (.setTimeZone (TimeZone/getTimeZone "Asia/Tokyo")))]
 		    (.getTime c)))
 	member_only (if (first (html/select infobox [:h2.onlym])) true false)
