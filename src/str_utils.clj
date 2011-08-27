@@ -13,3 +13,13 @@
   "translate from String to Stream."
   [^String s]
   (ByteArrayInputStream. (.getBytes s "UTF-8")))
+
+(defn split-by-length
+  "split string by given length"
+  [^String s n]
+  (let [l (.length s)]
+    (loop [result [], i 0]
+      (let [end (if (< (+ i n) l) (+ i n) l)]
+	(if (>= i l)
+	  result
+	  (recur (conj result (.substring s i end)) (+ i (- end i))))))))

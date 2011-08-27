@@ -4,7 +4,9 @@
   nico.ui.pgm-table
   (:use [clojure.contrib.swing-utils :only [add-action-listener]]
 	[clojure.contrib.seq-utils :only [indexed]])
-  (:require [nico.prefs :as p]
+  (:require [clojure.string :as s]
+	    [nico.prefs :as p]
+	    [str-utils :as su]
 	    [time-utils :as tu]
 	    [nico.pgm :as pgm])
   (:import (java.awt Cursor Desktop Font)
@@ -18,6 +20,8 @@
 	   (org.jdesktop.swingx JXTable)
 	   (org.jdesktop.swingx.decorator HighlighterFactory FontHighlighter HighlightPredicate)
 	   (org.jdesktop.swingx.renderer DefaultTableRenderer StringValue StringValues)))
+
+(def *desc-col* 64)
 
 (def *pgm-columns*
      (list
@@ -187,7 +191,7 @@
 		 (format "%s: %s<br>"
 			 (if (= "channel" (:type pgm)) "チャンネル" "コミュ名") (:comm_name pgm))
 		 (format "放送主: %s<br>" (:owner_name pgm))
-		 (format "%s<br>" (:desc pgm))
+		 (format "%s<br>" (s/join "<br>" (su/split-by-length (:desc pgm) *desc-col*)))
 		 (format "カテゴリ: %s<br>" (:category pgm))
 		 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))))
 
