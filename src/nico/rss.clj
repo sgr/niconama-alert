@@ -11,14 +11,15 @@
 	    [clojure.contrib.zip-filter :as zf]
 	    [clojure.contrib.zip-filter.xml :as zfx]
 	    [clojure.contrib.duck-streams :as ds]
-	    [clojure.contrib.http.agent :as ha]
 	    [nico.pgm :as pgm]
 	    [str-utils :as s]
 	    [time-utils :as tu])
   (:import (java.text SimpleDateFormat)
-	   (java.io ByteArrayInputStream)
-	   (java.net SocketTimeoutException)
 	   (java.util Locale)))
+
+;; タイムアウト値を設定。これ、SunのJREでないときはどうしたらよいだろうか？
+(System/setProperty "sun.net.client.defaultConnectTimeout" "10000")
+(System/setProperty "sun.net.client.defaultReadTimeout" "10000")
 
 (defn- printe
   [^Exception e]
@@ -29,28 +30,7 @@
   (try
     (let [s (ds/slurp* (format "http://live.nicovideo.jp/recent/rss?p=%s" page))
 	  cs (s/cleanup s)]
-      (xml/parse (ByteArrayInputStream. (.getBytes cs "UTF-8"))))
-    (catch Exception e (do (printe e) {}))))
-
-;; タイムアウト値を設定。これ、SunのJREでないときはどうしたらよいだろうか？
-(System/setProperty "sun.net.client.defaultConnectTimeout" "10000")
-(System/setProperty "sun.net.client.defaultReadTimeout" "10000")
-
-(defn- get-nico-rss-old
-  "get a RSS page of nicolive info and parse it to RSS map."
-  [page]
-  (print " creating http agent: ")
-  (try
-    (let [agnt (ha/http-agent (format "http://live.nicovideo.jp/recent/rss?p=%s" page)
-			      :connect-timeout 500
-			      :read-timeout 300)
-	  conn (:clojure.contrib.http.agent/connection @agnt)]
-      (print (format " conn cto: %d, rto: %d - " (.getConnectTimeout conn) (.getReadTimeout conn)))
-      (let [s (s/cleanup (ha/string agnt))]
-	(if-let [er (agent-error agnt)]
-	  (println (format "errors: %s" er))
-	  (println "done"))
-	(xml/parse (s/utf8stream s))))
+      (xml/parse (s/utf8stream cs)))
     (catch Exception e (do (printe e) {}))))
 
 (defn- get-programs-count
