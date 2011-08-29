@@ -22,10 +22,14 @@
 						       [:div.kaijo :> :strong :> html/text-node])]
 		  (let [[yyyy MM dd] (for [x (rest (re-find #"(\d{4})/(\d{2})/(\d{2})" sday))]
 				       (Integer/parseInt x))
-			[hh mm] (for [x (.split sstart ":")] (Integer/parseInt x))
-			c (doto (GregorianCalendar. yyyy (dec MM) dd hh mm)
+			[ohh omm] (for [x (.split sopen ":")] (Integer/parseInt x))
+			[shh smm] (for [x (.split sstart ":")] (Integer/parseInt x))
+			c (doto (GregorianCalendar. yyyy (dec MM) dd shh smm)
 			    (.setTimeZone (TimeZone/getTimeZone "Asia/Tokyo")))]
-		    (.getTime c)))
+		    (do
+		      ;; 開場23:5x、開演00:0xの場合に対応
+		      (if (> ohh shh) (.add c Calendar/DAY_OF_MONTH 1))
+		      (.getTime c))))
 	member_only (if (first (html/select infobox [:h2.onlym])) true false)
 	type (cond
 	      (not (empty? (html/select infobox [:div.com]))) :community
