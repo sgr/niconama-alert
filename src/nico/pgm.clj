@@ -23,25 +23,33 @@
 ;; 以下で使われるpgmsとは、番組IDをキー、pgmを値とするようなマップである。
 (let [id-pgms (ref {})		;; 番組IDをキー、番組情報を値とするマップ
       comm-pgms (ref {})	;; コミュニティIDをキー、番組情報を値とするマップ
-      old (ref #{})		;; 取得済み番組IDの集合。番組IDをキー、取得回数を値とするマップ
-      last-updated (ref (tu/now))]	;; 番組情報の最終更新時刻
+      new (ref {})		;; 新しい番組IDの集合。キーは番組ID。
+      last-updated (ref (tu/now))	;; 番組情報の最終更新時刻
+      total (atom 0)		;; 
+      hook-updated (ref '()) ;; 番組集合の更新を報せるフック
+      called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
+  (defn add-hook [kind f]
+    (condp = kind
+	:updated (dosync (alter hook-updated conj f))))
+  (defn get-last-updated [] last-updated)
+  (defn- call-hook-updated []
+    (when (< 3000 (- (.getTime (tu/now)) (.getTime @called-at-hook-updated)))
+      (dosync
+       (doseq [f @hook-updated] (f))
+       (ref-set called-at-hook-updated (tu/now)))))
   (defn pgms [] @id-pgms)
   (defn count-pgms [] (count @id-pgms))
-  (defn new? [^String id] (not (contains? @old id)))
+  (defn new? [^String id] (contains? @new id))
+  (defn set-total [t]
+    (do (reset! total t)
+	(call-hook-updated)))
+  (defn get-total [] @total)
   (defn- clear-pgms []
     (dosync
      (ref-set id-pgms {})
      (ref-set comm-pgms {})
-     (ref-set old #{}))
-    (System/gc))
-  (defn- update-updated
-    "最終更新時刻を更新する。もし前の最終更新より時間が経ちすぎていたら、番組情報をクリアする。"
-    []
-    (let [now (tu/now)]
-      (when (< 1800000 (- (.getTime now) (.getTime @last-updated)))
-	(clear-pgms))
-      (dosync
-       (ref-set last-updated now))))
+     (ref-set new #{}))
+    (call-hook-updated))
   (defn- is-to-add?
     "この番組情報を加えるべきか？同じコミュニティの放送が複数あったら、新しいものだけを追加する。"
     [^Pgm pgm]
@@ -58,7 +66,9 @@
     [^String id]
     (dosync
      (alter comm-pgms dissoc (:comm_id (get @id-pgms id)))
-     (alter id-pgms dissoc id)))
+     (alter id-pgms dissoc id)
+     (ref-set last-updated (tu/now)))
+    (call-hook-updated))
   (defn add-pgm
     "番組情報を追加する"
     [^Pgm pgm]
@@ -66,13 +76,25 @@
       (dosync
        (when-let [old-pgm (get @comm-pgms (:comm_id pgm))] (rem-pgm (:id old-pgm)))
        (alter id-pgms assoc (:id pgm) pgm)
-       (when-let [cid (:comm_id pgm)] (alter comm-pgms assoc cid pgm)))))
-  (defn update-pgm
-    "番組情報を更新する"
-    [^Pgm pgm]
+       (alter new assoc (:id pgm) pgm)
+       (when-let [cid (:comm_id pgm)] (alter comm-pgms assoc cid pgm))
+       (ref-set last-updated (tu/now)))
+      (call-hook-updated)))
+  (defn update-if-pgm
+    "与えられた番組IDに対する述語が成り立つ場合のみ番組情報をmで更新する。
+     更新した場合はtrue、述語が成り立たないか番組が存在しない場合はfalseを返す。"
+    [id pred m]
     (dosync
-     (alter id-pgms assoc (:id pgm) pgm)
-     (when-let [cid (:comm_id pgm)] (alter comm-pgms assoc cid pgm))))
+     (if-let [pgm (get @id-pgms id)]
+       (if (pred pgm)
+	 (let [apgm (apply assoc pgm (flatten (apply list m)))]
+	   (alter id-pgms assoc id apgm)
+	   (when-not (= (:comm_id pgm) (:comm_id apgm))
+	     (when-let [cid (:comm_id pgm)] (alter comm-pgms dissoc cid))
+	     (when-let [cid (:comm_id apgm)] (alter comm-pgms assoc cid apgm)))
+	   true)
+	 false)
+       false)))
   (defn rem-pgms
     "複数の番組を削除する"
     [ids]
@@ -80,7 +102,6 @@
   (defn add-pgms
     "複数の番組を追加する"
     [pgms]
-    (update-updated)
     (doseq [pgm pgms] (add-pgm pgm)))
   (defn reset-pgms
     "全ての番組情報を与えられた番組情報集合に置き換える"
@@ -89,7 +110,9 @@
     (dosync
      (ref-set id-pgms (reduce #(apply assoc %1 %2) {} (for [pgm pgms] (list (:id pgm) pgm))))
      (ref-set comm-pgms (reduce #(apply assoc %1 %2) {}
-				(for [pgm pgms :when (:comm_id pgm)] (list (:comm_id pgm) pgm))))))
+				(for [pgm pgms :when (:comm_id pgm)] (list (:comm_id pgm) pgm))))
+     (ref-set last-updated (tu/now)))
+    (call-hook-updated))
   (defn rem-pgms-without
     "取得済み放送情報を基に、pgmsから不要な番組情報を削除する"
     [ids]
@@ -141,6 +164,13 @@
 				  (into (vals younger-pgms) (vals extended-pgms)))))
 	      (reset-pgms (into (vals fetched-pgms) (vals younger-pgms)))))
 	  (reset-pgms (vals fetched-pgms))))))
-  (defn update-old
-    "現在取得済みの番組のIDをoldにセットする(oldを更新する)"
-    [] (dosync (ref-set old (set (for [[id pgm] @id-pgms] id))))))
+  (defn update-new
+    "newのうち、更新後1分未満のもののみ残す。"
+    []
+    (let [now (tu/now)]
+      (dosync
+       (alter new select-keys
+	      (filter
+	       (fn [id] (tu/within? (:fetched_at (get @new id)) now 60))
+	       (keys @new)))))))
+

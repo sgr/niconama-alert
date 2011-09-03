@@ -5,6 +5,7 @@
   (:use [clojure.contrib.swing-utils :only [add-action-listener do-swing*]])
   (:require [nico.prefs :as p]
 	    [nico.ui.util :as uu]
+	    [log-utils :as lu]
 	    [time-utils :as tu])
   (:import (java.awt Color Desktop Dimension FlowLayout Font GraphicsEnvironment RenderingHints
 		     GridBagLayout GridBagConstraints Insets)
@@ -47,10 +48,11 @@
 			      [dlg (RoundRectangle2D$Float.
 				    0 0
 				    (.getWidth dlg) (.getHeight dlg) 20 20)]))
-			    (catch Exception e (.printStackTrace e))))))))))
+			    (catch Exception e
+			      (lu/printe "failed invoking setWindowShape" e))))))))))
 	(catch Exception e
 	  (reset! decorate-fn (fn [dlg]))
-	  (println "This platform doesn't support AWTUtilities."))))
+	  (lu/printe "This platform doesn't support AWTUtilities" e))))
     (@decorate-fn dlg)))
 
 (defn dlg-width [] (.width *asize*))
@@ -59,18 +61,19 @@
 (defn- change-cursor [c url]
   (let [csr (.getCursor c)]
     (doto c
-      (.addMouseListener (proxy [MouseListener][]
-			   (mouseEntered [e] (.setCursor (.getSource e) *lcsr*))
-			   (mouseExited [e] (.setCursor (.getSource e) csr))
-			   (mousePressed [e]
-					 ;; 設定でアラート指定されたブラウザで番組URLを開く
-					 (let [[name cmd]
-					       (some #(let [[name cmd alert] %] (if alert % false))
-						     (:browsers @(p/get-pref)))]
-					   (if (= :default cmd)
-					     (.browse (Desktop/getDesktop) (URI. url))
-					     (.start (ProcessBuilder. [cmd url])))))
-			   (mouseClicked [e]) (mouseReleased [e]))))))
+      (.addMouseListener
+       (proxy [MouseListener][]
+	 (mouseEntered [e] (.setCursor (.getSource e) *lcsr*))
+	 (mouseExited [e] (.setCursor (.getSource e) csr))
+	 (mousePressed [e]
+		       ;; 設定でアラート指定されたブラウザで番組URLを開く
+		       (let [[name cmd]
+			     (some #(let [[name cmd alert] %] (if alert % false))
+				   (:browsers @(p/get-pref)))]
+			 (if (= :default cmd)
+			   (.browse (Desktop/getDesktop) (URI. url))
+			   (.start (ProcessBuilder. [cmd url])))))
+	 (mouseClicked [e]) (mouseReleased [e]))))))
 
 (defn- adjust-img [img width height]
   (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
@@ -81,13 +84,22 @@
       (.drawImage img 0 0 width height nil))
     nimg))
 
+(defn- fetch-image [url]
+  (try
+    (ImageIO/read url)
+    (catch Exception _ nil)))
+
+(defn- get-thumbnail-aux [url]
+  (loop [retry-count 5]
+    (if-let [img (fetch-image url)]
+      img
+      (if (zero? retry-count)
+	(do (println "abort fetching image!") *noimg*)
+	(do (println (format "retry fetching image (rest: %d)" (dec retry-count)))
+	    (recur (dec retry-count)))))))
+
 (defn- get-thumbnail [url]
-  (ImageIcon. (adjust-img
-	       (try (ImageIO/read url)
-		    (catch Exception e
-		      (println (format " failed loading icon: %s: %s"
-                                       (-> e .getClass .getName) (.getMessage e)))
-		      *noimg*)) 64 64)))
+  (ImageIcon. (adjust-img (get-thumbnail-aux url) 64 64)))
 
 (defn alert-dlg [^nico.pgm.Pgm pgm extra-close-fn]
   (let [dlg (JDialog.), thumbicn (get-thumbnail (URL. (:thumbnail pgm)))]

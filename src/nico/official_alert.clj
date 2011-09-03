@@ -6,6 +6,7 @@
     nico.official-alert
   (:require [nico.pgm :as pgm]
 	    [nico.scrape :as ns]
+	    [log-utils :as lu]
 	    [str-utils :as s]
 	    [time-utils :as tu]
 	    [clojure.xml :as xml]
@@ -121,29 +122,39 @@
       nil)))
 
 (defn listen [alert-status pgm-fn]
-  (try
-    (with-open [clnt (java.net.Socket. (:addr alert-status) (:port alert-status))
-		rdr (java.io.BufferedReader.
-		     (java.io.InputStreamReader. (.getInputStream clnt) "UTF8"))
-		wtr (java.io.OutputStreamWriter. (.getOutputStream clnt))]
-      (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
-		      (:thrd alert-status))]
-	(do (.write wtr q) (.flush wtr)
-	    (loop [c (.read rdr) s nil]
-	      (if (= c 0)
-		(do
-		  (if-let [[date pid cid uid] (parse-chat-str s)]
-		    (if-let [pgm (create-pgm-by-scrapedinfo pid cid (tu/now))]
-		      (pgm-fn pgm)
-		      (println "[ERROR] couldn't create-pgm!"))
-		    (println "[ERROR] couldn't parse the chat str!"))
-		  (recur (.read rdr) nil))
-		(recur (.read rdr) (str s (char c))))))))
-    (catch java.io.IOException e (.printStackTrace e) false)
-    (catch java.net.SocketTimeoutException e (.printStackTrace e) false)
-    (catch java.net.UnknownHostException e (.printStackTrace e) false)
-    (catch Exception e (.printStackTrace e) false)))
+  (with-open [clnt (java.net.Socket. (:addr alert-status) (:port alert-status))
+	      rdr (java.io.BufferedReader.
+		   (java.io.InputStreamReader. (.getInputStream clnt) "UTF8"))
+	      wtr (java.io.OutputStreamWriter. (.getOutputStream clnt))]
+    (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
+		    (:thrd alert-status))]
+      (do (.write wtr q) (.flush wtr)
+	  (loop [c (.read rdr) s nil]
+	    (if (= c 0)
+	      (do
+		(if-let [[date pid cid uid] (parse-chat-str s)]
+		  (if-let [pgm (create-pgm-by-scrapedinfo pid cid (tu/now))]
+		    (pgm-fn pgm)
+		    (println "[ERROR] couldn't create-pgm!"))
+		  (println "[ERROR] couldn't parse the chat str!"))
+		(recur (.read rdr) nil))
+	      (recur (.read rdr) (str s (char c)))))))))
 
-(defn run-listener [alert-status pgm-fn]
-  (.start (Thread. (fn [] (listen alert-status pgm-fn)))))
+(defn gen-listener [alert-status pgm-fn]
+  (fn []
+    (try
+      (listen alert-status pgm-fn)
+      (catch java.io.IOException e (lu/printe "IO error" e) false)
+      (catch java.net.SocketTimeoutException e (lu/printe "Socket timeout" e) false)
+      (catch java.net.UnknownHostException e (lu/printe "Unknown host" e) false)
+      (catch Exception e (lu/printe "Unknown error" e) false))))
 
+(let [listener (atom nil)]
+  (defn- run-listener
+    ([alert-status]
+       (run-listener alert-status (fn [pgm] (println (:title pgm))(pgm/add-pgm pgm))))
+    ([alert-status pgm-fn]
+       (when-not @listener
+	 (do
+	   (reset! listener (Thread. (gen-listener alert-status pgm-fn)))
+	   (.start @listener))))))

@@ -5,7 +5,6 @@
   (:use [clojure.contrib.swing-utils :only [do-swing do-swing* add-action-listener]])
   (:require [time-utils :as tu]
 	    [nico.pgm :as pgm]
-	    [nico.ui.fetch-panel :as ufp]
 	    [nico.ui.pgm-panel])
   (:import (java.awt BorderLayout Dimension)
 	   (java.awt.event MouseListener)
@@ -111,7 +110,8 @@
 	 (mouseEntered [e])
 	 (mouseExited [e])
 	 (mousePressed [e])
-	 (mouseReleased [e]))))))
+	 (mouseReleased [e]))))
+    (pgm/add-hook :updated (fn [] (pgm/update-new) (.updatePgms tpane (pgm/pgms) true)))))
   
 (defn- etp-addExtTab [this kind content]
   (doto this
@@ -125,7 +125,7 @@
   (let [last-updated (:last-updated @(.state this))]
     (when (or enforce
 	      (nil? last-updated)
-	      (< 3000 (- (.getTime (tu/now)) (.getTime last-updated))))
+	      (not (tu/within? last-updated (tu/now) 3)))
       (do (etp-update-pgms this pgms)
 	  (swap! (.state this) assoc :last-updated (tu/now))))))
 

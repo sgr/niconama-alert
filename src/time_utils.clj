@@ -19,3 +19,5 @@
 
 (defn minute [millisec] (int (/ (/ millisec 1000) 60)))
 
+(defn within? [^Date from ^Date to ^Integer sec]
+  (if (> (* sec 1000) (- (.getTime to) (.getTime from))) true false))

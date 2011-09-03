@@ -8,7 +8,8 @@
 	    [nico.ui.key-val-dlg :as ukvd]
 	    [nico.ui.kwd-tab-dlg :as uktd]
 	    [nico.alert :as al]
-	    [nico.pgm :as pgm])
+	    [nico.pgm :as pgm]
+	    [nico.updator :as nu])
   (:import (java.awt Dimension)
 	   (javax.swing BorderFactory JCheckBoxMenuItem JLabel JMenuItem
 			JPanel JScrollPane SpringLayout)
@@ -42,6 +43,7 @@
 	:comm (fn []
 		(if-let [as (oa/get-alert-status (:email pref) (:passwd pref))]
 		  (do
+		    (nu/run-api-updator as)
 		    (let [user-name (:user_name as) comms (apply hash-set (:comms as))]
 		      [user-name
 		       (fn [pgms]

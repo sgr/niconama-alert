@@ -52,34 +52,30 @@
   (defn- release-plat [i plat]
     (swap! plats assoc i (assoc plat :used false)))
   (defn alert-pgm [id]
-    (if-let [pgm (pgm/get-pgm id)]
-      (when-not (:alerted pgm)
-	(let [apgm (assoc pgm :alerted true)]
-	  (pgm/update-pgm apgm)
-	  (enqueue apgm)))))
-  (defn run-alerter []
-    (.start
-     (Thread.
-      (fn []
-	(Thread/sleep 500)
-	(when (= 1 (.getCount @latch)) (.await @latch))
-	(if (< 0 (count @queue))
-	  (do
-	    (let [[i plat] (reserve-plat)]
-	      (if i
-		(let [adlg (uad/alert-dlg (dequeue) (fn [] (release-plat i plat)))]
-		  (.start (Thread. (fn []
-				     (do-swing* :now
-						(fn []
-						  (.setLocation adlg (:x plat) (:y plat))
-						  (.setVisible adlg true)))
-				     (Thread/sleep (* *interval* 1000))
-				     (do-swing* :now
-						(fn []
-						  (.setVisible adlg false)
-						  (.dispose adlg)))
-				     (release-plat i plat))))
-		  (recur))
-		(recur))))
-	  (recur)))))))
-
+    (when-let [pgm (pgm/get-pgm id)]
+      (when (pgm/update-if-pgm (:id pgm) (fn [p] (not (:alerted p))) {:alerted true})
+	(enqueue (pgm/get-pgm id)))))
+  (defn gen-alerter []
+    (Thread.
+     (fn []
+       (Thread/sleep 500)
+       (when (= 1 (.getCount @latch)) (.await @latch))
+       (if (< 0 (count @queue))
+	 (do
+	   (let [[i plat] (reserve-plat)]
+	     (if i
+	       (let [adlg (uad/alert-dlg (dequeue) (fn [] (release-plat i plat)))]
+		 (.start (Thread. (fn []
+				    (do-swing* :now
+					       (fn []
+						 (.setLocation adlg (:x plat) (:y plat))
+						 (.setVisible adlg true)))
+				    (Thread/sleep (* *interval* 1000))
+				    (do-swing* :now
+					       (fn []
+						 (.setVisible adlg false)
+						 (.dispose adlg)))
+				    (release-plat i plat))))
+		 (recur))
+	       (recur))))
+	 (recur))))))

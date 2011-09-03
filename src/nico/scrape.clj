@@ -28,7 +28,7 @@
 			    (.setTimeZone (TimeZone/getTimeZone "Asia/Tokyo")))]
 		    (do
 		      ;; 開場23:5x、開演00:0xの場合に対応
-		      (if (> ohh shh) (.add c Calendar/DAY_OF_MONTH 1))
+		      (if (and (= 23 ohh) (= 0 shh)) (.add c Calendar/DAY_OF_MONTH 1))
 		      (.getTime c))))
 	member_only (if (first (html/select infobox [:h2.onlym])) true false)
 	type (cond
