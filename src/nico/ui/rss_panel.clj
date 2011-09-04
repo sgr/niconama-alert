@@ -3,13 +3,9 @@
        :doc "番組情報取得パネル"}
   nico.ui.rss-panel
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
-  (:require [nico.alert :as alert]
-	    [nico.pgm :as pgm]
-	    [nico.rss :as rss]
-	    [nico.updator :as nu]
-	    [time-utils :as tu])
+  (:require [nico.updator :as nu])
   (:import (java.awt Dimension)
-	   (javax.swing ImageIcon JPanel JButton JProgressBar JLabel SpringLayout GroupLayout)
+	   (javax.swing GroupLayout ImageIcon JPanel JButton JProgressBar JLabel)
 	   (javax.swing.border TitledBorder)))
 
 (def *btn-size* (Dimension. 80 30))
