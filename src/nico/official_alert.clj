@@ -70,7 +70,7 @@
 	    (nico-ans-handler
 	     (fn [res] (zip/xml-zip res)))))
 
-(defn- create-pgm-by-getstreaminfo
+(defn- create-pgm-from-getstreaminfo
   "getstreaminfoで得られた情報から番組情報を生成する。が、足りない情報がポロポロあって使えない・・・"
   [zipped-res fetched_at]
   (let [id (zfx/xml1-> zipped-res :request_id zfx/text)]
@@ -133,7 +133,7 @@
 	    (if (= c 0)
 	      (do
 		(if-let [[date pid cid uid] (parse-chat-str s)]
-		  (if-let [pgm (create-pgm-by-scrapedinfo pid cid (tu/now))]
+		  (if-let [pgm (create-pgm-from-scrapedinfo pid cid (tu/now))]
 		    (pgm-fn pgm)
 		    (println "[ERROR] couldn't create-pgm!"))
 		  (println "[ERROR] couldn't parse the chat str!"))
