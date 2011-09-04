@@ -17,24 +17,21 @@
 
 (defn rss-panel []
   (let [rss-panel (JPanel.)
-	lstatus (JLabel. "ステータス:")
-	vstatus (JLabel. "右のボタンでRSS取得開始")
+	status (JLabel. "右のボタンでRSS取得開始")
 	pbar (JProgressBar.)
 	cloader (.getClassLoader (class (fn [])))
 	ricn (ImageIcon. (.getResource cloader "reload.png"))
 	sicn (ImageIcon. (.getResource cloader "start.png"))
 	picn (ImageIcon. (.getResource cloader "pause.png"))
 	rbtn (JButton. ricn), tbtn (JButton. sicn)
-	stat-panel (JPanel.)
-	stat-panel-layout (GroupLayout. stat-panel)
-	stat-panel-hgrp (.createSequentialGroup stat-panel-layout)
-	stat-panel-vgrp (.createSequentialGroup stat-panel-layout)
-	rss-panel-layout (SpringLayout.)]
+	layout (GroupLayout. rss-panel)
+	hgrp (.createSequentialGroup layout)
+	vgrp (.createSequentialGroup layout)]
     (nu/add-hook
      :countdown
      (fn [sec max]
        (do-swing
-	(.setText vstatus "RSS取得待機中")
+	(.setText status "RSS取得待機中")
 	(.setString pbar (format "あと %d秒" sec))
 	(.setMaximum pbar max) (.setValue pbar sec))))
     (nu/add-hook
@@ -42,7 +39,7 @@
      (fn [fetched-count total page]
        (do-swing
 	(.setEnabled rbtn false) (.setEnabled tbtn false))
-	(.setText vstatus "RSS情報取得中")
+	(.setText status "RSS情報取得中")
 	(.setString pbar (format "%d / %d from page %d."
 				 fetched-count total page))
 	(.setMaximum pbar total)
@@ -54,13 +51,13 @@
        (condp = total
 	   0 (do ;; 通信エラーかサーバー落ちか、RSSが空っぽか。
 	       (do-swing
-		(.setText vstatus "サーバーとの通信エラー")))
+		(.setText status "サーバーとの通信エラー")))
 	   fetched-count (do ;; 全て取得できた。
 		     (do-swing
-		      (.setText vstatus "RSS情報取得完了")
+		      (.setText status "RSS情報取得完了")
 		      (.doClick tbtn)))
 	   (do-swing
-	    (.setText vstatus "RSS情報取得中断")))))
+	    (.setText status "RSS情報取得中断")))))
     (doto rbtn
       (.setPreferredSize *btn-size*)
       (.setToolTipText "RSS情報の取得をすぐに開始します")
@@ -81,42 +78,32 @@
     (doto pbar
       (.setPreferredSize *bar-size*)
       (.setStringPainted true))
-    (doto stat-panel-hgrp
-      (.addGroup (.. stat-panel-layout createParallelGroup
-		     (addGroup (.. stat-panel-layout createSequentialGroup
-				   (addComponent lstatus) (addComponent vstatus)))
-		     (addComponent pbar))))
-    (doto stat-panel-vgrp
-      (.addGroup (.. stat-panel-layout createParallelGroup
-		     (addComponent lstatus) (addComponent vstatus)))
-      (.addGroup (.. stat-panel-layout createParallelGroup
-		     (addComponent pbar))))
-    (doto stat-panel-layout
-      (.setHorizontalGroup stat-panel-hgrp)
-      (.setVerticalGroup stat-panel-vgrp)
+    (doto hgrp
+      (.addGroup (.. layout createParallelGroup
+		     (addComponent status)
+		     (addComponent pbar)))
+      (.addGroup (.. layout createParallelGroup
+		     (addComponent tbtn)))
+      (.addGroup (.. layout createParallelGroup
+		     (addComponent rbtn))))
+    (doto vgrp
+      (.addGroup (.. layout createParallelGroup
+		     (addGroup (.. layout createSequentialGroup
+				   (addComponent status)
+				   (addComponent pbar)))
+		     (addComponent rbtn)
+		     (addComponent tbtn))))
+    (doto layout
+      (.setHorizontalGroup hgrp)
+      (.setVerticalGroup vgrp)
       (.setAutoCreateGaps true)
       (.setAutoCreateContainerGaps true))
-    (doto stat-panel
-      (.setLayout stat-panel-layout)
-      (.add lstatus)
-      (.add vstatus)
-      (.add pbar))
-    (doto rss-panel-layout
-      (.putConstraint SpringLayout/NORTH stat-panel 1 SpringLayout/NORTH rss-panel)
-      (.putConstraint SpringLayout/SOUTH stat-panel -1 SpringLayout/SOUTH rss-panel)
-      (.putConstraint SpringLayout/NORTH tbtn 5 SpringLayout/NORTH rss-panel)
-      (.putConstraint SpringLayout/SOUTH tbtn -5 SpringLayout/SOUTH rss-panel)
-      (.putConstraint SpringLayout/NORTH rbtn 5 SpringLayout/NORTH rss-panel)
-      (.putConstraint SpringLayout/SOUTH rbtn -5 SpringLayout/SOUTH rss-panel)
-      (.putConstraint SpringLayout/WEST stat-panel 1 SpringLayout/WEST rss-panel)
-      (.putConstraint SpringLayout/EAST stat-panel -5 SpringLayout/WEST tbtn)
-      (.putConstraint SpringLayout/EAST tbtn -5 SpringLayout/WEST rbtn)
-      (.putConstraint SpringLayout/EAST rbtn -5 SpringLayout/EAST rss-panel))
     (doto rss-panel
       (.setPreferredSize (Dimension. 500 60))
       (.setBorder (TitledBorder. "RSS Status"))
-      (.setLayout rss-panel-layout)
-      (.add stat-panel)
+      (.setLayout layout)
+      (.add status)
+      (.add pbar)
       (.add rbtn)
       (.add tbtn))))
 
