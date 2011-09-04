@@ -14,7 +14,7 @@
 
 (defn api-panel []
   (let [panel (JPanel.)
-	status (uu/mlabel 8 "有効なユーザータブが必要です" *status-size*)
+	status (uu/mlabel "有効なユーザータブが必要です" *status-size*)
 	cloader (.getClassLoader (class (fn [])))
 	sicn (ImageIcon. (.getResource cloader "start.png"))
 	picn (ImageIcon. (.getResource cloader "pause.png"))

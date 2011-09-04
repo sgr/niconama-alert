@@ -37,11 +37,7 @@
        (doto l
 	 (.setFont *font*)
 	 (.setOpaque false) (.setEditable false) (.setFocusable false) (.setLineWrap true))))
-  ([^int col ^String text]
+  ([^String text ^Dimension size]
      (let [ml (mlabel text)]
-       (doto ml
-	 (.setColumns col))))
-  ([^int col ^String text ^Dimension size]
-     (let [ml (mlabel col text)]
        (doto ml
 	 (.setPreferredSize size)))))

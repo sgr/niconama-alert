@@ -135,7 +135,7 @@
 	  (.setPreferredSize (Dimension. 210 18))
 	  (.setLayout layout) (.add title) (.add cbtn)))
       (let [thumbnail (JLabel. thumbicn),
-	    desc (uu/mlabel 12 (if-let [d (:desc pgm)] d "## NO_DESC ##") *desc-size*)
+	    desc (uu/mlabel (if-let [d (:desc pgm)] d "## NO_DESC ##") *desc-size*)
 	    layout (GridBagLayout.), c (GridBagConstraints.)]
 	(letfn [(set-con!
 		 [lt component x y top left bottom right]
