@@ -30,7 +30,7 @@
       (.putConstraint SpringLayout/NORTH rpanel 1 SpringLayout/NORTH panel)
       (.putConstraint SpringLayout/SOUTH rpanel -1 SpringLayout/SOUTH panel)
       (.putConstraint SpringLayout/WEST ppanel 1 SpringLayout/WEST panel)
-      (.putConstraint SpringLayout/WEST apanel 1 SpringLayout/EAST ppanel)
+      (.putConstraint SpringLayout/EAST ppanel -1 SpringLayout/WEST apanel)
       (.putConstraint SpringLayout/EAST apanel -1 SpringLayout/WEST rpanel)
       (.putConstraint SpringLayout/EAST rpanel -1 SpringLayout/EAST panel))
     (doto panel

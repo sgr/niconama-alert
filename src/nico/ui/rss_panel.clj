@@ -9,7 +9,7 @@
 	   (javax.swing.border TitledBorder)))
 
 (def *btn-size* (Dimension. 80 30))
-(def *bar-size* (Dimension. 100 20))
+(def *bar-size* (Dimension. 200 20))
 
 (defn rss-panel []
   (let [rss-panel (JPanel.)
@@ -95,7 +95,6 @@
       (.setAutoCreateGaps true)
       (.setAutoCreateContainerGaps true))
     (doto rss-panel
-      (.setPreferredSize (Dimension. 500 60))
       (.setBorder (TitledBorder. "RSS Status"))
       (.setLayout layout)
       (.add status)
