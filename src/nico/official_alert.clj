@@ -90,7 +90,7 @@
      false
      fetched_at)))
 
-(defn- create-pgm-by-scrapedinfo
+(defn- create-pgm-from-scrapedinfo
   [pid cid fetched_at]
   (let [id (str "lv" pid)
 	info (ns/fetch-pgm-info id)]
