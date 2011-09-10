@@ -3,13 +3,13 @@
        :doc "番組リスト表示パネル"}
   nico.ui.pgm-panel
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
-  (:require [nico.official-alert :as oa]
+  (:require [nico.api :as api]
 	    [nico.ui.pgm-table :as upt]
 	    [nico.ui.key-val-dlg :as ukvd]
 	    [nico.ui.kwd-tab-dlg :as uktd]
 	    [nico.alert :as al]
 	    [nico.pgm :as pgm]
-	    [nico.updator :as nu])
+	    [nico.api-updator :as nau])
   (:import (java.awt Dimension)
 	   (javax.swing BorderFactory JCheckBoxMenuItem JLabel JMenuItem
 			JPanel JScrollPane SpringLayout)
@@ -41,9 +41,9 @@
     (condp = (:type pref)
 	:all (fn [] [(:title pref) (fn [pgms] [(pgm/count-pgms) pgms])])
 	:comm (fn []
-		(if-let [as (oa/get-alert-status (:email pref) (:passwd pref))]
+		(if-let [as (api/get-alert-status (:email pref) (:passwd pref))]
 		  (do
-		    (nu/run-api-updator as)
+		    (nau/set-alert-status as)
 		    (let [user-name (:user_name as) comms (apply hash-set (:comms as))]
 		      [user-name
 		       (fn [pgms]

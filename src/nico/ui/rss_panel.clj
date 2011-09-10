@@ -3,7 +3,7 @@
        :doc "番組情報取得パネル"}
   nico.ui.rss-panel
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
-  (:require [nico.updator :as nu])
+  (:require [nico.rss-updator :as nru])
   (:import (java.awt Dimension)
 	   (javax.swing GroupLayout ImageIcon JPanel JButton JProgressBar JLabel)
 	   (javax.swing.border TitledBorder)))
@@ -23,14 +23,14 @@
 	layout (GroupLayout. rss-panel)
 	hgrp (.createSequentialGroup layout)
 	vgrp (.createSequentialGroup layout)]
-    (nu/add-hook
+    (nru/add-hook
      :countdown
      (fn [sec max]
        (do-swing
 	(.setText status "RSS取得待機中")
 	(.setString pbar (format "あと %d秒" sec))
 	(.setMaximum pbar max) (.setValue pbar sec))))
-    (nu/add-hook
+    (nru/add-hook
      :fetching
      (fn [fetched-count total page]
        (do-swing
@@ -40,7 +40,7 @@
 				 fetched-count total page))
 	(.setMaximum pbar total)
 	(.setValue pbar fetched-count)))
-    (nu/add-hook
+    (nru/add-hook
      :fetched
      (fn [fetched-count total]
        (do-swing (.setEnabled rbtn true) (.setEnabled tbtn true))
@@ -58,13 +58,13 @@
       (.setPreferredSize *btn-size*)
       (.setToolTipText "RSS情報の取得をすぐに開始します")
       (.setEnabled false)
-      (add-action-listener (fn [e] (nu/set-counter 1))))
+      (add-action-listener (fn [e] (nru/set-counter 1))))
     (let [tstr "RSS情報の取得を開始します", pstr "RSS情報の取得を一時停止します"]
       (doto tbtn
 	(.setPreferredSize *btn-size*)
 	(.setToolTipText tstr)
 	(add-action-listener
-	 (fn [e] (if (nu/pause-rss-updator)
+	 (fn [e] (if (nru/pause-rss-updator)
 		   (do-swing (doto tbtn
 			       (.setIcon sicn) (.setToolTipText tstr))
 			     (.setEnabled rbtn false))

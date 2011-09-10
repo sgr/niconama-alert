@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "APIによる番組情報取得状況表示パネル"}
   nico.ui.api-panel
-  (:require [nico.updator :as nu]
+  (:require [nico.api-updator :as au]
 	    [nico.ui.util :as uu]
 	    [time-utils :as tu])
   (:import (java.awt Dimension)
@@ -10,7 +10,7 @@
 	   (javax.swing.border TitledBorder)))
 
 (def *btn-size* (Dimension. 80 30))
-(def *status-size* (Dimension. 120 30))
+(def *status-size* (Dimension. 150 30))
 
 (defn api-panel []
   (let [panel (JPanel.)
@@ -22,6 +22,13 @@
 	layout (GroupLayout. panel)
 	hgrp (.createSequentialGroup layout)
 	vgrp (.createSequentialGroup layout)]
+    (au/add-hook :awaiting
+		 (fn [] (.setText status "接続待ち")))
+    (au/add-hook :connected
+		 (fn [] (.setText status "接続完了")))
+    (au/add-hook :rate-updated
+		 (fn [] (.setText status (format "番組情報取得中...\n %d programs/min."
+						 (au/get-fetched-rate)))))
     (doto tbtn
       (.setPreferredSize *btn-size*)
       (.setToolTipText "番組情報取得のために接続開始します。")

@@ -1,9 +1,8 @@
 ;; -*- coding: utf-8-unix -*-
 (ns #^{:author "sgr"
        :doc "公式のニコ生アラートAPIで番組情報を取得する。
-             番組情報の一部までは取れるんだが、全て取得するにはブラウザの認証情報が必要。
-             結局、コミュニティ情報の取得までしか使っていない。"}
-    nico.official-alert
+             番組情報はスクレイピングで取得。"}
+    nico.api
   (:require [nico.pgm :as pgm]
 	    [nico.scrape :as ns]
 	    [log-utils :as lu]
@@ -121,32 +120,38 @@
 	  nil))
       nil)))
 
-(defn listen [alert-status pgm-fn]
+(defn listen [alert-status connected-fn pgm-fn]
   (with-open [clnt (java.net.Socket. (:addr alert-status) (:port alert-status))
 	      rdr (java.io.BufferedReader.
-		   (java.io.InputStreamReader. (.getInputStream clnt) "UTF8"))
+	      	   (java.io.InputStreamReader. (.getInputStream clnt) "UTF8"))
 	      wtr (java.io.OutputStreamWriter. (.getOutputStream clnt))]
     (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
+;;    (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1200\"/>\0"
 		    (:thrd alert-status))]
       (do (.write wtr q) (.flush wtr)
+	  (connected-fn)
 	  (loop [c (.read rdr) s nil]
-	    (if (= c 0)
-	      (do
-		(if-let [[date pid cid uid] (parse-chat-str s)]
-		  (if-let [pgm (create-pgm-from-scrapedinfo pid cid (tu/now))]
-		    (pgm-fn pgm)
-		    (println "[ERROR] couldn't create-pgm!"))
-		  (println "[ERROR] couldn't parse the chat str!"))
-		(recur (.read rdr) nil))
-	      (recur (.read rdr) (str s (char c)))))))))
+	    (cond
+	     (= -1 c) (println "******* Connection closed *******")
+	     (= 0 c) (do
+		       (future
+			(if-let [[date pid cid uid] (parse-chat-str s)]
+			  (if-let [pgm (create-pgm-from-scrapedinfo pid cid (tu/now))]
+			    (pgm-fn pgm)
+			    (println "[ERROR] couldn't create-pgm!"))
+			  (println "[ERROR] couldn't parse the chat str!")))
+		       (recur (.read rdr) nil))
+	     :else (let [ns (str s (char c))]
+;;		     (println (format " continue[%s]: %s" (.ready rdr) ns))
+		     (recur (.read rdr) ns))))))))
 
 (defn gen-listener [alert-status pgm-fn]
   (fn []
     (try
       (listen alert-status pgm-fn)
-      (catch java.io.IOException e (lu/printe "IO error" e) false)
       (catch java.net.SocketTimeoutException e (lu/printe "Socket timeout" e) false)
       (catch java.net.UnknownHostException e (lu/printe "Unknown host" e) false)
+      (catch java.io.IOException e (lu/printe "IO error" e) false)
       (catch Exception e (lu/printe "Unknown error" e) false))))
 
 (let [listener (atom nil)]
