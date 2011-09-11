@@ -95,7 +95,7 @@
       img
       (if (zero? retry-count)
 	(do (println "abort fetching image!") *noimg*)
-	(do (println (format "retry fetching image (rest: %d)" (dec retry-count)))
+	(do (Thread/sleep 1000)
 	    (recur (dec retry-count)))))))
 
 (defn- get-thumbnail [url]
