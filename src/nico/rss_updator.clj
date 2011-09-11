@@ -58,7 +58,8 @@
 	     [:aborted (count fetched) cur_total])
 	   :else
 	   (recur cur_page total cur_total earliest-updated fetched-updated))))
-      (catch Exception e (lu/printe "failed fetching RSS" e) :error)))
+      (catch Exception e (lu/printe "failed fetching RSS" e)
+	     [:error 0 (rss/get-programs-count)])))
   (defn set-counter [c] (reset! counter c))
   (defn update-rss []
     (try
@@ -71,7 +72,7 @@
 		new-max (condp = result
 			    :finished 180
 			    :aborted 120
-			    :error 60)]
+			    :error 300)]
 	    (set-counter new-max)
 	    ;; 取得状況更新
 	    (doseq [f @hook-fetched] (when f (f fetched total)))
