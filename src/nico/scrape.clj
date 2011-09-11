@@ -4,6 +4,7 @@
     nico.scrape
   (:require [net.cgrand.enlive-html :as html]
 	    [str-utils :as s]
+	    [time-utils :as tu]
 	    [clojure.contrib.string :as cs])
   (:import (java.util Calendar Date GregorianCalendar Locale TimeZone)))
 
@@ -18,8 +19,9 @@
 	title (s/cleanup (first (html/select infobox [:h2 :> html/text-node])))
 	desc (cs/join " " (for [n (html/select infobox [:div.bgm :> :div :> html/text-node])]
 			    (s/cleanup n)))
-	pubdate (let [[sday sopen sstart] (html/select infobox
-						       [:div.kaijo :> :strong :> html/text-node])]
+	pubdate (let [[sday sopen sstart]
+		      (html/select infobox
+				   [:div.kaijo :> :strong :> html/text-node])]
 		  (let [[yyyy MM dd] (for [x (rest (re-find #"(\d{4})/(\d{2})/(\d{2})" sday))]
 				       (Integer/parseInt x))
 			[ohh omm] (for [x (.split sopen ":")] (Integer/parseInt x))
@@ -28,7 +30,7 @@
 			    (.setTimeZone (TimeZone/getTimeZone "Asia/Tokyo")))]
 		    (do
 		      ;; 開場23:5x、開演00:0xの場合に対応
-		      (if (and (= 23 ohh) (= 0 shh)) (.add c Calendar/DAY_OF_MONTH 1))
+		      (when (and (= 23 ohh) (= 0 shh)) (.add c Calendar/DAY_OF_MONTH 1))
 		      (.getTime c))))
 	member_only (if (first (html/select infobox [:h2.onlym])) true false)
 	type (cond
@@ -58,6 +60,7 @@
 		       nil)
 	thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src)]
 		    (if (= type :community) bn (str base bn)))]
+    (when-not pubdate (println (format " ** NULL PUBDATE: %s (%s)" title link)))
     {:title title
      :pubdate pubdate
      :desc desc
@@ -67,16 +70,22 @@
      :owner_name owner_name
      :member_only member_only
      :type type
-     :comm_name comm_name}))
+     :comm_name comm_name
+     :fetched_at (tu/now)}))
 
 (defn- fetch-pgm-info2 [pid]
   (try
     (fetch-pgm-info1 pid)
-    (catch NullPointerException _ nil)))
+    (catch Exception _ nil)))
 
 (defn fetch-pgm-info
   "ニコ生の番組ページから番組情報を取得する。"
   [pid]
-  (if-let [pgm (fetch-pgm-info2 pid)]
-    pgm
-    (do (Thread/sleep 1000) (recur pid))))
+  (loop [retry 10]
+    (if (= 0 retry)
+      (do (println " *** aborted scraping! ***") nil)
+      (if-let [pgm (fetch-pgm-info2 pid)]
+	pgm
+	(do
+	  (Thread/sleep 5000)
+	  (recur (dec retry)))))))
