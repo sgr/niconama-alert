@@ -7,12 +7,12 @@
 (defn cleanup
   "絵文字など制御文字扱いになる文字を削除する"
   [^String s]
-  (.replaceAll s "[\\00-\\x1f\\x7f]" ""))
+  (if s (doto s (.replaceAll "[\\00-\\x1f\\x7f]" "")) nil))
 
 (defn utf8stream
   "translate from String to Stream."
   [^String s]
-  (ByteArrayInputStream. (.getBytes s "UTF-8")))
+  (if s (ByteArrayInputStream. (.getBytes s "UTF-8")) nil))
 
 (defn split-by-length
   "split string by given length"
