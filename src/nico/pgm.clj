@@ -50,17 +50,26 @@
      (ref-set comm-pgms {})
      (ref-set new #{}))
     (call-hook-updated))
-  (defn- is-to-add?
-    "この番組情報を加えるべきか？同じコミュニティの放送が複数あったら、新しいものだけを追加する。"
-    [^Pgm pgm]
-    (if (= "community" (:type pgm))
-      (if-let [apgm (get @comm-pgms (:comm_id pgm))]
-	(tu/earlier? (:pubdate apgm) (:pubdate pgm))
-	true)
-      true))
   (defn get-pgm
     "番組情報を得る"
     [^String id] (get @id-pgms id nil))
+  (defn- is-to-add?
+    "この番組情報を加えるべきか？同じコミュニティの放送が複数あったら、新しいものだけを追加する。"
+    [^Pgm pgm]
+    (if-not (get-pgm (:id pgm))
+      (if (= "community" (:type pgm))
+	(if-let [apgm (get @comm-pgms (:comm_id pgm))]
+	  (do
+	    (when (or (nil? (:pubdate apgm)) (nil? (:pubdate pgm)))
+	      (println (format "apgm: %s, pgm: %s, title: %s"
+			       (:pubdate apgm) (:pubdate pgm) (:title pgm))))
+	    ;; スクレイプで得た開始時刻は秒の情報が落ちてしまうため、60秒以内なら無視する。
+	    (if (tu/within? (:pubdate apgm) (:pubdate pgm) 60)
+	      false
+	      (tu/earlier? (:pubdate apgm) (:pubdate pgm))))
+	  true)
+	true)
+      false))
   (defn rem-pgm
     "番組情報を削除する"
     [^String id]
@@ -119,7 +128,12 @@
     (reset-pgms (vals (select-keys @id-pgms ids))))
   (defn- elapsed-time
     [pgm]
-    (- (.getTime (:fetched_at pgm)) (.getTime (:pubdate pgm))))
+    (try
+      (- (.getTime (:fetched_at pgm)) (.getTime (:pubdate pgm)))
+      (catch Exception e
+	(println (format " *** FAILED ELAPSED-PGM: %s %s (%s) [%s-%s]"
+			 (:id pgm) (:title pgm) (:link pgm) (:pubdate pgm) (:fetched_at pgm))
+	e))))
   (defn- younger?
     "番組開始30分以内なら真"
     [pgm]
@@ -128,7 +142,7 @@
     "今も延長している可能性を評価する"
     [pgm now]
     ;; 今は、取得時点での番組放送時間から、取得後から今までの経過時間を引いた時間をスコアとしている。
-    (- (elapsed-time pgm) (- (.getTime (tu/now)) (.getTime (:fetched_at pgm)))))
+    (- (elapsed-time pgm) (- (.getTime now) (.getTime (:fetched_at pgm)))))
   (defn rem-pgms-partial
     "部分的に取得された番組情報を基に、pgmsから不要そうな番組情報を削除する。
      番組情報を全て取得すれば終了した番組を判別し削除することができるのだが、
