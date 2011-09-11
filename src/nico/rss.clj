@@ -66,5 +66,12 @@
 (defn get-programs-from-rss-page [rss]
   (for [item (for [x (zfx/xml-> (zip/xml-zip rss) :channel zf/children)
 		   :when (= :item (:tag (first x)))] (first x))]
-    (create-pgm item (tu/now))))
+    (let [pgm (create-pgm item (tu/now))]
+      (when (some nil?
+		  (list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
+	(println
+	 (format " *** NULL-PGM-FROM-RSS: %s %s (%s) [%s-%s]"
+		 (:id pgm) (:title pgm) (:link pgm)
+		 (:pubdate pgm) (:fetched_at pgm))))
+      pgm)))
 
