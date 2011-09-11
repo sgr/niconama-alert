@@ -144,7 +144,9 @@
 				    (fn []
 				      (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
 					(pgm-fn pgm)
-					(println "[ERROR] couldn't create-pgm!")))
+					(println
+					 (format "[ERROR] couldn't create-pgm! (%s/%s/%s)"
+						 pid cid uid))))
 				    :finished)
 			   (println "[ERROR] couldn't parse the chat str!"))
 			 (recur (.read rdr) nil))
