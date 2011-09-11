@@ -126,7 +126,8 @@
 (let [nthreads 3
       pool (Executors/newFixedThreadPool nthreads)]
   (defn listen [alert-status connected-fn pgm-fn]
-    (with-open [clnt (java.net.Socket. (:addr alert-status) (:port alert-status))
+    (with-open [clnt (doto (java.net.Socket. (:addr alert-status) (:port alert-status))
+		       (.setSoTimeout 60000))
 		rdr (java.io.BufferedReader.
 		     (java.io.InputStreamReader. (.getInputStream clnt) "UTF8"))
 		wtr (java.io.OutputStreamWriter. (.getOutputStream clnt))]

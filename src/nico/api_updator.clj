@@ -47,7 +47,7 @@
 		      (swap! fetched conj now)
 ;;		      (println (format "[%s] %s" now (:title pgm)))
 		      (pgm/add-pgm pgm))))
-      (catch Exception e (lu/printe "" e) nil)))
+      (catch Exception e (lu/printe "** disconnected" e) nil)))
   (defn update-api []
     (loop [c *retry*]
       (when (= 1 (.getCount @latch)) ;; pause中かどうか
@@ -61,6 +61,7 @@
 		 (recur *retry*))
        @alert-status (do
 		       (api-update @alert-status)
+		       (println "Will reconnect after 3 sec...")
 		       (Thread/sleep 3000)
 		       (doseq [f @hook-reconnecting] (f))
 		       (recur (dec c))))))
