@@ -13,7 +13,8 @@
 	    [clojure.contrib.zip-filter :as zf]
 	    [clojure.contrib.zip-filter.xml :as zfx]
 	    [clojure.contrib.http.agent :as ha])
-  (:import (java.util Date)))
+  (:import (java.util Date)
+	   (java.util.concurrent Executors)))
 
 (def *user-agent* "Niconama-alert J/1.0.0")
 
@@ -122,28 +123,32 @@
 	  nil))
       nil)))
 
-(defn listen [alert-status connected-fn pgm-fn]
-  (with-open [clnt (java.net.Socket. (:addr alert-status) (:port alert-status))
-	      rdr (java.io.BufferedReader.
-	      	   (java.io.InputStreamReader. (.getInputStream clnt) "UTF8"))
-	      wtr (java.io.OutputStreamWriter. (.getOutputStream clnt))]
-    (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
-;;    (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1200\"/>\0"
-		    (:thrd alert-status))]
-      (do (.write wtr q) (.flush wtr)
-	  (connected-fn)
-	  (loop [c (.read rdr) s nil]
-	    (cond
-	     (= -1 c) (println "******* Connection closed *******")
-	     (= 0 c) (do
-		       (future
-			(if-let [[date pid cid uid] (parse-chat-str s)]
-			  (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
-			    (pgm-fn pgm)
-			    (println "[ERROR] couldn't create-pgm!"))
-			  (println "[ERROR] couldn't parse the chat str!")))
-		       (recur (.read rdr) nil))
-	     :else (recur (.read rdr) (str s (char c)))))))))
+(let [nthreads 3
+      pool (Executors/newFixedThreadPool nthreads)]
+  (defn listen [alert-status connected-fn pgm-fn]
+    (with-open [clnt (java.net.Socket. (:addr alert-status) (:port alert-status))
+		rdr (java.io.BufferedReader.
+		     (java.io.InputStreamReader. (.getInputStream clnt) "UTF8"))
+		wtr (java.io.OutputStreamWriter. (.getOutputStream clnt))]
+      ;; res_fromを-1200にすると、全ての番組を取得するらしい。
+      (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
+		      (:thrd alert-status))]
+	(do (.write wtr q) (.flush wtr)
+	    (connected-fn)
+	    (loop [c (.read rdr) s nil]
+	      (cond
+	       (= -1 c) (println "******* Connection closed *******")
+	       (= 0 c) (do
+			 (if-let [[date pid cid uid] (parse-chat-str s)]
+			   (.submit pool
+				    (fn []
+				      (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
+					(pgm-fn pgm)
+					(println "[ERROR] couldn't create-pgm!")))
+				    :finished)
+			   (println "[ERROR] couldn't parse the chat str!"))
+			 (recur (.read rdr) nil))
+	       :else (recur (.read rdr) (str s (char c))))))))))
 
 (defn- gen-listener [alert-status pgm-fn]
   (fn []
