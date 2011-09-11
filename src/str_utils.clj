@@ -7,7 +7,7 @@
 (defn cleanup
   "絵文字など制御文字扱いになる文字を削除する"
   [^String s]
-  (if s (doto s (.replaceAll "[\\00-\\x1f\\x7f]" "")) nil))
+  (if s (.replaceAll "[\\00-\\x1f\\x7f]" "") nil))
 
 (defn utf8stream
   "translate from String to Stream."
