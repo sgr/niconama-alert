@@ -90,24 +90,26 @@
      fetched_at)))
 
 (defn- create-pgm-from-scrapedinfo
-  [pid cid fetched_at]
+  [pid cid]
   (let [id (str "lv" pid)
 	info (ns/fetch-pgm-info id)]
-    (nico.pgm.Pgm.
-     id
-     (:title info)
-     (:pubdate info)
-     (:desc info)
-     (:category info)
-     (:link info)
-     (:thumbnail info)
-     (:owner_name info)
-     (:member_only info)
-     (:type info)
-     (:comm_name info)
-     cid
-     false
-     fetched_at)))
+    (if info
+      (nico.pgm.Pgm.
+       id
+       (:title info)
+       (:pubdate info)
+       (:desc info)
+       (:category info)
+       (:link info)
+       (:thumbnail info)
+       (:owner_name info)
+       (:member_only info)
+       (:type info)
+       (:comm_name info)
+       cid
+       false
+       (:fetched_at info))
+      nil)))
 
 (defn- parse-chat-str [chat-str]
   (let [chat (xml/parse (java.io.StringBufferInputStream. chat-str))]
@@ -136,16 +138,14 @@
 	     (= 0 c) (do
 		       (future
 			(if-let [[date pid cid uid] (parse-chat-str s)]
-			  (if-let [pgm (create-pgm-from-scrapedinfo pid cid (tu/now))]
+			  (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
 			    (pgm-fn pgm)
 			    (println "[ERROR] couldn't create-pgm!"))
 			  (println "[ERROR] couldn't parse the chat str!")))
 		       (recur (.read rdr) nil))
-	     :else (let [ns (str s (char c))]
-;;		     (println (format " continue[%s]: %s" (.ready rdr) ns))
-		     (recur (.read rdr) ns))))))))
+	     :else (recur (.read rdr) (str s (char c)))))))))
 
-(defn gen-listener [alert-status pgm-fn]
+(defn- gen-listener [alert-status pgm-fn]
   (fn []
     (try
       (listen alert-status pgm-fn)
