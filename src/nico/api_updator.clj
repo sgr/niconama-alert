@@ -9,34 +9,43 @@
 
 ;; Official Alert API updator
 (def *retry* 10)
-(let [latch (atom (java.util.concurrent.CountDownLatch. 1))
-      counter (atom *retry*)
-      alert-status (atom nil)
+(let [latch (ref (java.util.concurrent.CountDownLatch. 1))
+      alert-status (ref nil)
+      awaiting-status (ref :need_login)
       hook-awaiting (atom '())
       hook-connected (atom '())
-      hook-aborted (atom '())
+      hook-reconnecting (atom '())
       hook-rate-updated (atom '())
-      awaiting-status (atom :need_login)
       fetched (atom [])]
   (defn- add-hook-aux [a f] (reset! a (conj (deref a) f)))
   (defn add-hook [kind f]
     (condp = kind
 	:awaiting (add-hook-aux hook-awaiting f)
 	:connected (add-hook-aux hook-connected f)
-	:aborted (add-hook-aux hook-aborted f)
+	:reconnecting (add-hook-aux hook-reconnecting f)
 	:rate-updated (add-hook-aux hook-rate-updated f)))
   (defn get-awaiting-status [] @awaiting-status)
   (defn set-alert-status [as]
-    (reset! alert-status as)
-    (.countDown @latch))
+    (when-not @alert-status
+      (dosync
+       (ref-set alert-status as)
+       (ref-set awaiting-status :ready)))
+    (doseq [f @hook-awaiting] (f)))
+  (defn start-update-api [] (.countDown @latch))
   (defn- api-update [alert-status]
     (try
       (api/listen alert-status
 		  (fn [] (doseq [f @hook-connected] (f)))
 		  (fn [pgm]
+		    (when (some nil?
+				(list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
+		      (println
+		       (format " *** NULL-PGM-FROM-API: %s %s (%s) [%s-%s]"
+			       (:id pgm) (:title pgm) (:link pgm)
+			       (:pubdate pgm) (:fetched_at pgm))))
 		    (let [now (tu/now)]
 		      (swap! fetched conj now)
-		      (println (format "[%s] %s" now (:title pgm)))
+;;		      (println (format "[%s] %s" now (:title pgm)))
 		      (pgm/add-pgm pgm))))
       (catch Exception e (lu/printe "" e) nil)))
   (defn update-api []
@@ -46,17 +55,21 @@
 	    (.await @latch)))
       (cond
        (= 0 c) (do
-		 (doseq [f @hook-aborted] (f))
-		 (reset! awaiting-status :aborted)
-		 (reset! latch (java.util.concurrent.CountDownLatch. 1))
+		 (dosync
+		  (ref-set awaiting-status :aborted)
+		  (ref-set latch (java.util.concurrent.CountDownLatch. 1)))
 		 (recur *retry*))
        @alert-status (do
 		       (api-update @alert-status)
+		       (Thread/sleep 3000)
+		       (doseq [f @hook-reconnecting] (f))
 		       (recur (dec c))))))
   (defn get-fetched-rate [] (count @fetched))
   (defn update-rate []
     (loop []
-      (Thread/sleep 3000)
+      (Thread/sleep 5000)
+      (when (= 1 (.getCount @latch)) ;; pause中かどうか
+	(.await @latch))
       (swap! fetched (fn [coll now] (filter #(tu/within? % now 60) coll)) (tu/now))
       (doseq [f @hook-rate-updated] (f))
       (recur)))

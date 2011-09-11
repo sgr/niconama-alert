@@ -2,6 +2,7 @@
 (ns #^{:author "sgr"
        :doc "APIによる番組情報取得状況表示パネル"}
   nico.ui.api-panel
+  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.api-updator :as au]
 	    [nico.ui.util :as uu]
 	    [time-utils :as tu])
@@ -19,20 +20,47 @@
 	sicn (ImageIcon. (.getResource cloader "start.png"))
 	picn (ImageIcon. (.getResource cloader "pause.png"))
 	tbtn (JButton. sicn)
+	istr "APIによる番組情報取得はできません"
+	tstr "APIによる番組情報取得を開始します"
+	pstr "APIによる番組情報取得を中止します"
 	layout (GroupLayout. panel)
 	hgrp (.createSequentialGroup layout)
 	vgrp (.createSequentialGroup layout)]
     (au/add-hook :awaiting
-		 (fn [] (.setText status "接続待ち")))
+		 (fn [] (condp = (au/get-awaiting-status)
+			    :need_login (do-swing
+					 (doto tbtn
+					   (.setEnabled false)
+					   (.setToolTipText istr))
+					 (.setText status "有効なユーザータブが必要です"))
+			    :ready (do-swing
+				    (doto tbtn
+				      (.setEnabled true)
+				      (.setToolTipText tstr))
+				    (.setText status "接続できます"))
+			    :aborted (do-swing
+				      (doto tbtn
+					(.setEnabled true)
+					(.setToolTipText tstr))
+				      (.setText status "接続できませんでした")))))
     (au/add-hook :connected
-		 (fn [] (.setText status "接続完了")))
+		 (fn [] (do-swing
+			 (doto tbtn (.setEnabled false))
+			 (.setText status "接続完了"))))
+    (au/add-hook :reconnecting
+		 (fn [] (do-swing
+			 (doto tbtn (.setEnabled false))
+			 (.setText status "接続中断のため再接続中"))))
     (au/add-hook :rate-updated
-		 (fn [] (.setText status (format "番組情報取得中...\n %d programs/min."
-						 (au/get-fetched-rate)))))
+		 (fn [] (do-swing
+			 (doto tbtn (.setEnabled false))
+			 (.setText status (format "番組情報取得中\n %d programs/min."
+						  (au/get-fetched-rate))))))
     (doto tbtn
       (.setPreferredSize *btn-size*)
-      (.setToolTipText "番組情報取得のために接続開始します。")
-      (.setEnabled false))
+      (.setToolTipText istr)
+      (.setEnabled false)
+      (add-action-listener (fn [e] (au/start-update-api))))
     (doto hgrp
       (.addGroup (.. layout createParallelGroup
 		     (addComponent status)))
