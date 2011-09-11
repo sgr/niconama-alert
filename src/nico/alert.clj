@@ -4,6 +4,7 @@
   nico.alert
   (:use [clojure.contrib.swing-utils :only [do-swing*]])
   (:require [clojure.contrib.seq-utils :as cs]
+	    [time-utils :as tu]
 	    [nico.ui.alert-dlg :as uad]
 	    [nico.pgm :as pgm])
   (:import (java.awt GraphicsEnvironment)))
@@ -20,7 +21,8 @@
 
 (let [plats (atom (divide-plats))	;; アラートダイアログの表示領域
       queue (atom [])	;; アラート表示リクエストキュー
-      latch (atom (java.util.concurrent.CountDownLatch. 1))]
+      latch (atom (java.util.concurrent.CountDownLatch. 1))
+      last-modified (atom (tu/now))]
   (defn- enqueue [req]
     (swap! queue conj req)
     (when (= 1 (.getCount @latch)) (.countDown @latch)))
@@ -39,7 +41,7 @@
 	(swap! plats assoc i (assoc plat :used true))
 	[i plat])
       [nil nil]))
-  (defn- reserve-plat []
+  (defn- reserve-plat-A []
     (if-let [i (some #(let [[i plat] %] (if (:used plat) i nil))
 		     (reverse (cs/indexed @plats)))]
       (if (< i (dec (count @plats)))
@@ -49,6 +51,14 @@
 	  (reserve-plat-aux i)
 	  [nil nil]))
       (reserve-plat-aux 0)))
+  (defn- reserve-plat-B []
+    (let [iplat (some #(let [[i plat] %] (if-not (:used plat) [i plat] nil))
+		      (cs/indexed @plats))]
+      (if-let [[i plat] iplat]
+	(do
+	  (swap! plats assoc i (assoc plat :used true))
+	  iplat)
+	[nil nil])))
   (defn- release-plat [i plat]
     (swap! plats assoc i (assoc plat :used false)))
   (defn alert-pgm [id]
@@ -62,7 +72,11 @@
        (when (= 1 (.getCount @latch)) (.await @latch))
        (if (< 0 (count @queue))
 	 (do
-	   (let [[i plat] (reserve-plat)]
+	   (let [now (tu/now)
+		 [i plat] (if (tu/within? @last-modified now 5)
+			    (reserve-plat-A)
+			    (reserve-plat-B))]
+	     (reset! last-modified now)
 	     (if i
 	       (let [adlg (uad/alert-dlg (dequeue) (fn [] (release-plat i plat)))]
 		 (.start (Thread. (fn []
