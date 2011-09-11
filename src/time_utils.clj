@@ -2,6 +2,7 @@
 (ns #^{:author "sgr"
        :doc "時間に関する操作"}
   time-utils
+  (:require [clojure.contrib.math :as math])
   (:import (java.text SimpleDateFormat)
 	   (java.util Calendar Date)))
 
@@ -20,4 +21,4 @@
 (defn minute [millisec] (int (/ (/ millisec 1000) 60)))
 
 (defn within? [^Date from ^Date to ^Integer sec]
-  (if (> (* sec 1000) (- (.getTime to) (.getTime from))) true false))
+  (if (> (* sec 1000) (math/abs (- (.getTime to) (.getTime from)))) true false))
