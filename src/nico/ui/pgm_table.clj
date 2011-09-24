@@ -9,7 +9,7 @@
 	    [str-utils :as su]
 	    [time-utils :as tu]
 	    [nico.pgm :as pgm])
-  (:import (java.awt Cursor Desktop Font)
+  (:import (java.awt Color Cursor Desktop Font)
 	   (java.awt.event MouseListener MouseMotionListener)
 	   (java.net URI)
 	   (javax.swing BorderFactory JMenuItem JPopupMenu JTable ListSelectionModel
@@ -18,17 +18,14 @@
 	   (javax.swing.table AbstractTableModel DefaultTableModel
 			      DefaultTableColumnModel TableColumn)
 	   (org.jdesktop.swingx JXTable)
-	   (org.jdesktop.swingx.decorator HighlighterFactory FontHighlighter HighlightPredicate)
+	   (org.jdesktop.swingx.decorator ColorHighlighter FontHighlighter
+					  HighlighterFactory HighlightPredicate)
 	   (org.jdesktop.swingx.renderer DefaultTableRenderer StringValue StringValues)))
 
 (def *desc-col* 64)
 
 (def *pgm-columns*
      (list
-      {:key :member_only, :colName "限", :width 5,
-       :renderer (DefaultTableRenderer.
-		   (proxy [StringValue][] (getString [val] (if val "限" "")))
-		   SwingConstants/CENTER)}
       {:key :title, :colName "タイトル", :width 300,
        :renderer (DefaultTableRenderer. StringValues/TO_STRING)}
       {:key :comm_name, :colName "コミュ名", :width 300,
@@ -67,6 +64,7 @@
  :state state
  :init init
  :methods [[isNew [int] boolean]
+	   [isMemberOnly [int] boolean]
 	   [getUrl [int] String]
 	   [getProgramId [int] clojure.lang.Keyword]
 	   [getProgramTitle [int] String]
@@ -103,6 +101,14 @@
 	   (let [r (.row adapter)]
 	     (if (<= 0 r) (.isNew (.getModel tbl) (.convertRowIndexToModel tbl r)) false))))
 	(Font. Font/DIALOG Font/BOLD 12)))
+      (.addHighlighter	;; コミュ限は青字で表示する
+       (ColorHighlighter.
+	(proxy [HighlightPredicate] []
+	  (isHighlighted
+	   [renderer adapter]
+	   (let [r (.row adapter)]
+	     (if (<= 0 r) (.isMemberOnly (.getModel tbl) (.convertRowIndexToModel tbl r)) false))))
+	nil Color/BLUE))
       (.addMouseListener
        (proxy [MouseListener] []
 	 (mouseClicked
@@ -165,6 +171,9 @@
 
 (defn- ptm-isNew [this row]
   (tu/within? (:fetched_at (fnext (nth (seq @(.state this)) row))) (tu/now) 60))
+
+(defn- ptm-isMemberOnly [this row]
+  (:member_only (fnext (nth (seq @(.state this)) row))))
 
 (defn- ptm-getValueAt [this row col]
   ((:key (nth *pgm-columns* col)) (fnext (nth (seq @(.state this)) row))))
