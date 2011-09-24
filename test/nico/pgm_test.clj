@@ -9,7 +9,7 @@
   [^Integer id title]
   (let [pid (format "lv%08d" id)]
     (nico.pgm.Pgm.
-     pid ;; id
+     (keyword pid) ;; id
      title ;; title
      (java.util.Date. (- (.getTime (tu/now)) (* 60000 id))) ;; pubdate
      (str "the description of " title) ;; desc
@@ -20,7 +20,7 @@
      (if (odd? id) true false) ;; member_only
      :community ;; type
      (str title " community") ;; comm_name
-     (format "co%08d" id) ;; comm_id
+     (keyword (format "co%08d" id)) ;; comm_id
      false       ;; alerted
      (java.util.Date. (- (.getTime (tu/now)) (* 1000 id))) ;; fetched_at
      (java.util.Date. (- (.getTime (tu/now)) (* 1000 id)))))) ;; updated_at
@@ -56,12 +56,12 @@
 	  fs (map #(future (doseq [pgm (apply create-pgms %)] (f pgm))) dr)]
       (doseq [f fs] (deref f))
       (count-pgms)))
-  ;; (testing "add and rem with single thread"
-  ;;   (is (do (apply-single add 5000) (fit? 5000)) "add 5000 programs")
-  ;;   (is (do (apply-single rm 5000) (fit? 0)) "rem 5000 programs"))
-  ;; (testing "add and rem with multiple thread"
-  ;;   (is (do (apply-multi add 5000 4) (fit? 5000)) "add 5000 programs multi")
-  ;;   (is (do (apply-multi rm 5000 4) (fit? 0)) "rem 5000 programs multi"))
+  (testing "add and rem with single thread"
+    (is (do (apply-single add 5000) (fit? 5000)) "add 5000 programs")
+    (is (do (apply-single rm 5000) (fit? 0)) "rem 5000 programs"))
+  (testing "add and rem with multiple thread"
+    (is (do (apply-multi add 5000 4) (fit? 5000)) "add 5000 programs multi")
+    (is (do (apply-multi rm 5000 4) (fit? 0)) "rem 5000 programs multi"))
   (testing "add with constraint"
     (set-total 3000)
     (is (do (apply-single add 5000) (fit? (* 1.2 3000))) "add 5000 programs multi with max 3000")))
