@@ -56,14 +56,19 @@
 	  fs (map #(future (doseq [pgm (apply create-pgms %)] (f pgm))) dr)]
       (doseq [f fs] (deref f))
       (count-pgms)))
+  (defn clear-pgms [] (doseq [id (keys (pgms))] (rm id)))
   (testing "add and rem with single thread"
     (is (do (apply-single add 5000) (fit? 5000)) "add 5000 programs")
-    (is (do (apply-single rm 5000) (fit? 0)) "rem 5000 programs"))
+    (is (do (apply-single rm 5000) (fit? 0)) "rem 5000 programs")
+    (clear-pgms))
   (testing "add and rem with multiple thread"
     (is (do (apply-multi add 5000 4) (fit? 5000)) "add 5000 programs multi")
-    (is (do (apply-multi rm 5000 4) (fit? 0)) "rem 5000 programs multi"))
+    (is (do (apply-multi rm 5000 4) (fit? 0)) "rem 5000 programs multi")
+    (clear-pgms))
   (testing "add with constraint"
     (set-total 3000)
     (is (do (apply-single add 5000) (fit? (* 1.2 3000))) "add 5000 programs multi with max 3000")
-    (is (do (apply-multi add 5000 4) (fit? (* 1.2 3000))) "add 5000 programs multi with max 3000")))
+    (clear-pgms)
+    (is (do (apply-multi add 5000 4) (fit? (* 1.2 3000))) "add 5000 programs multi with max 3000")
+    (clear-pgms)))
 
