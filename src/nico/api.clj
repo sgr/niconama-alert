@@ -75,7 +75,7 @@
   [zipped-res fetched_at]
   (let [id (zfx/xml1-> zipped-res :request_id zfx/text)]
     (nico.pgm.Pgm.
-     id
+     (keyword id)
      (zfx/xml1-> zipped-res :streaminfo :title zfx/text)
      nil; pubdate
      (zfx/xml1-> zipped-res :streaminfo :description zfx/text)
@@ -86,7 +86,7 @@
      nil ;member_only
      (zfx/xml1-> zipped-res :streaminfo :provider_type zfx/text)
      (zfx/xml1-> zipped-res :communityinfo :name zfx/text)
-     (zfx/xml1-> zipped-res :streaminfo :default_community zfx/text)
+     (keyword (zfx/xml1-> zipped-res :streaminfo :default_community zfx/text))
      false
      fetched_at
      fetched_at)))
@@ -97,7 +97,7 @@
 	info (ns/fetch-pgm-info id)]
     (if info
       (nico.pgm.Pgm.
-       id
+       (keyword id)
        (:title info)
        (:pubdate info)
        (:desc info)
@@ -108,7 +108,7 @@
        (:member_only info)
        (:type info)
        (:comm_name info)
-       cid
+       (keyword cid)
        false
        (:fetched_at info)
        (:updated_at info))

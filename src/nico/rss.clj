@@ -47,7 +47,7 @@
 
 (defn- create-pgm [item fetched_at]
   (nico.pgm.Pgm.
-   (get-child-content :guid item)
+   (keyword (get-child-content :guid item))
    (get-child-content :title item)
    (.parse (SimpleDateFormat. "EEE, dd MMM yyyy HH:mm:ss Z" Locale/ENGLISH)
 	   (get-child-content :pubDate item))
@@ -64,7 +64,7 @@
 	 :official)
      :official)
    (get-child-content :nicolive:community_name item)
-   (get-child-content :nicolive:community_id item)
+   (keyword (get-child-content :nicolive:community_id item))
    false
    fetched_at
    fetched_at))

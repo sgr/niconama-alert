@@ -68,7 +68,7 @@
  :init init
  :methods [[isNew [int] boolean]
 	   [getUrl [int] String]
-	   [getProgramId [int] String]
+	   [getProgramId [int] clojure.lang.Keyword]
 	   [getProgramTitle [int] String]
 	   [updateData [clojure.lang.IPersistentMap] void]
 	   [getPgm [int] nico.pgm.Pgm]])
@@ -118,7 +118,7 @@
 			    pid (.getProgramId (.getModel tbl) mr)
 			    ptitle (.getProgramTitle (.getModel tbl) mr)
 			    url (.getUrl (.getModel tbl) mr)
-			    titem (JMenuItem. (format "%s (%s)" ptitle pid))]
+			    titem (JMenuItem. (format "%s (%s)" ptitle (name pid)))]
 			(doto titem
 			  (.setEnabled false))
 			(doto pmenu
