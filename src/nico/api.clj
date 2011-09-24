@@ -88,6 +88,7 @@
      (zfx/xml1-> zipped-res :communityinfo :name zfx/text)
      (zfx/xml1-> zipped-res :streaminfo :default_community zfx/text)
      false
+     fetched_at
      fetched_at)))
 
 (defn- create-pgm-from-scrapedinfo
@@ -109,7 +110,8 @@
        (:comm_name info)
        cid
        false
-       (:fetched_at info))
+       (:fetched_at info)
+       (:updated_at info))
       nil)))
 
 (defn- parse-chat-str [chat-str]
@@ -165,7 +167,7 @@
 (let [listener (atom nil)]
   (defn- run-listener
     ([alert-status]
-       (run-listener alert-status (fn [pgm] (println (:title pgm))(pgm/add-pgm pgm))))
+       (run-listener alert-status (fn [pgm] (println (:title pgm))(pgm/add pgm))))
     ([alert-status pgm-fn]
        (when-not @listener
 	 (do

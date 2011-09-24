@@ -39,23 +39,19 @@
 	      cur_total (rss/get-programs-count rss)
 	      cur_page (inc page)]
 	  (pgm/set-total cur_total)
-	  (pgm/add-pgms cur_pgms)
+	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
 	  ;; 取得状況更新
-	  (doseq [f @hook-fetching]
-	    (when f (f (count fetched) cur_total cur_page)))
+	  (doseq [f @hook-fetching] (when f (f (count fetched) cur_total cur_page)))
 	  ;; 取得完了・中断・継続の判定
 	  (cond
 	   (>= (+ (count fetched) (count cur_pgms)) cur_total) ;; 総番組数分取得したら、取得完了
-	   (do
-	     (pgm/rem-pgms-without fetched-updated) ;; 取得外の番組は削除できる。
-	     [:finished (count fetched) cur_total])
-	   (or 
-	    (= (count cur_pgms) 0) ;; ひとつも番組が取れない場合は中止
-	    (> (reduce #(if (contains? fetched (:id %2)) (inc %1) %1) 0 cur_pgms)
-	       (* 0.99 (count cur_pgms)))) ;; 重複率が99%を超えていたら、取得中止
-	   (do
-	     (pgm/rem-pgms-partial fetched-updated cur_total)
-	     [:aborted (count fetched) cur_total])
+	   [:finished (count fetched) cur_total]
+	   (= (count cur_pgms) 0) ;; ひとつも番組が取れない場合は中止
+	   ;; (or 
+	   ;;  (= (count cur_pgms) 0) ;; ひとつも番組が取れない場合は中止
+	   ;;  (> (reduce #(if (contains? fetched (:id %2)) (inc %1) %1) 0 cur_pgms)
+	   ;;     (* 0.99 (count cur_pgms)))) ;; 重複率が99%を超えていたら、取得中止
+	   [:aborted (count fetched) cur_total]
 	   :else
 	   (recur cur_page total cur_total earliest-updated fetched-updated))))
       (catch Exception e (lu/printe "failed fetching RSS" e)

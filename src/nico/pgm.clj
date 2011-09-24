@@ -2,12 +2,14 @@
 (ns #^{:author "sgr"
        :doc "ニコニコ生放送の番組情報とその操作"}
   nico.pgm
-  (:require [time-utils :as tu]))
+  (:use [clojure.set :only [union]])
+  (:require [time-utils :as tu]
+	    [log-utils :as lu]))
 
 (defrecord Pgm
   [id		;; 番組ID
    title	;; タイトル
-   pubdate	;; 開始日時
+   pubdate	;; 開始時刻
    desc		;; 説明
    category	;; カテゴリ
    link		;; 番組へのリンク
@@ -18,173 +20,199 @@
    comm_name	;; コミュニティ名
    comm_id	;; コミュニティID
    alerted	;; アラート済み
-   fetched_at])	;; 番組取得時刻
+   fetched_at	;; 取得時刻
+   updated_at])	;; 更新時刻
 
-;; 以下で使われるpgmsとは、番組IDをキー、pgmを値とするようなマップである。
-(let [id-pgms (ref {})		;; 番組IDをキー、番組情報を値とするマップ
-      comm-pgms (ref {})	;; コミュニティIDをキー、番組情報を値とするマップ
-      new (ref {})		;; 新しい番組IDの集合。キーは番組ID。
-      last-updated (ref (tu/now))	;; 番組情報の最終更新時刻
-      total (atom 0)		;; 
+(let [total (atom 0) ;; 総番組数
+      id-pgms (ref {}) ;; 番組IDをキー、番組を値とするマップ
+      idx-comm (ref {}) ;; コミュニティIDをキー、番組IDを値とするマップ
+      idx-pubdate (ref (sorted-set-by ;; 開始時刻でソートされた番組IDからなるリスト
+			#(let [pgm1 (get @id-pgms %1), pgm2 (get @id-pgms %2)]
+			   (cond
+			    (and pgm1 pgm2) (tu/later? (:pubdate pgm1) (:pubdate pgm2))
+			    (nil? pgm1) 1
+			    (nil? pgm2) -1))))
+      idx-updated-at (ref (sorted-set-by ;; 取得時刻でソートされた番組IDからなるリスト
+			   #(let [pgm1 (get @id-pgms %1), pgm2 (get @id-pgms %2)]
+			      (cond
+			       (and pgm1 pgm2) (tu/later? (:updated_at pgm1) (:updated_at pgm2))
+			       (nil? pgm1) 1
+			       (nil? pgm2) -1))))
+      idx-elapsed (ref (sorted-set-by ;; 確認済経過時間でソートされた番組IDからなるリスト
+			#(letfn [(elapsed [id]
+					  (if-let [pgm (get @id-pgms id)]
+					    (- (.getTime (:updated_at pgm)) (.getTime (:pubdate pgm)))
+					    (do
+					      (print (format "idx-elapsed[s]: %s (%s / %s) %s"
+							     id
+							     (contains? @idx-pubdate id)
+							     (contains? @idx-updated-at id)
+							     (contains? @id-pgms id)))
+					      -10000)))]
+			   (> (elapsed %1) (elapsed %2)))))
+      last-updated (ref (tu/now)) ;; 番組情報の最終更新時刻
       hook-updated (ref '()) ;; 番組集合の更新を報せるフック
       called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
+  (defn pgms [] @id-pgms)
+  (defn count-pgms [] (count @id-pgms))
+  (defn- count-comm [] (count @idx-comm))
+  (defn- count-pubdate [] (count @idx-pubdate))
+  (defn- count-updated-at [] (count @idx-updated-at))
+  (defn- count-elapsed [] (count @idx-elapsed))
   (defn add-hook [kind f]
     (condp = kind
 	:updated (dosync (alter hook-updated conj f))))
   (defn get-last-updated [] last-updated)
   (defn- call-hook-updated []
-    (when (< 3000 (- (.getTime (tu/now)) (.getTime @called-at-hook-updated)))
+    (when-not (tu/within? @called-at-hook-updated (tu/now) 3)
       (dosync
        (doseq [f @hook-updated] (f))
        (ref-set called-at-hook-updated (tu/now)))))
-  (defn pgms [] @id-pgms)
-  (defn count-pgms [] (count @id-pgms))
-  (defn new? [^String id] (contains? @new id))
   (defn set-total [t]
     (do (reset! total t)
 	(call-hook-updated)))
   (defn get-total [] @total)
-  (defn- clear-pgms []
-    (dosync
-     (ref-set id-pgms {})
-     (ref-set comm-pgms {})
-     (ref-set new #{}))
-    (call-hook-updated))
-  (defn get-pgm
-    "番組情報を得る"
-    [^String id] (get @id-pgms id nil))
-  (defn- is-to-add?
-    "この番組情報を加えるべきか？同じコミュニティの放送が複数あったら、新しいものだけを追加する。"
-    [^Pgm pgm]
-    (if-not (get-pgm (:id pgm))
-      (if (= "community" (:type pgm))
-	(if-let [apgm (get @comm-pgms (:comm_id pgm))]
-	  (do
-	    (when (or (nil? (:pubdate apgm)) (nil? (:pubdate pgm)))
-	      (println (format "apgm: %s, pgm: %s, title: %s"
-			       (:pubdate apgm) (:pubdate pgm) (:title pgm))))
-	    ;; スクレイプで得た開始時刻は秒の情報が落ちてしまうため、60秒以内なら無視する。
-	    (if (tu/within? (:pubdate apgm) (:pubdate pgm) 60)
-	      false
-	      (tu/earlier? (:pubdate apgm) (:pubdate pgm))))
-	  true)
-	true)
-      false))
-  (defn rem-pgm
-    "番組情報を削除する"
-    [^String id]
-    (dosync
-     (alter comm-pgms dissoc (:comm_id (get @id-pgms id)))
-     (alter id-pgms dissoc id)
-     (ref-set last-updated (tu/now)))
-    (call-hook-updated))
-  (defn add-pgm
-    "番組情報を追加する"
-    [^Pgm pgm]
-    (when (is-to-add? pgm)
-      (dosync
-       (when-let [old-pgm (get @comm-pgms (:comm_id pgm))] (rem-pgm (:id old-pgm)))
-       (alter id-pgms assoc (:id pgm) pgm)
-       (alter new assoc (:id pgm) pgm)
-       (when-let [cid (:comm_id pgm)] (alter comm-pgms assoc cid pgm))
-       (ref-set last-updated (tu/now)))
-      (call-hook-updated)))
-  (defn update-if-pgm
-    "与えられた番組IDに対する述語が成り立つ場合のみ番組情報をmで更新する。
-     更新した場合はtrue、述語が成り立たないか番組が存在しない場合はfalseを返す。"
-    [id pred m]
-    (dosync
-     (if-let [pgm (get @id-pgms id)]
-       (if (pred pgm)
-	 (let [apgm (apply assoc pgm (flatten (apply list m)))]
-	   (alter id-pgms assoc id apgm)
-	   (when-not (= (:comm_id pgm) (:comm_id apgm))
-	     (when-let [cid (:comm_id pgm)] (alter comm-pgms dissoc cid))
-	     (when-let [cid (:comm_id apgm)] (alter comm-pgms assoc cid apgm)))
-	   true)
-	 false)
-       false)))
-  (defn rem-pgms
-    "複数の番組を削除する"
-    [ids]
-    (doseq [id ids] (rem-pgm id)))
-  (defn add-pgms
-    "複数の番組を追加する"
-    [pgms]
-    (doseq [pgm pgms] (add-pgm pgm)))
-  (defn reset-pgms
-    "全ての番組情報を与えられた番組情報集合に置き換える"
-    [pgms]
-    (println (format " reset-pgms: %d" (count pgms)))
-    (dosync
-     (ref-set id-pgms (reduce #(apply assoc %1 %2) {} (for [pgm pgms] (list (:id pgm) pgm))))
-     (ref-set comm-pgms (reduce #(apply assoc %1 %2) {}
-				(for [pgm pgms :when (:comm_id pgm)] (list (:comm_id pgm) pgm))))
-     (ref-set last-updated (tu/now)))
-    (call-hook-updated))
-  (defn rem-pgms-without
-    "取得済み放送情報を基に、pgmsから不要な番組情報を削除する"
-    [ids]
-    (reset-pgms (vals (select-keys @id-pgms ids))))
-  (defn- elapsed-time
-    [pgm]
-    (try
-      (- (.getTime (:fetched_at pgm)) (.getTime (:pubdate pgm)))
-      (catch Exception e
-	(println (format " *** FAILED ELAPSED-PGM: %s %s (%s) [%s-%s]"
-			 (:id pgm) (:title pgm) (:link pgm) (:pubdate pgm) (:fetched_at pgm))
-	e))))
-  (defn- younger?
-    "番組開始30分以内なら真"
-    [pgm]
-    (if (> 1800000 (- (.getTime (tu/now)) (.getTime (:pubdate pgm)))) true false))
-  (defn- extend-score
-    "今も延長している可能性を評価する"
-    [pgm now]
-    ;; 今は、取得時点での番組放送時間から、取得後から今までの経過時間を引いた時間をスコアとしている。
-    (- (elapsed-time pgm) (- (.getTime now) (.getTime (:fetched_at pgm)))))
-  (defn rem-pgms-partial
-    "部分的に取得された番組情報を基に、pgmsから不要そうな番組情報を削除する。
-     番組情報を全て取得すれば終了した番組を判別し削除することができるのだが、
-     繁忙期はサーバーも負荷が高いのか、全ての番組を取得することが困難であるため、
-     結果として終了した番組情報も含め、保持する番組情報が総番組数の２倍を超えてしまっていた。
-     これを防ぐため、終了した番組を推定するヒューリスティックスを用いて、
-     繁忙期であっても番組情報を持ちすぎないようにする。"
-    [ids total]
-    (when (> (count-pgms) total)	;; 取得番組数が総番組数より少いうちはなにもしない
-      ;; 取得された番組は残す
-      (let [fetched-pgms (select-keys @id-pgms ids)]
-	(println (format "fetched-pgms: %d" (count fetched-pgms)))
-	(if (> total (count fetched-pgms))
-	  ;; 開始から30分経っていないと思われる番組は残す
-	  ;; ※30分以内に終了した番組が残ってしまう可能性がある。
-	  (let [younger-pgms (select-keys @id-pgms
-					  (for [[id pgm] @id-pgms :when
-						(and (not (contains? ids id))
-						     (younger? pgm))] id))]
-	    (println (format " younger-pgms: %d" (count younger-pgms)))
-	    (if (> total (+ (count fetched-pgms) (count younger-pgms)))
-	      ;; 延長していると思われる番組を、延長時間の長い順に残す
-	      ;; 既に何度も延長している番組は他と比べて今も延長している可能性が高いとみなす。
-	      (let [rest (- total (+ (count fetched-pgms) (count younger-pgms)))
-		    oids (into ids (keys younger-pgms))
-		    now (tu/now)
-		    sids (sort #(> (extend-score (get @id-pgms %1) now)
-				   (extend-score (get @id-pgms %2) now))
-			       (filter #(not (contains? oids %)) (keys @id-pgms)))
-		    extended-pgms (select-keys @id-pgms (take rest sids))]
-		(println (format " extended-pgms: %d" (count extended-pgms)))
-		(reset-pgms (into (vals fetched-pgms)
-				  (into (vals younger-pgms) (vals extended-pgms)))))
-	      (reset-pgms (into (vals fetched-pgms) (vals younger-pgms)))))
-	  (reset-pgms (vals fetched-pgms))))))
-  (defn update-new
-    "newのうち、更新後1分未満のもののみ残す。"
-    []
-    (let [now (tu/now)]
-      (dosync
-       (alter new select-keys
-	      (filter
-	       (fn [id] (tu/within? (:fetched_at (get @new id)) now 60))
-	       (keys @new)))))))
+  (defn get-pgm [^String id] (get @id-pgms id))
 
+  (defn- v-elapsed [pgms]
+    (partial every? #(if-let [pgm (get pgms %)]
+		       (and (:pubdate pgm) (:updated_at pgm))
+		       (do (println (format "idx-elapsed[v]: %s %s" % (contains? pgms %)))
+			   false))))
+  (defn- v-updated-at [pgms]
+    (partial every? #(if-let [pgm (get pgms %)]
+		       (:updated_at pgm)
+		       (do (println (format "idx-updated-at[v]: %s %s" % (contains? pgms %)))
+			   false))))
+  (defn- v-pubdate [pgms]
+    (partial every? #(if-let [pgm (get pgms %)]
+		       (:pubdate pgm)
+		       (do (println (format "idx-pubdate[v]: %s %s" % (contains? pgms %)))
+			   false))))
+  (defn- v-comm [pgms]
+    (partial every? #(let [[cid id] %]
+		       (if-let [pgm (get pgms id)]
+			 (= cid (:comm_id pgm))
+			 (do (println (format "idx-comm[v]: %s / %s / %s"
+					      cid id (contains? pgms id)))
+			     false)))))
+  ;; -aux内ではdosyncは使わず、その外でdosyncで囲むようにする。
+  (defn- rem-aux [^String id]
+    (print (format " REMOVING: %s ..." id))
+    (dosync
+     (let [eid-pgms (ensure id-pgms)
+	   pgm (get @id-pgms id) cid (if pgm (:comm_id pgm) nil)]
+       (ref-set idx-elapsed
+		(disj (with-meta @idx-elapsed {:validator (v-elapsed eid-pgms)}) id))
+       (ref-set idx-updated-at
+		(disj (with-meta @idx-updated-at {:validator (v-updated-at eid-pgms)}) id))
+       (ref-set idx-pubdate
+		(disj (with-meta @idx-pubdate {:validator (v-pubdate eid-pgms)}) id))
+       (when cid
+	 (ref-set idx-comm
+		  (dissoc (with-meta @idx-comm {:validator (v-comm eid-pgms)}) cid)))
+       (alter id-pgms dissoc id)))
+    (println " DONE"))
+;;    (println (format "  contains? %s -> %s / %s / %s"
+;;		     id (contains? @idx-elapsed id) (contains? @idx-updated-at id)
+;;		     (contains? @idx-pubdate id))))
+  (defn- add-aux2 [^Pgm pgm]
+    (print (format " ADDING: %s ..." (:id pgm)))
+    (dosync
+     (let [id (:id pgm) cid (:comm_id pgm)]
+       (alter id-pgms assoc id pgm)
+       (let [eid-pgms (ensure id-pgms)]
+	 (when cid
+	   (ref-set idx-comm
+		    (assoc (with-meta @idx-comm {:validator (v-comm eid-pgms)}) cid id)))
+	 (ref-set idx-pubdate
+		  (conj (with-meta @idx-pubdate {:validator (v-pubdate eid-pgms)}) id))
+	 (ref-set idx-updated-at
+		  (conj (with-meta @idx-updated-at {:validator (v-updated-at eid-pgms)}) id))
+	 (ref-set idx-elapsed
+		  (conj (with-meta @idx-elapsed {:validator (v-elapsed eid-pgms)}) id)))))
+    (println " DONE"))
+  (defn- add-aux [^Pgm pgm]
+    (let [id (:id pgm) cid (:comm_id pgm)]
+      (if-let [oid (get @idx-comm cid)]
+	(let [opgm (get @id-pgms oid)]
+	  (when (and (not (= id oid))
+		     (tu/later? (:pubdate pgm) (:pubdate opgm)))
+	    (do (rem-aux oid)
+		(add-aux2 pgm))))
+	(add-aux2 pgm))))
+  (defn- update-aux [^Pgm pgm]
+    (dosync
+     (let [orig (get @id-pgms (:id pgm))]
+       (letfn [(updated-time?
+		[k] (and orig (not (= 0 (.compareTo (get orig k) (get pgm k))))))
+	       (update-idx [ref id] (alter ref conj id))]
+	 (alter id-pgms assoc (:id pgm) pgm)
+	 (let [eid-pgms (ensure id-pgms)] ;; TODO 後でちゃんと処理をかくこと
+	   (when (updated-time? :pubdate) (update-idx idx-pubdate (:id pgm)))
+	   (when (updated-time? :updated_at) (update-idx idx-updated-at (:id pgm)))
+	   (when (or (updated-time? :pubdate) (updated-time? :updated_at)
+		     (update-idx idx-elapsed (:id pgm)))))))))
+  (defn update [^Pgm pgm]
+    (when (get @id-pgms (:id pgm)) (update-aux pgm)))
+  (defn- merge-pgm [^Pgm pgm]
+    (if-let [orig (get @id-pgms (:id pgm))]
+      (letfn [(longer [^String x ^String y]
+		      (cond (and x y) (if (> (.length x) (.length y)) x y)
+			    (nil? x) y
+			    (nil? y) x
+			    :else nil))
+	      (longer-for [k ^Pgm x ^Pgm y] (longer (get x k) (get y k)))
+	      (later [x y]
+		     (cond (and x y) (if (tu/later? x y) x y)
+			   (nil? x) y
+			   (nil? y) x
+			   :else nil))
+	      (later-for [k ^Pgm x ^Pgm y] (later (get x k) (get y k)))]
+	(Pgm. (:id orig)
+	      (longer-for :title pgm orig)
+	      (later-for :pubdate pgm orig)
+	      (longer-for :desc pgm orig)
+	      (:category orig)
+	      (:link orig)
+	      (:thumbnail orig)
+	      (:owner_name orig)
+	      (:member_only orig)
+	      (:type orig)
+	      (longer-for :comm_name pgm orig)
+	      (:comm_id orig)
+	      (or (:alerted orig) (:alerted pgm))
+	      (:fetched_at orig)
+	      (tu/now)))
+      pgm))
+  (defn- rem-pgms-without-aux [ids]
+    (doseq [id (keys @id-pgms)]
+      (when-not (contains? ids id) (rem-aux id))))
+  (defn- clean-old-aux []
+    (when (< 0 @total)
+      (let [c (int (* 1.2 @total))] ;; 総番組数の1.2倍までは許容
+	(when (< c (count (keys @id-pgms)))
+	  (let [now (tu/now)
+		confirmed (set (take-while #(tu/within? (:updated_at (get @id-pgms %)) now 1800)
+					   @idx-updated-at))]
+	    ;; 30分以内に存在が確認された番組は多くとも残す
+	    (if (<= c (count confirmed))
+	      (rem-pgms-without-aux confirmed)
+	      (let [with-young (union confirmed
+				      (set
+				       (take-while #(tu/within? (:pubdate (get @id-pgms %)) now 1800)
+						   @idx-pubdate)))]
+		(if (<= c (count with-young))
+		  (rem-pgms-without-aux with-young)
+		  (let [c2 (- c (count with-young))
+			with-elder (union with-young
+					  (set (take c2 (filter #(not (contains? with-young %))
+								@idx-elapsed))))]
+		    (rem-pgms-without-aux with-elder))))))))))
+  (defn add [^Pgm pgm]
+    (if (contains? @id-pgms (:id pgm))
+      (update-aux (merge-pgm pgm))
+      (add-aux pgm))
+    (clean-old-aux)
+    (call-hook-updated)))
+      

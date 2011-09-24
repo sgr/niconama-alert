@@ -164,7 +164,7 @@
   (count @(.state this)))
 
 (defn- ptm-isNew [this row]
-  (pgm/new? (first (nth (seq @(.state this)) row))))
+  (tu/within? (:fetched_at (fnext (nth (seq @(.state this)) row))) (tu/now) 60))
 
 (defn- ptm-getValueAt [this row col]
   ((:key (nth *pgm-columns* col)) (fnext (nth (seq @(.state this)) row))))

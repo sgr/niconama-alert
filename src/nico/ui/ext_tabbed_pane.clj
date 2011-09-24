@@ -111,7 +111,7 @@
 	 (mouseExited [e])
 	 (mousePressed [e])
 	 (mouseReleased [e]))))
-    (pgm/add-hook :updated (fn [] (pgm/update-new) (.updatePgms tpane (pgm/pgms) true)))))
+    (pgm/add-hook :updated (fn [] (.updatePgms tpane (pgm/pgms) true)))))
   
 (defn- etp-addExtTab [this kind content]
   (doto this

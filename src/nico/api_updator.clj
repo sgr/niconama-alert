@@ -46,7 +46,7 @@
 		    (let [now (tu/now)]
 		      (swap! fetched conj now)
 ;;		      (println (format "[%s] %s" now (:title pgm)))
-		      (pgm/add-pgm pgm))))
+		      (pgm/add pgm))))
       (catch Exception e (lu/printe "** disconnected" e) nil)))
   (defn update-api []
     (loop [c *retry*]

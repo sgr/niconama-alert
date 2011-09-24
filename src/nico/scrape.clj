@@ -61,17 +61,19 @@
 	thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src)]
 		    (if (= type :community) bn (str base bn)))]
     (when-not pubdate (println (format " ** NULL PUBDATE: %s (%s)" title link)))
-    {:title title
-     :pubdate pubdate
-     :desc desc
-     :category category
-     :link link
-     :thumbnail thumbnail
-     :owner_name owner_name
-     :member_only member_only
-     :type type
-     :comm_name comm_name
-     :fetched_at (tu/now)}))
+    (let [now (tu/now)]
+      {:title title
+       :pubdate pubdate
+       :desc desc
+       :category category
+       :link link
+       :thumbnail thumbnail
+       :owner_name owner_name
+       :member_only member_only
+       :type type
+       :comm_name comm_name
+       :fetched_at now
+       :updated_at now})))
 
 (defn- fetch-pgm-info2 [pid]
   (try

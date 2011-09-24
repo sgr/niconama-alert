@@ -57,10 +57,16 @@
    (get-child-attr :media:thumbnail :url item)
    (get-child-content :nicolive:owner_name item)
    (Boolean/parseBoolean (get-child-content :nicolive:member_only item))
-   (get-child-content :nicolive:type item)
+   (if-let [type-str (get-child-content :nicolive:type item)]
+     (condp = type-str
+	 "community" :community
+	 "channel" :channel
+	 :official)
+     :official)
    (get-child-content :nicolive:community_name item)
    (get-child-content :nicolive:community_id item)
    false
+   fetched_at
    fetched_at))
 
 (defn get-programs-from-rss-page [rss]
@@ -68,7 +74,7 @@
 		   :when (= :item (:tag (first x)))] (first x))]
     (let [pgm (create-pgm item (tu/now))]
       (when (some nil?
-		  (list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
+		  (list (:id pgm) (:pubdate pgm)))
 	(println
 	 (format " *** NULL-PGM-FROM-RSS: %s %s (%s) [%s-%s]"
 		 (:id pgm) (:title pgm) (:link pgm)
