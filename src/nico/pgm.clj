@@ -26,29 +26,17 @@
 (let [total (atom 0) ;; 総番組数
       id-pgms (ref {}) ;; 番組IDをキー、番組を値とするマップ
       idx-comm (ref {}) ;; コミュニティIDをキー、番組IDを値とするマップ
-      idx-pubdate (ref (sorted-set-by ;; 開始時刻でソートされた番組IDからなるリスト
-			#(let [pgm1 (get @id-pgms %1), pgm2 (get @id-pgms %2)]
-			   (cond
-			    (and pgm1 pgm2) (tu/later? (:pubdate pgm1) (:pubdate pgm2))
-			    (nil? pgm1) 1
-			    (nil? pgm2) -1))))
-      idx-updated-at (ref (sorted-set-by ;; 取得時刻でソートされた番組IDからなるリスト
-			   #(let [pgm1 (get @id-pgms %1), pgm2 (get @id-pgms %2)]
-			      (cond
-			       (and pgm1 pgm2) (tu/later? (:updated_at pgm1) (:updated_at pgm2))
-			       (nil? pgm1) 1
-			       (nil? pgm2) -1))))
-      idx-elapsed (ref (sorted-set-by ;; 確認済経過時間でソートされた番組IDからなるリスト
-			#(letfn [(elapsed [id]
-					  (if-let [pgm (get @id-pgms id)]
-					    (- (.getTime (:updated_at pgm)) (.getTime (:pubdate pgm)))
-					    (do
-					      (print (format "idx-elapsed[s]: %s (%s / %s) %s"
-							     id
-							     (contains? @idx-pubdate id)
-							     (contains? @idx-updated-at id)
-							     (contains? @id-pgms id)))
-					      -10000)))]
+      idx-pubdate (ref (sorted-set-by ;; 開始時刻でソートされた番組からなる集合
+			#(tu/later? (:pubdate %1) (:pubdate %2))))
+      idx-updated-at (ref (sorted-set-by ;; 取得時刻でソートされた番組IDからなる集合
+			   #(tu/later? (:updated_at %1) (:updated_at %2))))
+      idx-elapsed (ref (sorted-set-by ;; 確認済経過時間でソートされた番組IDからなる集合
+			#(letfn [(elapsed
+				  [pgm] (try
+					  (- (.getTime (:updated_at pgm)) (.getTime (:pubdate pgm)))
+					  (catch Exception e
+					    (println e)
+					    (println pgm))))]
 			   (> (elapsed %1) (elapsed %2)))))
       last-updated (ref (tu/now)) ;; 番組情報の最終更新時刻
       hook-updated (ref '()) ;; 番組集合の更新を報せるフック
@@ -74,85 +62,41 @@
   (defn get-total [] @total)
   (defn get-pgm [^String id] (get @id-pgms id))
 
-  (defn- v-elapsed [pgms]
-    (partial every? #(if-let [pgm (get pgms %)]
-		       (and (:pubdate pgm) (:updated_at pgm))
-		       (do (println (format "idx-elapsed[v]: %s %s" % (contains? pgms %)))
-			   false))))
-  (defn- v-updated-at [pgms]
-    (partial every? #(if-let [pgm (get pgms %)]
-		       (:updated_at pgm)
-		       (do (println (format "idx-updated-at[v]: %s %s" % (contains? pgms %)))
-			   false))))
-  (defn- v-pubdate [pgms]
-    (partial every? #(if-let [pgm (get pgms %)]
-		       (:pubdate pgm)
-		       (do (println (format "idx-pubdate[v]: %s %s" % (contains? pgms %)))
-			   false))))
-  (defn- v-comm [pgms]
-    (partial every? #(let [[cid id] %]
-		       (if-let [pgm (get pgms id)]
-			 (= cid (:comm_id pgm))
-			 (do (println (format "idx-comm[v]: %s / %s / %s"
-					      cid id (contains? pgms id)))
-			     false)))))
-  ;; -aux内ではdosyncは使わず、その外でdosyncで囲むようにする。
-  (defn- rem-aux [^String id]
-    (print (format " REMOVING: %s ..." id))
+  (defn- rem-aux [^clojure.lang.Keyword id]
     (dosync
-     (let [eid-pgms (ensure id-pgms)
-	   pgm (get @id-pgms id) cid (if pgm (:comm_id pgm) nil)]
-       (ref-set idx-elapsed
-		(disj (with-meta @idx-elapsed {:validator (v-elapsed eid-pgms)}) id))
-       (ref-set idx-updated-at
-		(disj (with-meta @idx-updated-at {:validator (v-updated-at eid-pgms)}) id))
-       (ref-set idx-pubdate
-		(disj (with-meta @idx-pubdate {:validator (v-pubdate eid-pgms)}) id))
-       (when cid
-	 (ref-set idx-comm
-		  (dissoc (with-meta @idx-comm {:validator (v-comm eid-pgms)}) cid)))
-       (alter id-pgms dissoc id)))
-    (println " DONE"))
-;;    (println (format "  contains? %s -> %s / %s / %s"
-;;		     id (contains? @idx-elapsed id) (contains? @idx-updated-at id)
-;;		     (contains? @idx-pubdate id))))
+     (when-let [pgm (get @id-pgms id)]
+       (alter idx-elapsed disj pgm)
+       (alter idx-updated-at disj pgm)
+       (alter idx-pubdate disj pgm)
+       (when-let [cid (:comm_id pgm)] (alter idx-comm dissoc cid))
+       (alter id-pgms dissoc id))))
   (defn- add-aux2 [^Pgm pgm]
-    (print (format " ADDING: %s ..." (:id pgm)))
     (dosync
-     (let [id (:id pgm) cid (:comm_id pgm)]
-       (alter id-pgms assoc id pgm)
-       (let [eid-pgms (ensure id-pgms)]
-	 (when cid
-	   (ref-set idx-comm
-		    (assoc (with-meta @idx-comm {:validator (v-comm eid-pgms)}) cid id)))
-	 (ref-set idx-pubdate
-		  (conj (with-meta @idx-pubdate {:validator (v-pubdate eid-pgms)}) id))
-	 (ref-set idx-updated-at
-		  (conj (with-meta @idx-updated-at {:validator (v-updated-at eid-pgms)}) id))
-	 (ref-set idx-elapsed
-		  (conj (with-meta @idx-elapsed {:validator (v-elapsed eid-pgms)}) id)))))
-    (println " DONE"))
+     (alter id-pgms assoc (:id pgm) pgm)
+     (when-let [cid (:comm_id pgm)] (alter idx-comm assoc cid pgm))
+     (alter idx-pubdate conj pgm)
+     (alter idx-updated-at conj pgm)
+     (alter idx-elapsed conj pgm)))
   (defn- add-aux [^Pgm pgm]
     (let [id (:id pgm) cid (:comm_id pgm)]
-      (if-let [oid (get @idx-comm cid)]
-	(let [opgm (get @id-pgms oid)]
-	  (when (and (not (= id oid))
-		     (tu/later? (:pubdate pgm) (:pubdate opgm)))
-	    (do (rem-aux oid)
-		(add-aux2 pgm))))
+      (if-let [opgm (get @idx-comm cid)]
+	(when (and (not (= id (:id opgm)))
+		   (tu/later? (:pubdate pgm) (:pubdate opgm)))
+	  (do (rem-aux (:id opgm))
+	      (add-aux2 pgm)))
 	(add-aux2 pgm))))
   (defn- update-aux [^Pgm pgm]
     (dosync
-     (let [orig (get @id-pgms (:id pgm))]
+     (let [id (:id pgm)
+	   orig (get @id-pgms id)]
        (letfn [(updated-time?
 		[k] (and orig (not (= 0 (.compareTo (get orig k) (get pgm k))))))
-	       (update-idx [ref id] (alter ref conj id))]
-	 (alter id-pgms assoc (:id pgm) pgm)
-	 (let [eid-pgms (ensure id-pgms)] ;; TODO 後でちゃんと処理をかくこと
-	   (when (updated-time? :pubdate) (update-idx idx-pubdate (:id pgm)))
-	   (when (updated-time? :updated_at) (update-idx idx-updated-at (:id pgm)))
-	   (when (or (updated-time? :pubdate) (updated-time? :updated_at)
-		     (update-idx idx-elapsed (:id pgm)))))))))
+	       (update-idx [ref] (alter ref conj pgm))]
+	 (alter id-pgms assoc id pgm)
+	 (when (updated-time? :pubdate) (update-idx idx-pubdate))
+	 (when (updated-time? :updated_at) (update-idx idx-updated-at))
+	 (when (or (updated-time? :pubdate) (updated-time? :updated_at))
+		   (update-idx idx-elapsed))))))
   (defn update [^Pgm pgm]
     (when (get @id-pgms (:id pgm)) (update-aux pgm)))
   (defn- merge-pgm [^Pgm pgm]
@@ -186,29 +130,33 @@
 	      (tu/now)))
       pgm))
   (defn- rem-pgms-without-aux [ids]
-    (doseq [id (keys @id-pgms)]
-      (when-not (contains? ids id) (rem-aux id))))
+    (doseq [id (filter #(not (contains? ids %)) (keys @id-pgms))] (rem-aux id)))
   (defn- clean-old-aux []
     (when (< 0 @total)
       (let [c (int (* 1.2 @total))] ;; 総番組数の1.2倍までは許容
-	(when (< c (count (keys @id-pgms)))
+	(when (< c (count @id-pgms))
 	  (let [now (tu/now)
-		confirmed (set (take-while #(tu/within? (:updated_at (get @id-pgms %)) now 1800)
-					   @idx-updated-at))]
+		updated (set
+			 (map #(:id %)
+			      (take-while #(tu/within? (:updated_at %) now 1800)
+					  @idx-updated-at)))]
 	    ;; 30分以内に存在が確認された番組は多くとも残す
-	    (if (<= c (count confirmed))
-	      (rem-pgms-without-aux confirmed)
-	      (let [with-young (union confirmed
-				      (set
-				       (take-while #(tu/within? (:pubdate (get @id-pgms %)) now 1800)
-						   @idx-pubdate)))]
-		(if (<= c (count with-young))
-		  (rem-pgms-without-aux with-young)
-		  (let [c2 (- c (count with-young))
-			with-elder (union with-young
-					  (set (take c2 (filter #(not (contains? with-young %))
-								@idx-elapsed))))]
-		    (rem-pgms-without-aux with-elder))))))))))
+	    (if (<= c (count updated))
+	      (rem-pgms-without-aux updated)
+	      (let [with-pubdate (union updated
+					(set
+					 (map #(:id %)
+					      (take-while #(tu/within? (:pubdate %) now 1800)
+							  @idx-pubdate))))]
+		(if (<= c (count with-pubdate))
+		  (rem-pgms-without-aux with-pubdate)
+		  (let [c2 (- c (count with-pubdate))
+			with-elapsed (union with-pubdate
+					    (set
+					     (map #(:id %)
+						  (take c2 (filter #(not (contains? with-pubdate %))
+								   @idx-elapsed)))))]
+		    (rem-pgms-without-aux with-elapsed))))))))))
   (defn add [^Pgm pgm]
     (if (contains? @id-pgms (:id pgm))
       (update-aux (merge-pgm pgm))

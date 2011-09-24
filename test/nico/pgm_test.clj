@@ -64,6 +64,6 @@
     (is (do (apply-multi rm 5000 4) (fit? 0)) "rem 5000 programs multi"))
   (testing "add with constraint"
     (set-total 3000)
-    (is (do (apply-single add 5000) (fit? (* 1.2 3000))) "add 5000 programs multi with max 3000")))
-;;    (is (do (apply-multi add 5000 4) (fit? (* 1.2 3000))) "add 5000 programs multi with max 3000")))
+    (is (do (apply-single add 5000) (fit? (* 1.2 3000))) "add 5000 programs multi with max 3000")
+    (is (do (apply-multi add 5000 4) (fit? (* 1.2 3000))) "add 5000 programs multi with max 3000")))
 
