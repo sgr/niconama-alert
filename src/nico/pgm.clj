@@ -62,21 +62,25 @@
   (defn get-total [] @total)
   (defn get-pgm [^String id] (get @id-pgms id))
 
+  (defn- disj-pgm-idx [aset pgm]
+    (reduce #(disj %1 %2) aset (filter #(= (:id pgm) (:id %)) aset)))
+  (defn- conj-pgm-idx [aset pgm]
+    (conj (disj-pgm-idx aset pgm) pgm))
   (defn- rem-aux [^clojure.lang.Keyword id]
     (dosync
      (when-let [pgm (get @id-pgms id)]
-       (alter idx-elapsed disj pgm)
-       (alter idx-updated-at disj pgm)
-       (alter idx-pubdate disj pgm)
+       (alter idx-elapsed disj-pgm-idx pgm)
+       (alter idx-updated-at disj-pgm-idx pgm)
+       (alter idx-pubdate disj-pgm-idx pgm)
        (when-let [cid (:comm_id pgm)] (alter idx-comm dissoc cid))
        (alter id-pgms dissoc id))))
   (defn- add-aux2 [^Pgm pgm]
     (dosync
      (alter id-pgms assoc (:id pgm) pgm)
      (when-let [cid (:comm_id pgm)] (alter idx-comm assoc cid pgm))
-     (alter idx-pubdate conj pgm)
-     (alter idx-updated-at conj pgm)
-     (alter idx-elapsed conj pgm)))
+     (alter idx-pubdate conj-pgm-idx pgm)
+     (alter idx-updated-at conj-pgm-idx pgm)
+     (alter idx-elapsed conj-pgm-idx pgm)))
   (defn- add-aux [^Pgm pgm]
     (let [id (:id pgm) cid (:comm_id pgm)]
       (if-let [opgm (get @idx-comm cid)]
@@ -91,7 +95,7 @@
 	   orig (get @id-pgms id)]
        (letfn [(updated-time?
 		[k] (and orig (not (= 0 (.compareTo (get orig k) (get pgm k))))))
-	       (update-idx [ref] (alter ref conj pgm))]
+	       (update-idx [ref] (alter ref conj-pgm-idx pgm))]
 	 (alter id-pgms assoc id pgm)
 	 (when (updated-time? :pubdate) (update-idx idx-pubdate))
 	 (when (updated-time? :updated_at) (update-idx idx-updated-at))
