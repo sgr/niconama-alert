@@ -47,10 +47,6 @@
 	   (>= (+ (count fetched) (count cur_pgms)) cur_total) ;; 総番組数分取得したら、取得完了
 	   [:finished (count fetched) cur_total]
 	   (= (count cur_pgms) 0) ;; ひとつも番組が取れない場合は中止
-	   ;; (or 
-	   ;;  (= (count cur_pgms) 0) ;; ひとつも番組が取れない場合は中止
-	   ;;  (> (reduce #(if (contains? fetched (:id %2)) (inc %1) %1) 0 cur_pgms)
-	   ;;     (* 0.99 (count cur_pgms)))) ;; 重複率が99%を超えていたら、取得中止
 	   [:aborted (count fetched) cur_total]
 	   :else
 	   (recur cur_page total cur_total earliest-updated fetched-updated))))
