@@ -23,7 +23,7 @@
 (def *noimg* (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
 (def *monly-bgcolor* (Color. 165 204 255))
 (def *desc-size* (Dimension. 115 64))
-(def *retry* 5)
+(def *retry-limit* 5)
 
 (let [decorate-fn (atom nil)]
   (defn- decorate [dlg]
@@ -91,11 +91,11 @@
     (catch Exception _ nil)))
 
 (defn- get-thumbnail-aux [url]
-  (loop [retry-count *retry*]
+  (loop [retry-count *retry-limit*]
     (if-let [img (fetch-image url)]
       img
       (if (zero? retry-count)
-	(do (warn (format "abort fetching image because reached retry count: %d" *retry*))
+	(do (warn (format "abort fetching image because reached retry limit: %d" *retry-limit*))
 	    *noimg*)
 	(do (Thread/sleep 1000)
 	    (recur (dec retry-count)))))))
