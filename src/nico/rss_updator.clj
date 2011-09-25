@@ -46,7 +46,7 @@
 	  (cond
 	   (>= (+ (count fetched) (count cur_pgms)) cur_total) ;; 総番組数分取得したら、取得完了
 	   [:finished (count fetched) cur_total]
-	   (= (count cur_pgms) 0) ;; ひとつも番組が取れない場合は中止
+	   (= 0 (count cur_pgms)) ;; ひとつも番組が取れない場合は中止
 	   [:aborted (count fetched) cur_total]
 	   :else
 	   (recur cur_page total cur_total earliest-updated fetched-updated))))
