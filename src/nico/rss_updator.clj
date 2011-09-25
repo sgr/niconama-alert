@@ -38,7 +38,7 @@
 				fetched)
 	      cur_total (rss/get-programs-count rss)
 	      cur_page (inc page)]
-	  (pgm/set-total cur_total)
+	  (when (< 0 cur_total) (pgm/set-total cur_total))
 	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
 	  ;; 取得状況更新
 	  (doseq [f @hook-fetching] (when f (f (count fetched) cur_total cur_page)))

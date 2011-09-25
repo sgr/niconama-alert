@@ -14,7 +14,6 @@
 (defn format-time-long [date] (format-time date "yyyy/MM/dd HH:mm:ss"))
 (defn format-time-short [date] (format-time date "MM/dd HH:mm"))
 
-(defn diff [^Date this ^Date that] (- (.getTime this) (.getTime that)))
 (defn later? [^Date this ^Date that] (pos? (.compareTo this that)))
 (defn earlier? [^Date this ^Date that] (neg? (.compareTo this that)))
 

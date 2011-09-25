@@ -29,16 +29,16 @@
       id-pgms (ref {}) ;; 番組IDをキー、番組を値とするマップ
       idx-comm (ref {}) ;; コミュニティIDをキー、番組IDを値とするマップ
       idx-pubdate (ref (sorted-set-by ;; 開始時刻でソートされた番組からなる集合
-			#(let [d (tu/diff (:pubdate %2) (:pubdate %1))]
+			#(let [d (.compareTo (:pubdate %2) (:pubdate %1))]
 			   (if (= 0 d) (.compareTo (name (:id %2)) (name (:id %1))) d))))
       idx-updated-at (ref (sorted-set-by ;; 取得時刻でソートされた番組IDからなる集合
-			   #(let [d (tu/diff (:updated_at %2) (:updated_at %1))]
+			   #(let [d (.compareTo (:updated_at %2) (:updated_at %1))]
 			      (if (= 0 d) (.compareTo (name (:id %2)) (name (:id %1))) d))))
       idx-elapsed (ref (sorted-set-by ;; 確認済経過時間でソートされた番組IDからなる集合
 			#(letfn [(elapsed
 				  [pgm] (- (.getTime (:updated_at pgm)) (.getTime (:pubdate pgm))))]
 			   (let [d (- (elapsed %2) (elapsed %1))]
-			     (if (= 0 d) (.compareTo (name (:id %2)) (name (:id %1))) d)))))
+			     (if (= 0 d) (.compareTo (name (:id %1)) (name (:id %2))) d)))))
       last-updated (ref (tu/now)) ;; 番組情報の最終更新時刻
       hook-updated (ref '()) ;; 番組集合の更新を報せるフック
       called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
@@ -70,15 +70,19 @@
   (defn- conj-pgm-idx [aset pgm]
     (conj (disj-pgm-idx aset (:id pgm)) pgm))
   (defn- rem-aux [^clojure.lang.Keyword id]
-    (debug (format "rem: %s" (name id)))
     (when-let [pgm (get @id-pgms id)]
+      (debug (format "rem: %s / %s / %s / %s"
+		     (name id) (if-let [cid (:comm_id pgm)] (name cid) nil)
+		     (:title pgm) (:comm_name pgm)))
       (alter idx-elapsed disj-pgm-idx id)
       (alter idx-updated-at disj-pgm-idx id)
       (alter idx-pubdate disj-pgm-idx id)
       (when-let [cid (:comm_id pgm)] (alter idx-comm dissoc cid))
       (alter id-pgms dissoc id)))
   (defn- add-aux2 [^Pgm pgm]
-    (debug (format "add: %s" (name (:id pgm))))
+    (debug (format "add: %s / %s / %s / %s"
+		   (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) nil)
+		   (:title pgm) (:comm_name pgm)))
     (alter id-pgms assoc (:id pgm) pgm)
     (when-let [cid (:comm_id pgm)] (alter idx-comm assoc cid pgm))
     (alter idx-pubdate conj-pgm-idx pgm)
@@ -95,7 +99,9 @@
   (defn- update-aux [^Pgm pgm]
     (let [id (:id pgm)
 	  orig (get @id-pgms id)]
-      (debug (format "update: %s" (name id)))
+      (debug (format "update: %s / %s / %s / %s"
+		     (name id) (if-let [cid (:comm_id pgm)] (name cid) nil)
+		     (:title pgm) (:comm_name pgm)))
       (letfn [(updated-time?
 	       [k] (and orig (not (= 0 (.compareTo (get orig k) (get pgm k))))))
 	      (update-idx [ref] (alter ref conj-pgm-idx pgm))]
@@ -147,6 +153,7 @@
 	(error (format "pgms: %d, pubdate: %d, updated: %d, elapsed: %d (comm: %d)"
 		       npgms npubdate nupdated nelapsed ncomm)))))
   (defn- rem-pgms-without-aux [ids]
+    (debug (format "removing old pgms: %d" (- (count-pgms) (count ids))))
     (doseq [id (filter #(not (contains? ids %)) (keys @id-pgms))] (rem-aux id)))
   (defn- clean-old-aux []
     (when (< 0 @total)
@@ -178,12 +185,9 @@
 					     (map #(:id %)
 						  (take c2 (filter #(not (contains? with-pubdate %))
 								   @idx-elapsed)))))]
-		    (if (<= c (count with-elapsed))
-		      (do
-			(debug (format "rem-pgms-without elapsed (%d <= %d)" c (count with-elapsed)))
-			(rem-pgms-without-aux with-elapsed))
-		      (debug (format "don't need to clean old pgms (%d > %d)"
-				     c (count with-elapsed)))))))))))))
+		    (debug (format "rem-pgms-without elapsed (c: %d, c2: %d, with-elapsed: %d)"
+				   c c2 (count with-elapsed)))
+		    (rem-pgms-without-aux with-elapsed))))))))))
   (defn add [^Pgm pgm]
     (dosync
      (if (contains? @id-pgms (:id pgm))
