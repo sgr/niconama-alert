@@ -57,7 +57,7 @@
 	       (let [xz (zip/xml-zip res)]
 		 {:user_id (zfx/xml1-> xz :user_id zfx/text)
 		  :user_name (zfx/xml1-> xz :user_name zfx/text)
-		  :comms (zfx/xml-> xz :communities :community_id zfx/text)
+		  :comms (map #(keyword %) (zfx/xml-> xz :communities :community_id zfx/text))
 		  :addr (zfx/xml1-> xz :ms :addr zfx/text)
 		  :port (Integer/parseInt (zfx/xml1-> xz :ms :port zfx/text))
 		  :thrd (zfx/xml1-> xz :ms :thread zfx/text)})))))
