@@ -2,9 +2,9 @@
 (ns #^{:author "sgr"
        :doc "ニコニコ生放送の番組情報とその操作"}
   nico.pgm
-  (:use [clojure.set :only [union]])
-  (:require [time-utils :as tu]
-	    [log-utils :as lu]))
+  (:use [clojure.set :only [union]]
+	[clojure.contrib.logging])
+  (:require [time-utils :as tu]))
 
 (def *scale* 1.05) ;; 最大保持数
 
@@ -58,8 +58,10 @@
        (doseq [f @hook-updated] (f))
        (ref-set called-at-hook-updated (tu/now)))))
   (defn set-total [t]
-    (do (reset! total t)
-	(call-hook-updated)))
+    (let [old @total]
+      (reset! total t)
+      (debug (format "pgm/set-total: %d -> %d" old t)))
+    (call-hook-updated))
   (defn get-total [] @total)
   (defn get-pgm [^String id] (get @id-pgms id))
 
@@ -68,6 +70,7 @@
   (defn- conj-pgm-idx [aset pgm]
     (conj (disj-pgm-idx aset (:id pgm)) pgm))
   (defn- rem-aux [^clojure.lang.Keyword id]
+    (debug (format "pgm/rem: %s" id))
     (when-let [pgm (get @id-pgms id)]
       (alter idx-elapsed disj-pgm-idx id)
       (alter idx-updated-at disj-pgm-idx id)
@@ -75,6 +78,7 @@
       (when-let [cid (:comm_id pgm)] (alter idx-comm dissoc cid))
       (alter id-pgms dissoc id)))
   (defn- add-aux2 [^Pgm pgm]
+    (debug (format "pgm/add: %s" (:id pgm)))
     (alter id-pgms assoc (:id pgm) pgm)
     (when-let [cid (:comm_id pgm)] (alter idx-comm assoc cid pgm))
     (alter idx-pubdate conj-pgm-idx pgm)
@@ -91,6 +95,7 @@
   (defn- update-aux [^Pgm pgm]
     (let [id (:id pgm)
 	  orig (get @id-pgms id)]
+      (debug (format "pgm/update: %s" id))
       (letfn [(updated-time?
 	       [k] (and orig (not (= 0 (.compareTo (get orig k) (get pgm k))))))
 	      (update-idx [ref] (alter ref conj-pgm-idx pgm))]
@@ -139,18 +144,13 @@
 	  nelapsed (count-elapsed)]
       ;; 公式などコミュニティIDがついていない放送もあるためncommでは比較しない。
       (when-not (= npgms npubdate nupdated nelapsed)
-	(do
-	  (println (format " PGMS:    %d" npgms))
-	  (println (format " COMM:    %d" ncomm))
-	  (println (format " PUBDATE: %d" npubdate))
-	  (println (format " UPDATED: %d" nupdated))
-	  (println (format " ELAPSED: %d" nelapsed))
-	  (println "--------")))))
+	(error (format "pgms: %d, pubdate: %d, updated: %d, elapsed: %d (comm: %d)"
+		       npgms npubdate nupdated nelapsed ncomm)))))
   (defn- rem-pgms-without-aux [ids]
     (doseq [id (filter #(not (contains? ids %)) (keys @id-pgms))] (rem-aux id)))
   (defn- clean-old-aux []
     (when (< 0 @total)
-      (let [c (int (* *scale* @total))] ;; 総番組数の1.2倍までは許容
+      (let [c (int (* *scale* @total))] ;; 総番組数のscale倍までは許容
 	(when (< c (count @id-pgms))
 	  (let [now (tu/now)
 		updated (set
@@ -160,8 +160,7 @@
 	    ;; 5分以内に存在が確認された番組は多くとも残す
 	    (if (<= c (count updated))
 	      (do
-		(println (format " rem-pgms-without-aux updated (%d <= %d)"
-				 c (count updated)))
+		(debug (format "rem-pgms-without updated (%d <= %d)" c (count updated)))
 		(rem-pgms-without-aux updated))
 	      (let [with-pubdate (union updated
 					(set
@@ -171,8 +170,7 @@
 		;; 30分以内に開始された番組は多くとも残す
 		(if (<= c (count with-pubdate))
 		  (do
-		    (println (format " rem-pgms-without-aux pubdate (%d <= %d)"
-				     c (count with-pubdate)))
+		    (debug (format "rem-pgms-without pubdate (%d <= %d)" c (count with-pubdate)))
 		    (rem-pgms-without-aux with-pubdate))
 		  (let [c2 (- c (count with-pubdate))
 			with-elapsed (union with-pubdate
@@ -182,11 +180,10 @@
 								   @idx-elapsed)))))]
 		    (if (<= c (count with-elapsed))
 		      (do
-			(println (format " rem-pgms-without-aux elapsed (%d <= %d)"
-					 c (count with-elapsed)))
+			(debug (format "rem-pgms-without elapsed (%d <= %d)" c (count with-elapsed)))
 			(rem-pgms-without-aux with-elapsed))
-		      (println (format " don't rem-pgms-without elapsed (%d > %d)"
-				       c (count with-elapsed)))))))))))))
+		      (debug (format "don't need to clean old pgms (%d > %d)"
+				     c (count with-elapsed)))))))))))))
   (defn add [^Pgm pgm]
     (dosync
      (if (contains? @id-pgms (:id pgm))

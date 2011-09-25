@@ -2,7 +2,8 @@
 (ns #^{:author "sgr"
        :doc "keyword tab preference dialog."}
   nico.ui.kwd-tab-dlg
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
+  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]]
+	[clojure.contrib.logging])
   (:require [nico.ui.util :as uu])
   (:import (java.awt BorderLayout Color FlowLayout Dimension)
 	   (javax.swing BorderFactory GroupLayout SpringLayout
@@ -82,12 +83,12 @@
 		       (.setBorder target-panel target-border))
 		     (try
 		       (do
-			 (println (format "query: %s" (transq (read-query))))
+			 (info (format "query: %s" (transq (read-query))))
 			 (eval (transq (read-query)))
 			 (.setBorder query-area query-border)
 			 (.setEnabled btn-ok true))
 		       (catch Exception e
-			 (println (.getMessage e))
+			 (warn (.getMessage e))
 			 (.setBorder query-area (BorderFactory/createLineBorder Color/RED))
 			 (.setEnabled btn-ok false)))
 		     (if (or (= 0 (.getLength title-doc))

@@ -14,7 +14,7 @@
     (str appdata File/separator)
     (str uhome File/separator)))
 
-(defn- pref-path [appname]
+(defn pref-base-path []
   (let [uhome (System/getProperty "user.home")
 	sys (.toLowerCase (System/getProperty "os.name"))]
     (str (condp re-find sys
@@ -23,8 +23,10 @@
 	   #"linux" (pref-dir-unix uhome)
 	   #"bsd" (pref-dir-unix uhome)
 	   #"solaris" (pref-dir-unix uhome)
-	   (pref-dir-unix uhome))
-	 "." appname ".clj")))
+	   (pref-dir-unix uhome)))))
+
+(defn- pref-path [appname]
+  (str (pref-base-path) "." appname ".clj"))
 
 (defn- old-pref-path [appname] (str (pref-path appname) ".old"))
 

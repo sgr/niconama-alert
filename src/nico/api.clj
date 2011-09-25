@@ -2,10 +2,10 @@
 (ns #^{:author "sgr"
        :doc "公式のニコ生アラートAPIで番組情報を取得する。
              番組情報はスクレイピングで取得。"}
-    nico.api
+  nico.api
+  (:use [clojure.contrib.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.scrape :as ns]
-	    [log-utils :as lu]
 	    [str-utils :as s]
 	    [time-utils :as tu]
 	    [clojure.xml :as xml]
@@ -30,7 +30,7 @@
 		 :read-timeout 10000)
 	   raw-res (s/cleanup (ha/string agnt))]
        (if-let [err (agent-error agnt)]
-	 (println (format "failed http-req (%s): %s" url err))
+	 (error (format "failed http-req (%s): %s" url err))
 	 (func raw-res)))))
 
 (defn- nico-ans-handler [func]
@@ -40,7 +40,7 @@
       (if (.equalsIgnoreCase status "ok")
 	(func res)
 	(let [err (zfx/xml-> (zip/xml-zip res) :error :description zfx/text)]
-	  (println (format "returned failure from server: %s" err))
+	  (error (format "returned failure from server: %s" err))
 	  nil)))))
 
 ;; 認証APIでチケットを得る
@@ -140,18 +140,17 @@
 	    (connected-fn)
 	    (loop [c (.read rdr) s nil]
 	      (cond
-	       (= -1 c) (println "******* Connection closed *******")
+	       (= -1 c) (info "******* Connection closed *******")
 	       (= 0 c) (do
 			 (if-let [[date pid cid uid] (parse-chat-str s)]
 			   (.submit pool
 				    (fn []
 				      (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
 					(pgm-fn pgm)
-					(println
-					 (format "[ERROR] couldn't create-pgm! (%s/%s/%s)"
-						 pid cid uid))))
+					(warn
+					 (format "couldn't create-pgm! (%s/%s/%s)" pid cid uid))))
 				    :finished)
-			   (println "[ERROR] couldn't parse the chat str!"))
+			   (warn "couldn't parse the chat str!"))
 			 (recur (.read rdr) nil))
 	       :else (recur (.read rdr) (str s (char c))))))))))
 
@@ -159,10 +158,10 @@
   (fn []
     (try
       (listen alert-status pgm-fn)
-      (catch java.net.SocketTimeoutException e (lu/printe "Socket timeout" e) false)
-      (catch java.net.UnknownHostException e (lu/printe "Unknown host" e) false)
-      (catch java.io.IOException e (lu/printe "IO error" e) false)
-      (catch Exception e (lu/printe "Unknown error" e) false))))
+      (catch java.net.SocketTimeoutException e (error "Socket timeout" e) false)
+      (catch java.net.UnknownHostException e (error "Unknown host" e) false)
+      (catch java.io.IOException e (error "IO error" e) false)
+      (catch Exception e (error "Unknown error" e) false))))
 
 (let [listener (atom nil)]
   (defn- run-listener

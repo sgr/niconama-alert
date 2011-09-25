@@ -2,9 +2,9 @@
 (ns #^{:author "sgr"
        :doc "ニコ生の番組情報を更新する。(API)"}
     nico.api-updator
+  (:use [clojure.contrib.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.api :as api]
-	    [log-utils :as lu]
 	    [time-utils :as tu]))
 
 ;; Official Alert API updator
@@ -39,15 +39,14 @@
 		  (fn [pgm]
 		    (when (some nil?
 				(list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
-		      (println
-		       (format " *** NULL-PGM-FROM-API: %s %s (%s) [%s-%s]"
+		      (warn
+		       (format "NULL-PGM-FROM-API: %s %s (%s) [%s-%s]"
 			       (:id pgm) (:title pgm) (:link pgm)
 			       (:pubdate pgm) (:fetched_at pgm))))
 		    (let [now (tu/now)]
 		      (swap! fetched conj now)
-;;		      (println (format "[%s] %s" now (:title pgm)))
 		      (pgm/add pgm))))
-      (catch Exception e (lu/printe "** disconnected" e) nil)))
+      (catch Exception e (warn "** disconnected" e) nil)))
   (defn update-api []
     (loop [c *retry*]
       (when (= 1 (.getCount @latch)) ;; pause中かどうか
@@ -61,7 +60,7 @@
 		 (recur *retry*))
        @alert-status (do
 		       (api-update @alert-status)
-		       (println "Will reconnect after 3 sec...")
+		       (info "Will reconnect after 3 sec...")
 		       (Thread/sleep 3000)
 		       (doseq [f @hook-reconnecting] (f))
 		       (recur (dec c))))))

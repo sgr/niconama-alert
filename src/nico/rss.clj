@@ -4,13 +4,13 @@
              RSSは文字数制限があるようで、タイトルや説明が切れることがある。
              また、絵文字の類いがそのまま？RSSに混入するようなので、まずいものは除去する。"}
     nico.rss
+  (:use [clojure.contrib.logging])
   (:require [clojure.xml :as xml]
 	    [clojure.zip :as zip]
 	    [clojure.contrib.zip-filter :as zf]
 	    [clojure.contrib.zip-filter.xml :as zfx]
 	    [clojure.contrib.duck-streams :as ds]
 	    [nico.pgm :as pgm]
-	    [log-utils :as lu]
 	    [str-utils :as s]
 	    [time-utils :as tu])
   (:import (java.text SimpleDateFormat)
@@ -26,7 +26,7 @@
     (let [s (ds/slurp* (format "http://live.nicovideo.jp/recent/rss?p=%s" page))
 	  cs (s/cleanup s)]
       (xml/parse (s/utf8stream cs)))
-    (catch Exception e (do (lu/printe "failed fetching RSS" e) {}))))
+    (catch Exception e (error "failed fetching RSS" e) {})))
 
 (defn get-programs-count
   "get the total programs count."
@@ -34,7 +34,9 @@
   ([rss] (try
 	   (Integer/parseInt
 	    (first (zfx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count zfx/text)))
-	   (catch NumberFormatException e (do (lu/printe "failed fetching RSS" e) 0)))))
+	   (catch NumberFormatException e
+	     (error "failed fetching RSS for get programs count" e)
+	     0))))
 
 (defn- get-child-elm [tag node]
   (some #(if (= tag (:tag %)) %) (:content node)))
@@ -75,7 +77,7 @@
     (let [pgm (create-pgm item (tu/now))]
       (when (some nil?
 		  (list (:id pgm) (:pubdate pgm)))
-	(println
+	(warn
 	 (format " *** NULL-PGM-FROM-RSS: %s %s (%s) [%s-%s]"
 		 (:id pgm) (:title pgm) (:link pgm)
 		 (:pubdate pgm) (:fetched_at pgm))))

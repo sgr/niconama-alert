@@ -2,10 +2,10 @@
 (ns #^{:author "sgr"
        :doc "Alert dialog."}
   nico.ui.alert-dlg
-  (:use [clojure.contrib.swing-utils :only [add-action-listener do-swing*]])
+  (:use [clojure.contrib.swing-utils :only [add-action-listener do-swing*]]
+	[clojure.contrib.logging])
   (:require [nico.prefs :as p]
 	    [nico.ui.util :as uu]
-	    [log-utils :as lu]
 	    [time-utils :as tu])
   (:import (java.awt Color Desktop Dimension FlowLayout Font GraphicsEnvironment RenderingHints
 		     GridBagLayout GridBagConstraints Insets)
@@ -23,6 +23,7 @@
 (def *noimg* (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
 (def *monly-bgcolor* (Color. 165 204 255))
 (def *desc-size* (Dimension. 115 64))
+(def *retry* 5)
 
 (let [decorate-fn (atom nil)]
   (defn- decorate [dlg]
@@ -49,10 +50,10 @@
 				    0 0
 				    (.getWidth dlg) (.getHeight dlg) 20 20)]))
 			    (catch Exception e
-			      (lu/printe "failed invoking setWindowShape" e))))))))))
+			      (warn "failed invoking setWindowShape" e))))))))))
 	(catch Exception e
 	  (reset! decorate-fn (fn [dlg]))
-	  (lu/printe "This platform doesn't support AWTUtilities" e))))
+	  (warn "This platform doesn't support AWTUtilities" e))))
     (@decorate-fn dlg)))
 
 (defn dlg-width [] (.width *asize*))
@@ -90,11 +91,12 @@
     (catch Exception _ nil)))
 
 (defn- get-thumbnail-aux [url]
-  (loop [retry-count 5]
+  (loop [retry-count *retry*]
     (if-let [img (fetch-image url)]
       img
       (if (zero? retry-count)
-	(do (println "abort fetching image!") *noimg*)
+	(do (warn (format "abort fetching image because reached retry count: %d" *retry*))
+	    *noimg*)
 	(do (Thread/sleep 1000)
 	    (recur (dec retry-count)))))))
 

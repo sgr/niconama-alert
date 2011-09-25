@@ -2,9 +2,9 @@
 (ns #^{:author "sgr"
        :doc "ニコ生の番組情報を更新する。"}
     nico.rss-updator
+  (:use [clojure.contrib.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.rss :as rss]
-	    [log-utils :as lu]
 	    [time-utils :as tu]))
 
 (defn- earliest-pubdate [earliest pgms]
@@ -45,12 +45,16 @@
 	  ;; 取得完了・中断・継続の判定
 	  (cond
 	   (>= (+ (count fetched) (count cur_pgms)) cur_total) ;; 総番組数分取得したら、取得完了
-	   [:finished (count fetched) cur_total]
+	   (do
+	     (info (format "finished fetching programs: %d" (+ (count fetched) (count cur_pgms))))
+	     [:finished (count fetched) cur_total])
 	   (= 0 (count cur_pgms)) ;; ひとつも番組が取れない場合は中止
-	   [:aborted (count fetched) cur_total]
+	   (do
+	     (warn (format "aborted fetching programs: %d" (count fetched)))
+	     [:aborted (count fetched) cur_total])
 	   :else
 	   (recur cur_page total cur_total earliest-updated fetched-updated))))
-      (catch Exception e (lu/printe "failed fetching RSS" e)
+      (catch Exception e (error "failed fetching RSS" e)
 	     [:error 0 (rss/get-programs-count)])))
   (defn set-counter [c] (reset! counter c))
   (defn update-rss []
@@ -73,7 +77,7 @@
 	    (Thread/sleep 1000)
 	    (set-counter (dec @counter))
 	    (recur max))))
-      (catch Exception e (lu/printe "failed updating RSS" e))))
+      (catch Exception e (error "failed updating RSS" e))))
   (defn pause-rss-updator []
     (if (= 1 (.getCount @latch))
       (do (.countDown @latch) false)

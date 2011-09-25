@@ -2,6 +2,7 @@
 (ns #^{:author "sgr"
        :doc "ニコ生のページから情報を取得する。"}
     nico.scrape
+  (:use [clojure.contrib.logging])
   (:require [net.cgrand.enlive-html :as html]
 	    [str-utils :as s]
 	    [time-utils :as tu]
@@ -60,7 +61,7 @@
 		       nil)
 	thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src)]
 		    (if (= type :community) bn (str base bn)))]
-    (when-not pubdate (println (format " ** NULL PUBDATE: %s (%s)" title link)))
+    (when-not pubdate (error (format " NULL PUBDATE: %s (%s)" title link)))
     (let [now (tu/now)]
       {:title title
        :pubdate pubdate
@@ -85,7 +86,8 @@
   [pid]
   (loop [retry 10]
     (if (= 0 retry)
-      (do (println " *** aborted scraping! ***") nil)
+      (do (warn (format "aborted scraping because reached retry count: %d" retry))
+	  nil)
       (if-let [pgm (fetch-pgm-info2 pid)]
 	pgm
 	(do
