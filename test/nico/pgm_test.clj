@@ -33,19 +33,21 @@
 ;; 番組をマルチスレッドで削除して、数が減るか
 
 (with-test
-  (defn same? []
+  (defn check []
     (let [npgms (count-pgms)
 	  ncomm (@#'nico.pgm/count-comm)
 	  npubdate (@#'nico.pgm/count-pubdate)
 	  nupdated (@#'nico.pgm/count-updated-at)
 	  nelapsed (@#'nico.pgm/count-elapsed)]
-      (println (format " PGMS:    %d" npgms))
-      (println (format " COMM:    %d" ncomm))
-      (println (format " PUBDATE: %d" npubdate))
-      (println (format " UPDATED: %d" nupdated))
-      (println (format " ELAPSED: %d" nelapsed))
-      (if (= npgms ncomm npubdate nupdated nelapsed) npgms nil)))
-  (defn- fit? [n] (= n (same?)))
+      (if (= npgms npubdate nupdated nelapsed)
+	npgms
+	(do (println (format " PGMS:    %d" npgms))
+	    (println (format " COMM:    %d" ncomm))
+	    (println (format " PUBDATE: %d" npubdate))
+	    (println (format " UPDATED: %d" nupdated))
+	    (println (format " ELAPSED: %d" nelapsed))
+	    nil))))
+  (defn- fit? [n] (= n (check)))
   (defn apply-single [f n]
     (doseq [pgm (create-pgms 0 5000)] (f pgm)))
   (defn rm [pgm] (dosync (@#'nico.pgm/rem-aux (:id pgm))))
@@ -59,19 +61,18 @@
       (count-pgms)))
   (defn clear-pgms [] (doseq [id (keys (pgms))] (rm id)))
 
-  ;; (testing "add and rem with single thread"
-  ;;   (is (do (apply-single add 5000) (fit? 5000)) "add 5000 programs")
-  ;;   (is (do (apply-single rm 5000) (fit? 0)) "rem 5000 programs")
-  ;;   (clear-pgms))
-  ;; (testing "add and rem with multiple thread"
-  ;;   (is (do (apply-multi add 5000 4) (fit? 5000)) "add 5000 programs multi")
-  ;;   (is (do (apply-multi rm 5000 4) (fit? 0)) "rem 5000 programs multi")
-  ;;   (clear-pgms))
+  (testing "add and rem with single thread"
+    (is (do (apply-single add 5000) (fit? 5000)) "add 5000 programs")
+    (is (do (apply-single rm 5000) (fit? 0)) "rem 5000 programs")
+    (clear-pgms))
+  (testing "add and rem with multiple thread"
+    (is (do (apply-multi add 5000 4) (fit? 5000)) "add 5000 programs multi")
+    (is (do (apply-multi rm 5000 4) (fit? 0)) "rem 5000 programs multi")
+    (clear-pgms))
   (testing "add with constraint"
     (set-total 3000)
     (is (do (apply-single add 5000) (fit? (* *scale* 3000))) "add 5000 programs multi with max 3000")
     (clear-pgms)
-;;    (add-hook :updated #(same?))
     (is (do (apply-multi add 5000 4) (fit? (* *scale* 3000))) "add 5000 programs multi with max 3000")
     (clear-pgms)))
 
