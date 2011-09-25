@@ -9,7 +9,7 @@
 	    [clojure.contrib.string :as cs])
   (:import (java.util Calendar Date GregorianCalendar Locale TimeZone)))
 
-(def *retry* 10)
+(def *retry-limit* 10)
 (def *base-url* "http://live.nicovideo.jp/watch/")
 
 (defn- fetch-pgm-info1
