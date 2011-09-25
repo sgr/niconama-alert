@@ -28,7 +28,7 @@
   (let [msg (format "%s %-7s %s [%s] %s%s"
 		    (.format (SimpleDateFormat. "yyyy-MM-dd hh:mm:ss,SSS") (Date. (.getMillis r)))
 		    (.getName (.getLevel r))
-		    (.getSourceMethodName r)
+		    (.getLoggerName r)
 		    (.getThreadID r)
 		    (.getMessage r)
 		    *s*)]

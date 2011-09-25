@@ -3,7 +3,8 @@
        :doc "アプリケーションログに関する処理"}
   nico.log
   (:require [log-utils :as lu])
-  (:import (java.util Properties)))
+  (:import (java.util Properties)
+	   (java.util.logging Level Logger)))
 
 (defn- default-log-props []
   (doto (Properties.)
@@ -15,5 +16,9 @@
     (.setProperty ".level" "INFO")))
 
 (defn load-log-props []
-  (lu/load-log-props "nico" (default-log-props)))
+  (lu/load-log-props "nico" (default-log-props))
+  (doto (Logger/getLogger "sun.awt") (.setLevel Level/OFF))
+  (doto (Logger/getLogger "javax.swing") (.setLevel Level/OFF))
+  (doto (Logger/getLogger "java.awt") (.setLevel Level/OFF)))
+
 

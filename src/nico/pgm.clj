@@ -60,7 +60,7 @@
   (defn set-total [t]
     (let [old @total]
       (reset! total t)
-      (debug (format "pgm/set-total: %d -> %d" old t)))
+      (debug (format "set-total: %d -> %d" old t)))
     (call-hook-updated))
   (defn get-total [] @total)
   (defn get-pgm [^String id] (get @id-pgms id))
@@ -70,7 +70,7 @@
   (defn- conj-pgm-idx [aset pgm]
     (conj (disj-pgm-idx aset (:id pgm)) pgm))
   (defn- rem-aux [^clojure.lang.Keyword id]
-    (debug (format "pgm/rem: %s" id))
+    (debug (format "rem: %s" (name id)))
     (when-let [pgm (get @id-pgms id)]
       (alter idx-elapsed disj-pgm-idx id)
       (alter idx-updated-at disj-pgm-idx id)
@@ -78,7 +78,7 @@
       (when-let [cid (:comm_id pgm)] (alter idx-comm dissoc cid))
       (alter id-pgms dissoc id)))
   (defn- add-aux2 [^Pgm pgm]
-    (debug (format "pgm/add: %s" (:id pgm)))
+    (debug (format "add: %s" (name (:id pgm))))
     (alter id-pgms assoc (:id pgm) pgm)
     (when-let [cid (:comm_id pgm)] (alter idx-comm assoc cid pgm))
     (alter idx-pubdate conj-pgm-idx pgm)
@@ -95,7 +95,7 @@
   (defn- update-aux [^Pgm pgm]
     (let [id (:id pgm)
 	  orig (get @id-pgms id)]
-      (debug (format "pgm/update: %s" id))
+      (debug (format "update: %s" (name id)))
       (letfn [(updated-time?
 	       [k] (and orig (not (= 0 (.compareTo (get orig k) (get pgm k))))))
 	      (update-idx [ref] (alter ref conj-pgm-idx pgm))]
