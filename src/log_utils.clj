@@ -26,7 +26,7 @@
 
 (defn- l4f-format [this ^LogRecord r]
   (let [msg (format "%s %-7s %s [%s] %s%s"
-		    (.format (SimpleDateFormat. "yyyy-MM-dd hh:mm:ss,SSS") (Date. (.getMillis r)))
+		    (.format (SimpleDateFormat. "yyyy-MM-dd HH:mm:ss SSS") (Date. (.getMillis r)))
 		    (.getName (.getLevel r))
 		    (.getLoggerName r)
 		    (.getThreadID r)
