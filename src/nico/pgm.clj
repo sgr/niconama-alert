@@ -79,8 +79,9 @@
       (alter idx-pubdate disj-pgm-idx id)
       (when-let [cid (:comm_id pgm)] (alter idx-comm dissoc cid))
       (alter id-pgms dissoc id)))
-  (defn- add-aux2 [^Pgm pgm]
-    (debug (format "add: %s / %s / %s / %s"
+  (defn- add-aux [^Pgm pgm]
+    (debug (format "%s: %s / %s / %s / %s"
+		   (if (contains? @id-pgms (:id pgm)) "update" "add")
 		   (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) nil)
 		   (:title pgm) (:comm_name pgm)))
     (alter id-pgms assoc (:id pgm) pgm)
@@ -88,31 +89,7 @@
     (alter idx-pubdate conj-pgm-idx pgm)
     (alter idx-updated-at conj-pgm-idx pgm)
     (alter idx-elapsed conj-pgm-idx pgm))
-  (defn- add-aux [^Pgm pgm]
-    (let [id (:id pgm) cid (:comm_id pgm)]
-      (if-let [opgm (get @idx-comm cid)]
-	(when (and (not (= id (:id opgm)))
-		   (tu/later? (:pubdate pgm) (:pubdate opgm)))
-	  (do (rem-aux (:id opgm))
-	      (add-aux2 pgm)))
-	(add-aux2 pgm))))
-  (defn- update-aux [^Pgm pgm]
-    (let [id (:id pgm)
-	  orig (get @id-pgms id)]
-      (debug (format "update: %s / %s / %s / %s"
-		     (name id) (if-let [cid (:comm_id pgm)] (name cid) nil)
-		     (:title pgm) (:comm_name pgm)))
-      (letfn [(updated-time?
-	       [k] (and orig (not (= 0 (.compareTo (get orig k) (get pgm k))))))
-	      (update-idx [ref] (alter ref conj-pgm-idx pgm))]
-	(alter id-pgms assoc id pgm)
-	(when (updated-time? :pubdate) (update-idx idx-pubdate))
-	(when (updated-time? :updated_at) (update-idx idx-updated-at))
-	(when (or (updated-time? :pubdate) (updated-time? :updated_at))
-	  (update-idx idx-elapsed)))))
-  (defn update [^Pgm pgm]
-    (when (get @id-pgms (:id pgm)) (dosync (update-aux pgm))))
-  (defn- merge-pgm [^Pgm pgm]
+  (defn- merge-aux [^Pgm pgm]
     (if-let [orig (get @id-pgms (:id pgm))]
       (letfn [(longer [^String x ^String y]
 		      (cond (and x y) (if (> (.length x) (.length y)) x y)
@@ -126,21 +103,13 @@
 			   (nil? y) x
 			   :else nil))
 	      (later-for [k ^Pgm x ^Pgm y] (later (get x k) (get y k)))]
-	(Pgm. (:id orig)
-	      (longer-for :title pgm orig)
-	      (later-for :pubdate pgm orig)
-	      (longer-for :desc pgm orig)
-	      (:category orig)
-	      (:link orig)
-	      (:thumbnail orig)
-	      (:owner_name orig)
-	      (:member_only orig)
-	      (:type orig)
-	      (longer-for :comm_name pgm orig)
-	      (:comm_id orig)
-	      (or (:alerted orig) (:alerted pgm))
-	      (:fetched_at orig)
-	      (tu/now)))
+	(assoc pgm
+	  :title (longer-for :title pgm orig)
+	  :pubdate (later-for :pubdate pgm orig)
+	  :desc (longer-for :desc pgm orig)
+	  :comm_name (longer-for :comm_name pgm orig)
+	  :alerted (or (:alerted orig) (:alerted pgm))
+	  :updated_at (tu/now)))
       pgm))
   (defn- check-consistency []
     (let [npgms (count-pgms)
@@ -190,9 +159,14 @@
 		    (rem-pgms-without-aux with-elapsed))))))))))
   (defn add [^Pgm pgm]
     (dosync
-     (if (contains? @id-pgms (:id pgm))
-       (update-aux (merge-pgm pgm))
-       (add-aux pgm))
-     (clean-old-aux))
-    (check-consistency)
-    (call-hook-updated)))
+     (let [id (:id pgm) cid (:comm_id pgm)]
+       (when-let [opgm (get @idx-comm cid)]
+	 (when (and (not (= id (:id opgm)))
+		    (tu/later? (:pubdate pgm) (:pubdate opgm)))
+	   (rem-aux (:id opgm))))
+       (if (contains? @id-pgms id)
+	 (add-aux (merge-aux pgm))
+	 (add-aux pgm))
+       (clean-old-aux))
+     (check-consistency)
+     (call-hook-updated))))

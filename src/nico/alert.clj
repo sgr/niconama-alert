@@ -62,10 +62,11 @@
   (defn- release-plat [i plat]
     (swap! plats assoc i (assoc plat :used false)))
   (defn alert-pgm [id]
-    (when-let [pgm (pgm/get-pgm id)]
-      (when-not (:alerted pgm)
-	(do (pgm/update (assoc pgm :alerted true))
-	    (enqueue pgm)))))
+    (dosync
+     (when-let [pgm (pgm/get-pgm id)]
+       (when-not (:alerted pgm)
+	 (do (pgm/add (assoc pgm :alerted true))
+	     (enqueue pgm))))))
   (defn gen-alerter []
     (Thread.
      (fn []
