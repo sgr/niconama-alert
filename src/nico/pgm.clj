@@ -39,7 +39,7 @@
 				  [pgm] (- (.getTime (:updated_at pgm)) (.getTime (:pubdate pgm))))]
 			   (let [d (- (elapsed %2) (elapsed %1))]
 			     (if (= 0 d) (.compareTo (name (:id %1)) (name (:id %2))) d)))))
-      last-updated (ref (tu/now)) ;; 番組情報の最終更新時刻
+      last-cleaned (ref (tu/now)) ;; 番組情報の最終クリーンアップ時刻
       hook-updated (ref '()) ;; 番組集合の更新を報せるフック
       called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
   (defn pgms [] @id-pgms)
@@ -51,7 +51,6 @@
   (defn add-hook [kind f]
     (condp = kind
 	:updated (dosync (alter hook-updated conj f))))
-  (defn get-last-updated [] last-updated)
   (defn- call-hook-updated []
     (when-not (tu/within? @called-at-hook-updated (tu/now) 3)
       (dosync
@@ -167,6 +166,8 @@
        (if (contains? @id-pgms id)
 	 (add-aux (merge-aux pgm))
 	 (add-aux pgm))
-       (clean-old-aux))
+       (when-not (tu/within? @last-cleaned (tu/now) 60)
+	 (do (clean-old-aux)
+	     (ref-set last-cleaned (tu/now)))))
      (check-consistency)
      (call-hook-updated))))
