@@ -7,10 +7,6 @@
 	    [nico.rss :as rss]
 	    [time-utils :as tu]))
 
-(defn- earliest-pubdate [earliest pgms]
-  (reduce #(if (tu/earlier? %1 %2) %1 %2)
-	  earliest (for [pgm pgms :when (:comm_id pgm)] (:pubdate pgm))))
-
 ;; RSS updator
 (let [counter (atom 1)
       latch (atom (java.util.concurrent.CountDownLatch. 1))
@@ -25,35 +21,25 @@
 	:fetched (add-hook-aux hook-fetched f)))
   (defn- fetch-rss []
     (try
-      (loop [page 1
-	     total (rss/get-programs-count)
-	     cur_total total
-	     earliest (tu/now)
-	     fetched #{}]
-	(let [rss (rss/get-nico-rss page)
-	      cur_pgms (rss/get-programs-from-rss-page rss)
-	      earliest-updated (earliest-pubdate earliest cur_pgms)
-	      fetched-updated (if (pos? (count cur_pgms))
-				(apply conj fetched (for [pgm cur_pgms] (:id pgm)))
-				fetched)
-	      cur_total (rss/get-programs-count rss)
-	      cur_page (inc page)]
-	  (when (< 0 cur_total) (pgm/set-total cur_total))
+      (loop [page 1, total (pgm/get-total), cur_total total, fetched #{}]
+	(let [[cur_total cur_pgms] (rss/get-programs-from-rss-page (rss/get-nico-rss page))
+	      fetched-upd (reduce conj fetched (map :id cur_pgms))]
+	  (when (and (< 0 cur_total) (not (= total cur_total))) (pgm/set-total cur_total))
+	  ;; 番組の追加と取得状況のリアルタイム更新
 	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
-	  ;; 取得状況更新
-	  (doseq [f @hook-fetching] (when f (f (count fetched) cur_total cur_page)))
+	  (doseq [f @hook-fetching] (when f (f (count fetched-upd) cur_total page)))
 	  ;; 取得完了・中断・継続の判定
 	  (cond
-	   (>= (+ (count fetched) (count cur_pgms)) cur_total) ;; 総番組数分取得したら、取得完了
+	   (>= (count fetched-upd) cur_total) ;; 総番組数分取得したら、取得完了
 	   (do
 	     (info (format "finished fetching programs: %d" (+ (count fetched) (count cur_pgms))))
-	     [:finished (count fetched) cur_total])
+	     [:finished (count fetched-upd) cur_total])
 	   (= 0 (count cur_pgms)) ;; ひとつも番組が取れない場合は中止
 	   (do
-	     (warn (format "aborted fetching programs: %d" (count fetched)))
-	     [:aborted (count fetched) cur_total])
+	     (warn (format "aborted fetching programs: %d" (count fetched-upd)))
+	     [:aborted (count fetched-upd) cur_total])
 	   :else
-	   (recur cur_page total cur_total earliest-updated fetched-updated))))
+	   (recur (inc page), total cur_total fetched-upd))))
       (catch Exception e (error "failed fetching RSS" e)
 	     [:error 0 (rss/get-programs-count)])))
   (defn set-counter [c] (reset! counter c))
