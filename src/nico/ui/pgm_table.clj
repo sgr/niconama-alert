@@ -196,11 +196,13 @@
       (let [mc (.convertColumnIndexToModel this c), mr (.convertRowIndexToModel this r)]
 	(if (and (<= 0 mc) (<= 0 mr))
 	  (let [pgm (.getPgm (.getModel this) mr)]
-	    (str (format "<html>番組タイトル: %s<br>" (:title pgm))
+	    (str (format "<html>番組タイトル: %s<br>" (su/ifstr (:title pgm) ""))
 		 (format "%s: %s<br>"
-			 (if (= "channel" (:type pgm)) "チャンネル" "コミュ名") (:comm_name pgm))
-		 (format "放送主: %s<br>" (:owner_name pgm))
-		 (format "%s<br>" (s/join "<br>" (su/split-by-length (:desc pgm) *desc-col*)))
-		 (format "カテゴリ: %s<br>" (:category pgm))
+			 (if (= "channel" (:type pgm)) "チャンネル" "コミュ名")
+			 (su/ifstr (:comm_name pgm) ""))
+		 (format "放送主: %s<br>" (su/ifstr (:owner_name pgm) ""))
+		 (format "%s<br>" (s/join "<br>" (su/split-by-length
+						  (su/ifstr (:desc pgm) "") *desc-col*)))
+		 (format "カテゴリ: %s<br>" (su/ifstr (:category pgm) ""))
 		 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))))
 

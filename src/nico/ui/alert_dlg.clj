@@ -6,6 +6,7 @@
 	[clojure.contrib.logging])
   (:require [nico.prefs :as p]
 	    [nico.ui.util :as uu]
+	    [str-utils :as su]
 	    [time-utils :as tu])
   (:import (java.awt Color Desktop Dimension FlowLayout Font GraphicsEnvironment RenderingHints
 		     GridBagLayout GridBagConstraints Insets)
@@ -95,7 +96,8 @@
     (if-let [img (fetch-image url)]
       img
       (if (zero? retry-count)
-	(do (warn (format "abort fetching image because reached retry limit: %d" *retry-limit*))
+	(do (warn (format "abort fetching image (%s) because reached retry limit: %d"
+			  url *retry-limit*))
 	    *noimg*)
 	(do (Thread/sleep 1000)
 	    (recur (dec retry-count)))))))
@@ -106,13 +108,13 @@
 (defn alert-dlg [^nico.pgm.Pgm pgm extra-close-fn]
   (let [dlg (JDialog.), thumbicn (get-thumbnail (URL. (:thumbnail pgm)))]
     (let [tpanel (JPanel.), dpanel (JPanel.)
-	  owner (if-let [n (:owner_name pgm)] n "## NO_OWNER ##")
-	  comm_name (if-let [n (:comm_name pgm)] n "## NO_COMMUNITY ##")
+	  owner (su/ifstr (:owner_name pgm) "")
+	  comm_name (su/ifstr (:comm_name pgm) (:comm_id pgm))
 	  olabel (JLabel. (format " %s (%s)" owner comm_name))
 	  time (JLabel. (format "%s  （%d分前に開始）"
 				(if (:member_only pgm) "※コミュ限" "")
 				(tu/minute (tu/interval (:pubdate pgm) (tu/now)))))]
-      (let [title (JLabel. (if-let [t (:title pgm)] t "## NO_TITLE ##"))
+      (let [title (JLabel. (su/ifstr (:title pgm) (:id pgm)))
 	    cbtn (JButton. *cicn*), layout (SpringLayout.)]
 	(doto title (.setFont uu/*font*))
 	(doto layout
@@ -137,7 +139,7 @@
 	  (.setPreferredSize (Dimension. 210 18))
 	  (.setLayout layout) (.add title) (.add cbtn)))
       (let [thumbnail (JLabel. thumbicn),
-	    desc (uu/mlabel (if-let [d (:desc pgm)] d "## NO_DESC ##") *desc-size*)
+	    desc (uu/mlabel (su/ifstr (:desc pgm) "") *desc-size*)
 	    layout (GridBagLayout.), c (GridBagConstraints.)]
 	(letfn [(set-con!
 		 [lt component x y top left bottom right]
