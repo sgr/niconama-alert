@@ -2,7 +2,8 @@
 (ns #^{:author "sgr"
        :doc "番組リスト表示パネル"}
   nico.ui.pgm-panel
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
+  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]]
+	[clojure.contrib.logging])
   (:require [nico.api :as api]
 	    [nico.ui.pgm-table :as upt]
 	    [nico.ui.key-val-dlg :as ukvd]
@@ -57,12 +58,16 @@
 	       (let [query (eval (uktd/transq (:query pref)))]
 		 [(:title pref)
 		  (fn [pgms]
-		    (let [npgms (select-keys pgms
-					     (for [[id pgm] pgms :when
-						   (query
-						    (reduce #(str %1 " " %2)
-							    (map #(% pgm) (:target pref))))] id))]
-		      [(count npgms) npgms]))])))))
+		    (letfn [(tstr [pgm] (reduce #(str %1 " " %2) (map #(% pgm) (:target pref))))
+			    (matched-keys [pgms]
+					  (for [[id pgm] pgms :when
+						(try
+						  (query (tstr pgm))
+						  (catch Exception e
+						    (warn (format "parse error: %s" pgm) e)))
+						] id))]
+		      (let [npgms (select-keys pgms (matched-keys pgms))]
+			[(count npgms) npgms])))])))))
 
 (defn- pp-init [pref]
   (let [title (get-init-title pref)]
