@@ -61,21 +61,21 @@
 				  (html/select comm [:strong :> html/text-node])))
 		       nil)
 	thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src)]
-		    (if (= type :community) bn (str base bn)))]
+		    (if (= type :community) bn (str base bn)))
+	now (tu/now)]
     (when-not pubdate (error (format " NULL PUBDATE: %s (%s)" title link)))
-    (let [now (tu/now)]
-      {:title title
-       :pubdate pubdate
-       :desc desc
-       :category category
-       :link link
-       :thumbnail thumbnail
-       :owner_name owner_name
-       :member_only member_only
-       :type type
-       :comm_name comm_name
-       :fetched_at now
-       :updated_at now})))
+    {:title title
+     :pubdate pubdate
+     :desc desc
+     :category category
+     :link link
+     :thumbnail thumbnail
+     :owner_name owner_name
+     :member_only member_only
+     :type type
+     :comm_name comm_name
+     :fetched_at now
+     :updated_at now}))
 
 (defn- fetch-pgm-info2 [pid]
   (try
@@ -87,7 +87,8 @@
   [pid]
   (loop [retry *retry-limit*]
     (if (= 0 retry)
-      (do (warn (format "aborted scraping because reached retry limit: %d" *retry-limit*))
+      (do (warn (format "aborted scraping %s because reached retry limit: %d"
+			pid *retry-limit*))
 	  nil)
       (if-let [pgm (fetch-pgm-info2 pid)]
 	pgm

@@ -61,10 +61,13 @@
 		    (letfn [(tstr [pgm] (reduce #(str %1 " " %2) (map #(% pgm) (:target pref))))
 			    (matched-keys [pgms]
 					  (for [[id pgm] pgms :when
-						(try
-						  (query (tstr pgm))
-						  (catch Exception e
-						    (warn (format "parse error: %s" pgm) e)))
+						(let [ts (tstr pgm)]
+						  (try
+						    (query (tstr pgm))
+						    (catch Exception e
+						      (warn (format "parse error: %s, %s"
+								    ts (prn-str pgm)) e)
+						      false)))
 						] id))]
 		      (let [npgms (select-keys pgms (matched-keys pgms))]
 			[(count npgms) npgms])))])))))

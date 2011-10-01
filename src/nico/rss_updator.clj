@@ -23,21 +23,23 @@
     (try
       (loop [page 1, total (pgm/get-total), cur_total total, fetched #{}]
 	(let [[cur_total cur_pgms] (rss/get-programs-from-rss-page (rss/get-nico-rss page))
-	      fetched-upd (reduce conj fetched (map :id cur_pgms))]
-	  (when (and (< 0 cur_total) (not (= total cur_total))) (pgm/set-total cur_total))
+	      fetched-upd (reduce conj fetched (map :id cur_pgms))
+	      cfetched (count fetched-upd)]
+	  (when (and (< 0 cur_total) (not (= (pgm/get-total) cur_total)))
+	    (pgm/set-total cur_total))
 	  ;; 番組の追加と取得状況のリアルタイム更新
 	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
-	  (doseq [f @hook-fetching] (when f (f (count fetched-upd) cur_total page)))
+	  (doseq [f @hook-fetching] (when f (f cfetched cur_total page)))
 	  ;; 取得完了・中断・継続の判定
 	  (cond
-	   (>= (count fetched-upd) cur_total) ;; 総番組数分取得したら、取得完了
+	   (or (>= cfetched (pgm/get-total)) (>= cfetched cur_total)) ;; 総番組数分取得したら、取得完了
 	   (do
-	     (info (format "finished fetching programs: %d" (+ (count fetched) (count cur_pgms))))
-	     [:finished (count fetched-upd) cur_total])
+	     (info (format "finished fetching programs: %d" cfetched))
+	     [:finished cfetched cur_total])
 	   (= 0 (count cur_pgms)) ;; ひとつも番組が取れない場合は中止
 	   (do
-	     (warn (format "aborted fetching programs: %d" (count fetched-upd)))
-	     [:aborted (count fetched-upd) cur_total])
+	     (warn (format "aborted fetching programs: %d" cfetched))
+	     [:aborted cfetched cur_total])
 	   :else
 	   (recur (inc page), total cur_total fetched-upd))))
       (catch Exception e (error "failed fetching RSS" e)
