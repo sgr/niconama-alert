@@ -70,7 +70,7 @@
     (conj (disj-pgm-idx aset (:id pgm)) pgm))
   (defn- rem-aux [^clojure.lang.Keyword id]
     (when-let [pgm (get @id-pgms id)]
-      (debug (format "rem: %s / %s / %s / %s"
+      (trace (format "rem: %s / %s / %s / %s"
 		     (name id) (if-let [cid (:comm_id pgm)] (name cid) nil)
 		     (:title pgm) (:comm_name pgm)))
       (alter idx-elapsed disj-pgm-idx id)
@@ -79,7 +79,7 @@
       (when-let [cid (:comm_id pgm)] (alter idx-comm dissoc cid))
       (alter id-pgms dissoc id)))
   (defn- add-aux [^Pgm pgm]
-    (debug (format "%s: %s / %s / %s / %s"
+    (trace (format "%s: %s / %s / %s / %s"
 		   (if (contains? @id-pgms (:id pgm)) "update" "add")
 		   (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) nil)
 		   (:title pgm) (:comm_name pgm)))
