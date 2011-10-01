@@ -102,7 +102,7 @@
 			   (nil? y) x
 			   :else nil))
 	      (later-for [k ^Pgm x ^Pgm y] (later (get x k) (get y k)))]
-	(assoc pgm
+	(assoc orig
 	  :title (longer-for :title pgm orig)
 	  :pubdate (later-for :pubdate pgm orig)
 	  :desc (longer-for :desc pgm orig)
