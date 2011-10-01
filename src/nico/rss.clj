@@ -25,8 +25,12 @@
   (try
     (let [s (ds/slurp* (format "http://live.nicovideo.jp/recent/rss?p=%s" page))
 	  cs (s/cleanup s)]
-      (xml/parse (s/utf8stream cs)))
-    (catch Exception e (error "failed fetching RSS" e) {})))
+      (try
+	(xml/parse (s/utf8stream cs))
+	(catch Exception e
+	  (error (format "failed parsing RSS #%d: %s" page cs) e))))
+    (catch Exception e
+      (error (format "failed fetching RSS #%d: %s" (.getMessage e)) e) {})))
 
 (defn get-programs-count
   "get the total programs count."
@@ -35,7 +39,7 @@
 	   (Integer/parseInt
 	    (first (zfx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count zfx/text)))
 	   (catch NumberFormatException e
-	     (error "failed fetching RSS for get programs count" e)
+	     (error (format "failed fetching RSS for get programs count: %s" rss) e)
 	     0))))
 
 (defn- get-child-elm [tag node]
