@@ -150,7 +150,7 @@
 					(warn
 					 (format "couldn't create-pgm! (%s/%s/%s)" pid cid uid))))
 				    :finished)
-			   (warn "couldn't parse the chat str!"))
+			   (warn (format "couldn't parse the chat str: %s" s)))
 			 (recur (.read rdr) nil))
 	       :else (recur (.read rdr) (str s (char c))))))))))
 
