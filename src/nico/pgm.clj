@@ -157,17 +157,20 @@
 				   c c2 (count with-elapsed)))
 		    (rem-pgms-without-aux with-elapsed))))))))))
   (defn add [^Pgm pgm]
-    (dosync
-     (let [id (:id pgm) cid (:comm_id pgm)]
-       (when-let [opgm (get @idx-comm cid)]
-	 (when (and (not (= id (:id opgm)))
-		    (tu/later? (:pubdate pgm) (:pubdate opgm)))
-	   (rem-aux (:id opgm))))
-       (if (contains? @id-pgms id)
-	 (add-aux (merge-aux pgm))
-	 (add-aux pgm))
-       (when-not (tu/within? @last-cleaned (tu/now) 60)
-	 (do (clean-old-aux)
-	     (ref-set last-cleaned (tu/now)))))
-     (check-consistency)
-     (call-hook-updated))))
+    (letfn [(add-clean [^Pgm pgm]
+		       (add-aux pgm)
+		       (when-not (tu/within? @last-cleaned (tu/now) 60)
+			 (do (clean-old-aux)
+			     (ref-set last-cleaned (tu/now))))
+		       (check-consistency)
+		       (call-hook-updated))]
+      (dosync
+       (let [id (:id pgm) cid (:comm_id pgm)]
+	 (if (contains? @id-pgms id)
+	   (add-clean (merge-aux pgm))
+	   (if-let [opgm (get @idx-comm cid)]
+	     (when (and (not (= id (:id opgm)))
+			(tu/later? (:pubdate pgm) (:pubdate opgm)))
+	       (do (rem-aux (:id opgm))
+		   (add-clean pgm)))
+	     (add-clean pgm))))))))
