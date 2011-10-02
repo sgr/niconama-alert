@@ -39,10 +39,7 @@
 		  (fn [pgm]
 		    (when (some nil?
 				(list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
-		      (warn
-		       (format "NULL-PGM-FROM-API: %s %s (%s) [%s-%s]"
-			       (:id pgm) (:title pgm) (:link pgm)
-			       (:pubdate pgm) (:fetched_at pgm))))
+		      (warn (format "Some nil properties found in: %s" (prn-str pgm))))
 		    (let [now (tu/now)]
 		      (swap! fetched conj now)
 		      (pgm/add pgm))))
