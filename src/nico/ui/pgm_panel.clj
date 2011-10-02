@@ -62,11 +62,16 @@
 			    (matched-keys [pgms]
 					  (for [[id pgm] pgms :when
 						(let [ts (tstr pgm)]
-						  (try
-						    (query (tstr pgm))
-						    (catch Exception e
-						      (warn (format "parse error: %s, %s"
-								    ts (prn-str pgm)) e)
+						  (if (or ts (< 0 (.length ts)))
+						    (try
+						      (query (tstr pgm))
+						      (catch Exception e
+							(warn (format "parse error: %s, %s"
+								      ts (prn-str pgm)) e)
+							false))
+						    (do
+						      (warn (format "zero length str: %s"
+								    (prn-str pgm)))
 						      false)))
 						] id))]
 		      (let [npgms (select-keys pgms (matched-keys pgms))]
