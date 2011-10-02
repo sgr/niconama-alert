@@ -88,7 +88,7 @@
   (loop [retry *retry-limit*]
     (if (= 0 retry)
       (do (warn (format "aborted scraping %s because reached retry limit: %d"
-			pid *retry-limit*))
+			(str *base-url* pid) *retry-limit*))
 	  nil)
       (if-let [pgm (fetch-pgm-info2 pid)]
 	pgm
