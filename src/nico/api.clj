@@ -114,16 +114,18 @@
        (:updated_at info))
       nil)))
 
-(defn- parse-chat-str [chat-str]
-  (let [chat (xml/parse (java.io.StringBufferInputStream. chat-str))]
-    (if (= :chat (-> chat :tag))
-      (let [s (-> chat :content)
-	    date (Date. (* 1000 (Long/parseLong (-> chat :attrs :date))))]
-	(if s
-	  (let [[pid cid uid] (.split (first s) ",")]
-	    (list date pid cid uid))
-	  nil))
-      nil)))
+(defn- parse-chat-str [^String chat-str]
+  (try
+    (let [chat (xml/parse (java.io.StringBufferInputStream. chat-str))]
+      (if (= :chat (-> chat :tag))
+	(let [s (-> chat :content)
+	      date (Date. (* 1000 (Long/parseLong (-> chat :attrs :date))))]
+	  (if s
+	    (let [[pid cid uid] (.split (first s) ",")]
+	      (list date pid cid uid))
+	    nil))
+	nil))
+    (catch Exception e (error (format "parse error: %s" chat-str e)) nil)))
 
 (let [nthreads 3
       pool (Executors/newFixedThreadPool nthreads)]
