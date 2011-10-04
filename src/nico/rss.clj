@@ -30,7 +30,7 @@
 	(catch Exception e
 	  (error (format "failed parsing RSS #%d: %s" page cs) e))))
     (catch Exception e
-      (error (format "failed fetching RSS #%d: %s" (.getMessage e)) e) {})))
+      (error (format "failed fetching RSS #%d: %s" page (.getMessage e)) e) {})))
 
 (defn get-programs-count
   "get the total programs count."
