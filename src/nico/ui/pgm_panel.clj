@@ -62,7 +62,7 @@
 			    (matched-keys [pgms]
 					  (for [[id pgm] pgms :when
 						(let [ts (tstr pgm)]
-						  (if (or ts (< 0 (.length ts)))
+						  (if (and ts (< 0 (.length ts)))
 						    (try
 						      (query (tstr pgm))
 						      (catch Exception e
