@@ -45,15 +45,9 @@
      (fn [fetched-count total]
        (do-swing (.setEnabled rbtn true) (.setEnabled tbtn true))
        (condp = total
-	   0 (do ;; 通信エラーかサーバー落ちか、RSSが空っぽか。
-	       (do-swing
-		(.setText status "サーバーとの通信エラー")))
-	   fetched-count (do ;; 全て取得できた。
-		     (do-swing
-		      (.setText status "RSS情報取得完了")
-		      (.doClick tbtn)))
-	   (do-swing
-	    (.setText status "RSS情報取得中断")))))
+	   0 (do-swing (.setText status "サーバーとの通信エラー"))
+	   fetched-count (do-swing (.setText status "RSS情報取得完了"))
+	   (do-swing (.setText status "RSS情報取得中断")))))
     (doto rbtn
       (.setPreferredSize *btn-size*)
       (.setToolTipText "RSS情報の取得をすぐに開始します")
