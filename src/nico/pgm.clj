@@ -4,7 +4,8 @@
   nico.pgm
   (:use [clojure.set :only [union]]
 	[clojure.contrib.logging])
-  (:require [time-utils :as tu]))
+  (:require [hook-utils :as hu]
+	    [time-utils :as tu]))
 
 (def *scale* 1.05) ;; 最大保持数
 
@@ -40,7 +41,6 @@
 			   (let [d (- (elapsed %2) (elapsed %1))]
 			     (if (= 0 d) (.compareTo (name (:id %1)) (name (:id %2))) d)))))
       last-cleaned (ref (tu/now)) ;; 番組情報の最終クリーンアップ時刻
-      hook-updated (ref '()) ;; 番組集合の更新を報せるフック
       called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
   (defn pgms [] @id-pgms)
   (defn count-pgms [] (count @id-pgms))
@@ -48,13 +48,11 @@
   (defn- count-pubdate [] (count @idx-pubdate))
   (defn- count-updated-at [] (count @idx-updated-at))
   (defn- count-elapsed [] (count @idx-elapsed))
-  (defn add-hook [kind f]
-    (condp = kind
-	:updated (dosync (alter hook-updated conj f))))
+  (hu/defhook :updated)
   (defn- call-hook-updated []
-    (when-not (tu/within? @called-at-hook-updated (tu/now) 3)
-      (dosync
-       (doseq [f @hook-updated] (f))
+    (dosync
+     (when-not (tu/within? @called-at-hook-updated (tu/now) 3)
+       (run-hooks :updated)
        (ref-set called-at-hook-updated (tu/now)))))
   (defn set-total [t]
     (let [old @total]

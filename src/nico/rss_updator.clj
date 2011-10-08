@@ -5,20 +5,14 @@
   (:use [clojure.contrib.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.rss :as rss]
-	    [time-utils :as tu]))
+	    [hook-utils :as hu]
+	    [time-utils :as tu])
+  (:import (clojure.lang Keyword)))
 
 ;; RSS updator
 (let [counter (atom 1)
-      latch (atom (java.util.concurrent.CountDownLatch. 1))
-      hook-countdown (atom '())
-      hook-fetching (atom '())
-      hook-fetched (atom '())]
-  (defn- add-hook-aux [a f] (reset! a (conj (deref a) f)))
-  (defn add-hook [kind f]
-    (condp = kind
-	:countdown (add-hook-aux hook-countdown f)
-	:fetching (add-hook-aux hook-fetching f)
-	:fetched (add-hook-aux hook-fetched f)))
+      latch (atom (java.util.concurrent.CountDownLatch. 1))]
+  (hu/defhook :countdown :fetching :fetched)
   (defn- fetch-rss []
     (try
       (loop [page 1, total (pgm/get-total), cur_total total, fetched #{}]
@@ -29,7 +23,7 @@
 	    (pgm/set-total cur_total))
 	  ;; 番組の追加と取得状況のリアルタイム更新
 	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
-	  (doseq [f @hook-fetching] (when f (f cfetched cur_total page)))
+	  (run-hooks :fetching cfetched cur_total page)
 	  ;; 取得完了・中断・継続の判定
 	  (cond
 	   (or (>= cfetched (pgm/get-total)) (>= cfetched cur_total)) ;; 総番組数分取得したら、取得完了
@@ -50,16 +44,14 @@
       (loop [max @counter]
 	(if (= 1 (.getCount @latch)) ;; pause中かどうか
 	  (do (.await @latch))
-	  (doseq [f @hook-countdown] (when f (f @counter max)))) ;; 待ち秒数表示
+	  (run-hooks :countdown @counter max))
 	(if (= 0 @counter) ; カウント0かどうか
-	  (let [[result fetched total] (fetch-rss)
-		new-max (condp = result
-			    :finished 180
-			    :aborted 120
-			    :error 300)]
-	    (set-counter new-max)
-	    ;; 取得状況更新
-	    (doseq [f @hook-fetched] (when f (f fetched total)))
+	  (let [[result fetched total] (fetch-rss)]
+	    (set-counter (condp = result
+			     :finished 180
+			     :aborted 120
+			     :error 300))
+	    (run-hooks :fetched fetched total) ;; 取得状況更新
 	    (recur @counter))
 	  (do
 	    (Thread/sleep 1000)

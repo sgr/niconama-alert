@@ -5,6 +5,7 @@
   (:use [clojure.contrib.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.api :as api]
+	    [hook-utils :as hu]
 	    [time-utils :as tu]))
 
 ;; Official Alert API updator
@@ -12,30 +13,20 @@
 (let [latch (ref (java.util.concurrent.CountDownLatch. 1))
       alert-status (ref nil)
       awaiting-status (ref :need_login)
-      hook-awaiting (atom '())
-      hook-connected (atom '())
-      hook-reconnecting (atom '())
-      hook-rate-updated (atom '())
       fetched (atom [])]
-  (defn- add-hook-aux [a f] (reset! a (conj (deref a) f)))
-  (defn add-hook [kind f]
-    (condp = kind
-	:awaiting (add-hook-aux hook-awaiting f)
-	:connected (add-hook-aux hook-connected f)
-	:reconnecting (add-hook-aux hook-reconnecting f)
-	:rate-updated (add-hook-aux hook-rate-updated f)))
+  (hu/defhook :awaiting :connected :reconnecting :rate-updated)
   (defn get-awaiting-status [] @awaiting-status)
   (defn set-alert-status [as]
     (when-not @alert-status
       (dosync
        (ref-set alert-status as)
        (ref-set awaiting-status :ready)))
-    (doseq [f @hook-awaiting] (f)))
+    (run-hooks :awaiting))
   (defn start-update-api [] (.countDown @latch))
   (defn- api-update [alert-status]
     (try
       (api/listen alert-status
-		  (fn [] (doseq [f @hook-connected] (f)))
+		  (fn [] (run-hooks :connected))
 		  (fn [pgm]
 		    (when (some nil?
 				(list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
@@ -47,7 +38,7 @@
   (defn update-api []
     (loop [c *retry*]
       (when (= 1 (.getCount @latch)) ;; pause中かどうか
-	(do (doseq [f @hook-awaiting] (f))
+	(do (run-hooks :awaiting)
 	    (.await @latch)))
       (cond
        (= 0 c) (do
@@ -59,7 +50,7 @@
 		       (api-update @alert-status)
 		       (info "Will reconnect after 3 sec...")
 		       (Thread/sleep 3000)
-		       (doseq [f @hook-reconnecting] (f))
+		       (run-hooks :reconnecting)
 		       (recur (dec c))))))
   (defn get-fetched-rate [] (count @fetched))
   (defn update-rate []
@@ -68,8 +59,7 @@
       (when (= 1 (.getCount @latch)) ;; pause中かどうか
 	(.await @latch))
       (swap! fetched (fn [coll now] (filter #(tu/within? % now 60) coll)) (tu/now))
-      (doseq [f @hook-rate-updated] (f))
-      (recur)))
-  )
+      (run-hooks :rate-updated)
+      (recur))))
 
 
