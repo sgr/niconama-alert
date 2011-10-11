@@ -8,6 +8,7 @@
 	    [time-utils :as tu]))
 
 (def *scale* 1.05) ;; 最大保持数
+(def *interval-clean* 60) ;; 古い番組情報を削除する間隔
 
 (defrecord Pgm
   [id		;; 番組ID
@@ -44,10 +45,6 @@
       called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
   (defn pgms [] @id-pgms)
   (defn count-pgms [] (count @id-pgms))
-  (defn- count-comm [] (count @idx-comm))
-  (defn- count-pubdate [] (count @idx-pubdate))
-  (defn- count-updated-at [] (count @idx-updated-at))
-  (defn- count-elapsed [] (count @idx-elapsed))
   (hu/defhook :updated)
   (defn- call-hook-updated []
     (dosync
@@ -108,16 +105,6 @@
 	  :alerted (or (:alerted orig) (:alerted pgm))
 	  :updated_at (tu/now)))
       pgm))
-  (defn- check-consistency []
-    (let [npgms (count-pgms)
-	  ncomm (count-comm)
-	  npubdate (count-pubdate)
-	  nupdated (count-updated-at)
-	  nelapsed (count-elapsed)]
-      ;; 公式などコミュニティIDがついていない放送もあるためncommでは比較しない。
-      (when-not (= npgms npubdate nupdated nelapsed)
-	(error (format "pgms: %d, pubdate: %d, updated: %d, elapsed: %d (comm: %d)"
-		       npgms npubdate nupdated nelapsed ncomm)))))
   (defn- rem-pgms-without-aux [ids]
     (debug (format "removing old pgms: %d" (- (count-pgms) (count ids))))
     (doseq [id (filter #(not (contains? ids %)) (keys @id-pgms))] (rem-aux id)))
@@ -154,10 +141,24 @@
 		    (debug (format "rem-pgms-without elapsed (c: %d, c2: %d, with-elapsed: %d)"
 				   c c2 (count with-elapsed)))
 		    (rem-pgms-without-aux with-elapsed))))))))))
+  (defn- check-consistency []
+    (let [npgms (count-pgms)
+	  ncomm (count @idx-comm)
+	  npubdate (count @idx-pubdate)
+	  nupdated (count @idx-updated-at)
+	  nelapsed (count @idx-elapsed)]
+      ;; 公式などコミュニティIDがついていない放送もあるためncommでは比較しない。
+      (if (= npgms npubdate nupdated nelapsed)
+	npgms
+	(do
+	  (error (format "pgms: %d, pubdate: %d, updated: %d, elapsed: %d (comm: %d)"
+			 npgms npubdate nupdated nelapsed ncomm))
+	  nil))))
+  (defn- get-last-cleaned [] @last-cleaned)
   (defn add [^Pgm pgm]
     (letfn [(add-clean [^Pgm pgm]
 		       (add-aux pgm)
-		       (when-not (tu/within? @last-cleaned (tu/now) 60)
+		       (when-not (tu/within? @last-cleaned (tu/now) *interval-clean*)
 			 (do (clean-old-aux)
 			     (ref-set last-cleaned (tu/now))))
 		       (check-consistency)
