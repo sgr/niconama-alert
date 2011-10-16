@@ -30,7 +30,7 @@
 		  (fn [pgm]
 		    (when (some nil?
 				(list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
-		      (warn (format "Some nil properties found in: %s" (prn-str pgm))))
+		      (warn (format "Some nil properties found in: %s" (pr-str pgm))))
 		    (let [now (tu/now)]
 		      (swap! fetched conj now)
 		      (pgm/add pgm))))

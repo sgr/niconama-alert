@@ -82,6 +82,6 @@
      (let [pgm (create-pgm item (tu/now))]
        (when (some nil?
 		   (list (:id pgm) (:title pgm) (:pubdate pgm)))
-	 (warn (format "Some nil properties found in: %s" (prn-str pgm))))
+	 (warn (format "Some nil properties found in: %s" (pr-str pgm))))
        pgm))])
 

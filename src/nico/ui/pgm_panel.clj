@@ -67,11 +67,11 @@
 						      (query (tstr pgm))
 						      (catch Exception e
 							(warn (format "parse error: %s, %s"
-								      ts (prn-str pgm)) e)
+								      ts (pr-str pgm)) e)
 							false))
 						    (do
 						      (warn (format "zero length str: %s"
-								    (prn-str pgm)))
+								    (pr-str pgm)))
 						      false)))
 						] id))]
 		      (let [npgms (select-keys pgms (matched-keys pgms))]
