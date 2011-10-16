@@ -9,9 +9,8 @@
 	    [str-utils :as su]
 	    [time-utils :as tu]
 	    [nico.pgm :as pgm])
-  (:import (java.awt Color Cursor Desktop Font)
+  (:import (java.awt Color Cursor Font)
 	   (java.awt.event MouseListener MouseMotionListener)
-	   (java.net URI)
 	   (javax.swing BorderFactory JMenuItem JPopupMenu JTable ListSelectionModel
 	                SwingConstants SwingUtilities)
 	   (javax.swing.border EtchedBorder)
@@ -82,11 +81,6 @@
  :state state
  :init init)
 
-(defn- open-url [cmd url]
-  (if (= :default cmd)
-    (.browse (Desktop/getDesktop) (URI. url))
-    (.start (ProcessBuilder. [cmd url]))))
-
 (defn pgm-table
   "番組情報テーブルを生成する"
   []
@@ -117,8 +111,7 @@
 	    (when (and (<= 0 c) (<= 0 r))
 	      (let [mc (.convertColumnIndexToModel tbl c), mr (.convertRowIndexToModel tbl r)]
 		(cond (and (= 2 (.getClickCount e)) (<= 0 mc) (<= 0 mr))
-		      (let [[name cmd] (first (:browsers @(p/get-pref)))]
-			(open-url cmd (.getUrl (.getModel tbl) mr)))
+		      (p/open-url :first (.getUrl (.getModel tbl) mr))
 		      (and (SwingUtilities/isRightMouseButton e) (<= 0 mr))
 		      (let [pmenu (JPopupMenu.)
 			    pid (.getProgramId (.getModel tbl) mr)
@@ -130,11 +123,11 @@
 			(doto pmenu
 			  (.add titem)
 			  (.addSeparator))
-			(doseq [[name cmd] (:browsers @(p/get-pref))]
-			  (let [mitem (if (= :default cmd)
+			(doseq [[name ofn] (p/browsers)]
+			  (let [mitem (if (= :default name)
 					(JMenuItem. "デフォルトブラウザで開く")
 					(JMenuItem. (str name "で開く")))]
-			    (add-action-listener mitem (fn [e] (open-url cmd url)))
+			    (add-action-listener mitem (fn [e] (ofn url)))
 			    (doto pmenu (.add mitem))))
 			(.show pmenu tbl (.getX e) (.getY e))))))))
 	 (mouseEntered [e])

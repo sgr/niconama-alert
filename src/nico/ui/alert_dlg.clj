@@ -8,12 +8,12 @@
 	    [nico.ui.util :as uu]
 	    [str-utils :as su]
 	    [time-utils :as tu])
-  (:import (java.awt Color Desktop Dimension FlowLayout Font GraphicsEnvironment RenderingHints
+  (:import (java.awt Color Dimension FlowLayout Font GraphicsEnvironment RenderingHints
 		     GridBagLayout GridBagConstraints Insets)
 	   (java.awt.event ComponentAdapter MouseListener MouseMotionListener)
 	   (java.awt.geom RoundRectangle2D$Float)
 	   (java.awt.image BufferedImage)
-	   (java.net URI URL)
+	   (java.net URL)
 	   (javax.swing BorderFactory ImageIcon JButton JDialog JLabel JPanel JTextArea SpringLayout)
 	   (javax.swing.text.html HTMLEditorKit)
 	   (javax.imageio ImageIO)))
@@ -67,14 +67,7 @@
        (proxy [MouseListener][]
 	 (mouseEntered [e] (.setCursor (.getSource e) *lcsr*))
 	 (mouseExited [e] (.setCursor (.getSource e) csr))
-	 (mousePressed [e]
-		       ;; 設定でアラート指定されたブラウザで番組URLを開く
-		       (let [[name cmd]
-			     (some #(let [[name cmd alert] %] (if alert % false))
-				   (:browsers @(p/get-pref)))]
-			 (if (= :default cmd)
-			   (.browse (Desktop/getDesktop) (URI. url))
-			   (.start (ProcessBuilder. [cmd url])))))
+	 (mousePressed [e] (p/open-url :alert url))
 	 (mouseClicked [e]) (mouseReleased [e]))))))
 
 (defn- adjust-img [img width height]
