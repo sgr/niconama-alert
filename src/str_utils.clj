@@ -31,7 +31,7 @@
 	    (recur (conj result (.substring s i end)) (+ i (- end i)))))))))
 
 (defn space? [^Char c] (some #(= % c) '(\space \tab)))
-(defn quote? [^Char c] (some #(= % c) '(\" \')))
+(defn quote? [^Char c] (= \" c))
 (defn escape? [^Char c] (= \\ c))
 
 (declare in-word in-space in-quote)
