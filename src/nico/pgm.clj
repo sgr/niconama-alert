@@ -65,19 +65,33 @@
     (conj (disj-pgm-idx aset (:id pgm)) pgm))
   (defn- rem-aux [^clojure.lang.Keyword id]
     (when-let [pgm (get @id-pgms id)]
-      (trace (format "rem: %s / %s / %s / %s"
-		     (name id) (if-let [cid (:comm_id pgm)] (name cid) nil)
+      (trace (format "rem: %s %s \"%s\" \"%s\""
+		     (name id) (if-let [cid (:comm_id pgm)] (name cid) "NONE")
 		     (:title pgm) (:comm_name pgm)))
       (alter idx-elapsed disj-pgm-idx id)
       (alter idx-updated-at disj-pgm-idx id)
       (alter idx-pubdate disj-pgm-idx id)
       (when-let [cid (:comm_id pgm)] (alter idx-comm dissoc cid))
       (alter id-pgms dissoc id)))
+  (defn- diff-pgms [^Pgm from ^Pgm to]
+    (letfn [(eq? [k ^Pgm x ^Pgm y] (= 0 (.compareTo (get x k) (get y k))))
+	    (to-str [o] (condp = (class o)
+			  java.util.Date (tu/format-time-long o)
+			  o))
+	    (diff-str [k ^Pgm x ^Pgm y]
+		      (format "%s: \"%s\" -> \"%s\""
+			      (name k) (to-str (get x k)) (to-str (get y k))))]
+      (apply str (interpose ", "
+			    (map #(when-not (eq? % from to) (diff-str % from to))
+				 '(:title :pubdate :desc :comm_name :alerted :updated_at))))))
   (defn- add-aux [^Pgm pgm]
-    (trace (format "%s: %s / %s / %s / %s"
-		   (if (contains? @id-pgms (:id pgm)) "update" "add")
-		   (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) nil)
-		   (:title pgm) (:comm_name pgm)))
+    (if-let [orig (get @id-pgms (:id pgm))]
+      (trace (format "update: %s %s \"%s\" %s"
+		     (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) "NONE")
+		     (:title pgm) (diff-pgms orig pgm)))
+      (trace (format "add: %s %s \"%s\" \"%s\""
+		     (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) "NONE")
+		     (:title pgm) (:comm_name pgm))))
     (alter id-pgms assoc (:id pgm) pgm)
     (when-let [cid (:comm_id pgm)] (alter idx-comm assoc cid pgm))
     (alter idx-pubdate conj-pgm-idx pgm)
@@ -111,7 +125,7 @@
   (defn- clean-old-aux []
     (when (< 0 @total)
       (let [c (int (* *scale* @total))] ;; 総番組数のscale倍までは許容
-	(when (< c (count @id-pgms))
+	(when (< c (count-pgms))
 	  (let [now (tu/now)
 		updated (set
 			 (map #(:id %)
@@ -120,7 +134,8 @@
 	    ;; 5分以内に存在が確認された番組は多くとも残す
 	    (if (<= c (count updated))
 	      (do
-		(debug (format "rem-pgms-without updated (%d <= %d)" c (count updated)))
+		(debug (format "rem-pgms-without updated (%d, %d <= %d)"
+			       @total c (count updated)))
 		(rem-pgms-without-aux updated))
 	      (let [with-pubdate (union updated
 					(set
@@ -130,7 +145,8 @@
 		;; 30分以内に開始された番組は多くとも残す
 		(if (<= c (count with-pubdate))
 		  (do
-		    (debug (format "rem-pgms-without pubdate (%d <= %d)" c (count with-pubdate)))
+		    (debug (format "rem-pgms-without pubdate (%d, %d <= %d)"
+				   @total c (count with-pubdate)))
 		    (rem-pgms-without-aux with-pubdate))
 		  (let [c2 (- c (count with-pubdate))
 			with-elapsed (union with-pubdate
@@ -138,8 +154,8 @@
 					     (map #(:id %)
 						  (take c2 (filter #(not (contains? with-pubdate %))
 								   @idx-elapsed)))))]
-		    (debug (format "rem-pgms-without elapsed (c: %d, c2: %d, with-elapsed: %d)"
-				   c c2 (count with-elapsed)))
+		    (debug (format "rem-pgms-without elapsed (t: %d, c: %d, c2: %d, with-elapsed: %d)"
+				   @total, c c2 (count with-elapsed)))
 		    (rem-pgms-without-aux with-elapsed))))))))))
   (defn- check-consistency []
     (let [npgms (count-pgms)
