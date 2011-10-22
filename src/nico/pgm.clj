@@ -74,7 +74,10 @@
       (when-let [cid (:comm_id pgm)] (alter idx-comm dissoc cid))
       (alter id-pgms dissoc id)))
   (defn- diff-pgms [^Pgm from ^Pgm to]
-    (letfn [(eq? [k ^Pgm x ^Pgm y] (= 0 (.compareTo (get x k) (get y k))))
+    (letfn [(eq? [k ^Pgm x ^Pgm y]
+		 (let [f (get x k) t (get y k)]
+		   (if (and f t) (= 0 (.compareTo f t))
+		       (if (and (nil? f) (nil? t)) true false))))
 	    (to-str [o] (condp = (class o)
 			  java.util.Date (tu/format-time-long o)
 			  o))
