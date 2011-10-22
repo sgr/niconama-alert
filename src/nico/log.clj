@@ -13,6 +13,7 @@
     (.setProperty "java.util.logging.FileHandler.limit" "10485760")
     (.setProperty "java.util.logging.FileHandler.count" "10")
     (.setProperty "java.util.logging.FileHandler.formatter" "utils.Log4JLikeFormatter")
+    (.setProperty "java.util.logging.FileHandler.encoding" "utf-8")
     (.setProperty ".level" "INFO")))
 
 (defn load-log-props []
