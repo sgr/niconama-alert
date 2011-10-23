@@ -63,11 +63,16 @@
     (reduce #(disj %1 %2) aset (filter #(= id (:id %)) aset)))
   (defn- conj-pgm-idx [aset pgm]
     (conj (disj-pgm-idx aset (:id pgm)) pgm))
+  (defn- log-pgm [^String mode ^Pgm pgm]
+    (format "%s: %s %s \"%s\" \"%s\" pubdate: %s updated_at: %s elapsed: %d"
+	    mode (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) "NONE")
+	    (:title pgm) (if-let [cname (:comm_name pgm)] cname "NONE")
+	    (tu/format-time-long (:pubdate pgm))
+	    (tu/format-time-long (:updated_at pgm))
+	    (- (.getTime (:updated_at pgm)) (.getTime (:pubdate pgm)))))
   (defn- rem-aux [^clojure.lang.Keyword id]
     (when-let [pgm (get @id-pgms id)]
-      (trace (format "rem: %s %s \"%s\" \"%s\""
-		     (name id) (if-let [cid (:comm_id pgm)] (name cid) "NONE")
-		     (:title pgm) (:comm_name pgm)))
+      (trace (log-pgm "rem" pgm))
       (alter idx-elapsed disj-pgm-idx id)
       (alter idx-updated-at disj-pgm-idx id)
       (alter idx-pubdate disj-pgm-idx id)
@@ -76,8 +81,8 @@
   (defn- diff-pgms [^Pgm from ^Pgm to]
     (letfn [(eq? [k ^Pgm x ^Pgm y]
 		 (let [f (get x k) t (get y k)]
-		   (if (and f t) (= 0 (.compareTo f t))
-		       (if (and (nil? f) (nil? t)) true false))))
+		   (if-not (or (nil? f) (nil? t)) (= 0 (.compareTo f t))
+			   (if (and (nil? f) (nil? t)) true false))))
 	    (to-str [o] (condp = (class o)
 			  java.util.Date (tu/format-time-long o)
 			  o))
@@ -89,12 +94,10 @@
 				 '(:title :pubdate :desc :comm_name :alerted :updated_at))))))
   (defn- add-aux [^Pgm pgm]
     (if-let [orig (get @id-pgms (:id pgm))]
-      (trace (format "update: %s %s \"%s\" %s"
+      (trace (format "update: %s %s \"%s\" {%s}"
 		     (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) "NONE")
 		     (:title pgm) (diff-pgms orig pgm)))
-      (trace (format "add: %s %s \"%s\" \"%s\""
-		     (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) "NONE")
-		     (:title pgm) (:comm_name pgm))))
+      (trace (log-pgm "add" pgm)))
     (alter id-pgms assoc (:id pgm) pgm)
     (when-let [cid (:comm_id pgm)] (alter idx-comm assoc cid pgm))
     (alter idx-pubdate conj-pgm-idx pgm)
@@ -155,8 +158,9 @@
 			with-elapsed (union with-pubdate
 					    (set
 					     (map #(:id %)
-						  (take c2 (filter #(not (contains? with-pubdate %))
-								   @idx-elapsed)))))]
+						  (take c2 (filter
+							    #(not (contains? with-pubdate (:id %)))
+							    @idx-elapsed)))))]
 		    (debug (format "rem-pgms-without elapsed (t: %d, c: %d, c2: %d, with-elapsed: %d)"
 				   @total, c c2 (count with-elapsed)))
 		    (rem-pgms-without-aux with-elapsed))))))))))
