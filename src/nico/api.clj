@@ -6,6 +6,7 @@
   (:use [clojure.contrib.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.scrape :as ns]
+	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu]
 	    [clojure.xml :as xml]
@@ -26,8 +27,8 @@
 		 :headers {"user-agent" *user-agent*}
 		 :method (if body "POST" "GET")
 		 :body body
-		 :connect-timeout 10000
-		 :read-timeout 10000)
+		 :connect-timeout n/*connect-timeout*
+		 :read-timeout n/*read-timeout*)
 	   raw-res (s/cleanup (ha/string agnt))]
        (if-let [err (agent-error agnt)]
 	 (error (format "failed http-req (%s): %s" url err))
@@ -141,20 +142,35 @@
 	(do (.write wtr q) (.flush wtr)
 	    (connected-fn)
 	    (loop [c (.read rdr) s nil]
-	      (cond
-	       (= -1 c) (info "******* Connection closed *******")
-	       (= 0 c) (do
-			 (if-let [[date pid cid uid] (parse-chat-str s)]
-			   (.submit pool
-				    (fn []
-				      (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
-					(pgm-fn pgm)
-					(warn
-					 (format "couldn't create-pgm! (%s/%s/%s)" pid cid uid))))
-				    :finished)
-			   (warn (format "couldn't parse the chat str: %s" s)))
-			 (recur (.read rdr) nil))
-	       :else (recur (.read rdr) (str s (char c))))))))))
+	      (condp = c
+		  -1 (info "******* Connection closed *******")
+		  0 (let [received (tu/now)]
+		      (if-let [[date pid cid uid] (parse-chat-str s)]
+			(.submit pool
+				 (fn []
+				   ;; 繁忙期は番組ページ閲覧すら重い。
+				   ;; 番組ID受信後この関数が呼ばれるまで30分経過していたら諦める。
+				   (let [now (tu/now)]
+				     (if (tu/within? received now 1800)
+				       (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
+					 (do
+					   (pgm-fn pgm)
+					   (trace
+					    (format "fecthed pgm: %s %s pubdate: %s, received: %s, fetched_at: %s"
+						    (:id pgm) (:title pgm) (:pubdate pgm)
+						    (tu/format-time-long received)
+						    (:fetched_at pgm))))
+					 (warn
+					  (format "couldn't create-pgm: %s/%s/%s" pid cid uid)))
+				       (warn
+					(format "too late to fetch: %s/%s/%s received: %s, called: %s"
+						pid cid uid
+						(tu/format-time-long received)
+						(tu/format-time-long now))))))
+				 :finished)
+			(warn (format "couldn't parse the chat str: %s" s)))
+		      (recur (.read rdr) nil))
+		  (recur (.read rdr) (str s (char c))))))))))
 
 (defn- gen-listener [alert-status pgm-fn]
   (fn []

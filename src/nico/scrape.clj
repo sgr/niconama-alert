@@ -4,18 +4,19 @@
     nico.scrape
   (:use [clojure.contrib.logging])
   (:require [net.cgrand.enlive-html :as html]
+	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu]
 	    [clojure.contrib.string :as cs])
   (:import (java.util Calendar Date GregorianCalendar Locale TimeZone)))
 
-(def *retry-limit* 10)
+(def *retry-limit* 5)
 (def *base-url* "http://live.nicovideo.jp/watch/")
 
 (defn- fetch-pgm-info1
   [pid]
-  (let [link (str *base-url* pid)
-	h (html/html-resource (java.net.URL. link))
+  (let [url (str *base-url* pid)
+	h (html/html-resource (n/url-stream url))
 	base (-> (html/select h [:base]) first :attrs :href)
 	infobox (first (html/select h [:div.infobox]))
 	title (s/cleanup (first (html/select infobox [:h2 :> html/text-node])))
@@ -63,12 +64,12 @@
 	thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src)]
 		    (if (= type :community) bn (str base bn)))
 	now (tu/now)]
-    (when-not pubdate (error (format " NULL PUBDATE: %s (%s)" title link)))
+    (when-not pubdate (error (format " NULL PUBDATE: %s (%s)" title url)))
     {:title title
      :pubdate pubdate
      :desc desc
      :category category
-     :link link
+     :link url
      :thumbnail thumbnail
      :owner_name owner_name
      :member_only member_only
@@ -93,5 +94,5 @@
       (if-let [pgm (fetch-pgm-info2 pid)]
 	pgm
 	(do
-	  (Thread/sleep 5000)
+	  (Thread/sleep 3000)
 	  (recur (dec retry)))))))

@@ -11,19 +11,16 @@
 	    [clojure.contrib.zip-filter.xml :as zfx]
 	    [clojure.contrib.duck-streams :as ds]
 	    [nico.pgm :as pgm]
+	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu])
   (:import (java.text SimpleDateFormat)
 	   (java.util Locale)))
 
-;; タイムアウト値を設定。これ、SunのJREでないときはどうしたらよいだろうか？
-(System/setProperty "sun.net.client.defaultConnectTimeout" "10000")
-(System/setProperty "sun.net.client.defaultReadTimeout" "10000")
-
 (defn get-nico-rss
   [page]
   (try
-    (let [s (ds/slurp* (format "http://live.nicovideo.jp/recent/rss?p=%s" page))
+    (let [s (ds/slurp* (n/url-stream (format "http://live.nicovideo.jp/recent/rss?p=%s" page)))
 	  cs (s/cleanup s)]
       (try
 	(xml/parse (s/utf8stream cs))

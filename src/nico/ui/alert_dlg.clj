@@ -6,6 +6,7 @@
 	[clojure.contrib.logging])
   (:require [nico.prefs :as p]
 	    [nico.ui.util :as uu]
+	    [net-utils :as n]
 	    [str-utils :as su]
 	    [time-utils :as tu])
   (:import (java.awt Color Dimension FlowLayout Font GraphicsEnvironment RenderingHints
@@ -81,7 +82,7 @@
 
 (defn- fetch-image [url]
   (try
-    (ImageIO/read url)
+    (ImageIO/read (n/url-stream url))
     (catch Exception _ nil)))
 
 (defn- get-thumbnail-aux [url]
@@ -99,7 +100,7 @@
   (ImageIcon. (adjust-img (get-thumbnail-aux url) 64 64)))
 
 (defn alert-dlg [^nico.pgm.Pgm pgm extra-close-fn]
-  (let [dlg (JDialog.), thumbicn (get-thumbnail (URL. (:thumbnail pgm)))]
+  (let [dlg (JDialog.), thumbicn (get-thumbnail (:thumbnail pgm))]
     (let [tpanel (JPanel.), dpanel (JPanel.)
 	  owner (su/ifstr (:owner_name pgm) "")
 	  comm_name (su/ifstr (:comm_name pgm) (:comm_id pgm))
