@@ -168,15 +168,14 @@
 					      (tu/format-time-long received)
 					      (tu/format-time-long now))))))]
 			(if-let [[date pid cid uid] (parse-chat-str s)]
-			  (dosync
-			   (alter fetching conj
-				  ;; 所属コミュニティの放送は優先的に取得
-				  (if (some #(contains? (set (:comms %)) (keyword cid))
+			  (let [t (if (some #(contains? (set (:comms %)) (keyword cid))
 					    @ref-alert-status)
+				    ;; 所属コミュニティの放送は優先的に取得
 				    (do (trace (format "lv%s: %s is joined community." pid cid))
 					(future #(f pid cid uid)))
 				    (do (trace (format "lv%s: %s isn't your community." pid cid))
-					(.submit pool #(f pid cid uid) :finished)))))
+					(.submit pool #(f pid cid uid) :finished)))]
+			    (dosync (alter fetching conj t)))
 			  (warn (format "couldn't parse the chat str: %s" s)))
 			(recur (.read rdr) nil)))
 		  (recur (.read rdr) (str s (char c)))))))))
