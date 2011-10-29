@@ -129,7 +129,8 @@
 	nil))
     (catch Exception e (error (format "parse error: %s" chat-str e)) nil)))
 
-(let [pool (Executors/newFixedThreadPool *nthreads*)]
+(let [pool (Executors/newFixedThreadPool *nthreads*)
+      fetching (ref '())]
   (defn listen [ref-alert-status connected-fn pgm-fn]
     (with-open [clnt (let [as (first @ref-alert-status)]
 		       (doto (java.net.Socket. (:addr as) (:port as))
@@ -167,15 +168,21 @@
 					      (tu/format-time-long received)
 					      (tu/format-time-long now))))))]
 			(if-let [[date pid cid uid] (parse-chat-str s)]
-			  ;; 所属コミュニティの放送は優先的に取得
-			  (if (some #(contains? (set (:comms %)) (keyword cid)) @ref-alert-status)
-			    (do (trace (format "lv%s: %s is joined community." pid cid))
-				(future #(f pid cid uid)))
-			    (do (trace (format "lv%s: %s isn't your community." pid cid))
-				(.submit pool #(f pid cid uid) :finished)))
+			  (dosync
+			   (alter fetching conj
+				  ;; 所属コミュニティの放送は優先的に取得
+				  (if (some #(contains? (set (:comms %)) (keyword cid))
+					    @ref-alert-status)
+				    (do (trace (format "lv%s: %s is joined community." pid cid))
+					(future #(f pid cid uid)))
+				    (do (trace (format "lv%s: %s isn't your community." pid cid))
+					(.submit pool #(f pid cid uid) :finished)))))
 			  (warn (format "couldn't parse the chat str: %s" s)))
 			(recur (.read rdr) nil)))
-		  (recur (.read rdr) (str s (char c))))))))))
+		  (recur (.read rdr) (str s (char c)))))))))
+  (defn count-fetching []
+    (dosync (alter fetching (fn [l] (filter #(not (or (.isDone %) (.isCancelled %))) l))))
+    (count @fetching)))
 
 (defn- gen-listener [alert-status pgm-fn]
   (fn []
