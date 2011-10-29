@@ -7,7 +7,7 @@
   (:require [hook-utils :as hu]
 	    [time-utils :as tu]))
 
-(def *scale* 1.05) ;; 最大保持数
+(def *scale* 1.15) ;; 最大保持数
 (def *interval-clean* 60) ;; 古い番組情報を削除する間隔
 
 (defrecord Pgm

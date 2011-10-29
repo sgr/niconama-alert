@@ -18,6 +18,7 @@
 	   (java.util.concurrent Executors)))
 
 (def *user-agent* "Niconama-alert J/1.0.0")
+(def *nthreads* 3)
 
 (defn- http-req
   ([url func] (http-req url nil func))	; GET
@@ -128,8 +129,7 @@
 	nil))
     (catch Exception e (error (format "parse error: %s" chat-str e)) nil)))
 
-(let [nthreads 3
-      pool (Executors/newFixedThreadPool nthreads)]
+(let [pool (Executors/newFixedThreadPool *nthreads*)]
   (defn listen [ref-alert-status connected-fn pgm-fn]
     (with-open [clnt (let [as (first @ref-alert-status)]
 		       (doto (java.net.Socket. (:addr as) (:port as))
