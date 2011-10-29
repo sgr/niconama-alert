@@ -44,7 +44,7 @@
 	:comm (fn []
 		(if-let [as (api/get-alert-status (:email pref) (:passwd pref))]
 		  (do
-		    (nau/set-alert-status as)
+		    (nau/add-alert-status as)
 		    (let [user-name (:user_name as) comms (apply hash-set (:comms as))]
 		      [user-name
 		       (fn [pgms]

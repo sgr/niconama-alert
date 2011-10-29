@@ -11,21 +11,20 @@
 ;; Official Alert API updator
 (def *retry* 10)
 (let [latch (ref (java.util.concurrent.CountDownLatch. 1))
-      alert-status (ref nil)
+      alert-status (ref '())
       awaiting-status (ref :need_login)
       fetched (atom [])]
   (hu/defhook :awaiting :connected :reconnecting :rate-updated)
   (defn get-awaiting-status [] @awaiting-status)
-  (defn set-alert-status [as]
-    (when-not @alert-status
-      (dosync
-       (ref-set alert-status as)
-       (ref-set awaiting-status :ready)))
+  (defn add-alert-status [as]
+    (dosync
+     (alter alert-status conj as)
+     (ref-set awaiting-status :ready))
     (run-hooks :awaiting))
   (defn start-update-api [] (.countDown @latch))
-  (defn- api-update [alert-status]
+  (defn- api-update [ref-alert-status]
     (try
-      (api/listen alert-status
+      (api/listen ref-alert-status
 		  (fn [] (run-hooks :connected))
 		  (fn [pgm]
 		    (when (some nil?
@@ -47,7 +46,7 @@
 		  (ref-set latch (java.util.concurrent.CountDownLatch. 1)))
 		 (recur *retry*))
        @alert-status (do
-		       (api-update @alert-status)
+		       (api-update alert-status)
 		       (info "Will reconnect after 3 sec...")
 		       (Thread/sleep 3000)
 		       (run-hooks :reconnecting)
