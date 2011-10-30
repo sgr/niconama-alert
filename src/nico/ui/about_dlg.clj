@@ -5,7 +5,7 @@
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.ui.util :as uu]
 	    [nico.ui.env-panel :as ue])
-  (:import (java.awt BorderLayout Dimension Font GridBagLayout GridBagConstraints Insets)
+  (:import (java.awt BorderLayout Dimension Font)
 	   (javax.swing BorderFactory BoxLayout SpringLayout
 			JButton JDialog JLabel JPanel JTabbedPane)))
 
@@ -69,7 +69,7 @@
 	  (.setLayout layout) (.add btn-ok))))
     (doto tpane
       (.add "About" (about-panel))
-      (.add "Environment" (ue/env-panel)))
+      (.add "Your Environment" (ue/env-panel)))
     (doto cpane
       (.add tpane BorderLayout/CENTER)
       (.add btn-panel BorderLayout/SOUTH))

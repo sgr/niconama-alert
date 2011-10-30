@@ -2,14 +2,10 @@
 (ns #^{:author "sgr"
        :doc "environment info panel."}
   nico.ui.env-panel
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]]
-	[clojure.contrib.seq-utils :only [indexed]])
-  (:require [nico.ui.util :as uu])
-  (:import (java.awt BorderLayout Color Dimension Font GridBagLayout GridBagConstraints Insets)
-	   (javax.swing BorderFactory BoxLayout SpringLayout
-			JButton JDialog JLabel JPanel JScrollPane JTable)
-	   (javax.swing.table AbstractTableModel DefaultTableModel
-			      DefaultTableCellRenderer
+  (:use [clojure.contrib.seq-utils :only [indexed]])
+  (:import (java.awt BorderLayout Color Dimension)
+	   (javax.swing JPanel JScrollPane JTable)
+	   (javax.swing.table AbstractTableModel DefaultTableCellRenderer
 			      DefaultTableColumnModel TableColumn)))
 
 (def *dlg-size* (Dimension. 450 250))
