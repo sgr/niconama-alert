@@ -3,20 +3,19 @@
        :doc "'about this application' dialog."}
   nico.ui.about-dlg
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
-  (:require [nico.ui.util :as uu])
+  (:require [nico.ui.util :as uu]
+	    [nico.ui.env-panel :as ue])
   (:import (java.awt BorderLayout Dimension Font GridBagLayout GridBagConstraints Insets)
-	   (javax.swing BorderFactory BoxLayout SpringLayout JButton JDialog JLabel JPanel)))
+	   (javax.swing BorderFactory BoxLayout SpringLayout
+			JButton JDialog JLabel JPanel JTabbedPane)))
 
-(def *dlg-size* (Dimension. 450 250))
+(def *dlg-size* (Dimension. 500 300))
 (def *cr-panel-size* (Dimension. 450 80))
 (def *btn-panel-size* (Dimension. 450 40))
 (def *app-name-font* (Font. "Default" Font/PLAIN 20))
 
-(defn about-dialog
-  [parent title]
-  (let [dlg (JDialog. parent title true), cpane (.getContentPane dlg)
-	cr-panel (JPanel.), lib-panel (JPanel.), btn-panel (JPanel.), btn-ok (uu/btn "OK")
-	p (.getLocationOnScreen parent)]
+(defn- about-panel []
+  (let [cr-panel (JPanel.) lib-panel (JPanel.)]
     (let [lapp (JLabel. "NicoNama Alert (J)")
 	  lauthor (JLabel. "Copyright (C) Shigeru Fujiwara All Rights Reserved.")
 	  layout (SpringLayout.)]
@@ -34,7 +33,8 @@
 	(.add lapp) (.add lauthor)))
     (let [inner-panel (JPanel.)
 	  lclj (uu/mlabel "Clojure 1.2.1 Copyright (c) Rich Hickey. All rights reserved.")
-	  lcljc (uu/mlabel "Clojure-contrib 1.2.0 copyrighted by Rich Hickey and the various contributors.")
+	  lcljc (uu/mlabel
+		 "Clojure-contrib 1.2.0 copyrighted by Rich Hickey and the various contributors.")
 	  lsx (uu/mlabel "SwingX 1.6.2 SwingLabs project")
 	  layout (BoxLayout. inner-panel BoxLayout/Y_AXIS)]
       (doto lclj (.setFont uu/*font*))
@@ -45,20 +45,33 @@
 	(.setLayout layout) (.add lclj) (.add lcljc) (.add lsx))
       (doto lib-panel
 	(uu/do-add-expand inner-panel 5)))
-    (doto btn-ok
-      (add-action-listener (fn [e] (do-swing (.setVisible dlg false) (.dispose dlg)))))
-    (let [layout (SpringLayout.)]
-      (doto layout
-	(.putConstraint SpringLayout/NORTH btn-ok 5 SpringLayout/NORTH btn-panel)
-	(.putConstraint SpringLayout/SOUTH btn-ok -10 SpringLayout/SOUTH btn-panel)
-	(.putConstraint SpringLayout/EAST btn-ok -10 SpringLayout/EAST btn-panel))
-      (doto btn-panel
-	(.setPreferredSize *btn-panel-size*)
-	(.setLayout layout) (.add btn-ok)))
-    (.setDefaultButton (.getRootPane dlg) btn-ok)
-    (doto cpane
+    (doto (JPanel.)
+      (.setLayout (BorderLayout.))
       (.add cr-panel BorderLayout/NORTH)
-      (.add lib-panel BorderLayout/CENTER)
+      (.add lib-panel BorderLayout/CENTER))))
+
+(defn about-dialog
+  [parent title]
+  (let [dlg (JDialog. parent title true), cpane (.getContentPane dlg)
+	tpane (JTabbedPane.) btn-panel (JPanel.)
+	p (.getLocationOnScreen parent)]
+    (let [btn-ok (uu/btn "OK")]
+      (doto btn-ok
+	(add-action-listener (fn [e] (do-swing (.setVisible dlg false) (.dispose dlg)))))
+      (.setDefaultButton (.getRootPane dlg) btn-ok)
+      (let [layout (SpringLayout.)]
+	(doto layout
+	  (.putConstraint SpringLayout/NORTH btn-ok 5 SpringLayout/NORTH btn-panel)
+	  (.putConstraint SpringLayout/SOUTH btn-ok -10 SpringLayout/SOUTH btn-panel)
+	  (.putConstraint SpringLayout/EAST btn-ok -10 SpringLayout/EAST btn-panel))
+	(doto btn-panel
+	  (.setPreferredSize *btn-panel-size*)
+	  (.setLayout layout) (.add btn-ok))))
+    (doto tpane
+      (.add "About" (about-panel))
+      (.add "Environment" (ue/env-panel)))
+    (doto cpane
+      (.add tpane BorderLayout/CENTER)
       (.add btn-panel BorderLayout/SOUTH))
     (doto dlg
       (.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth *dlg-size*)) 2)))
