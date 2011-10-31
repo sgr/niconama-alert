@@ -3,36 +3,22 @@
        :doc "environment info panel."}
   nico.ui.env-panel
   (:use [clojure.contrib.seq-utils :only [indexed]])
-  (:import (java.awt BorderLayout Color Dimension)
+;;  (:require [nico.ui.util :as uu])
+  (:import (java.awt BorderLayout Dimension)
 	   (javax.swing JPanel JScrollPane JTable)
-	   (javax.swing.table AbstractTableModel DefaultTableCellRenderer
+	   (javax.swing.table AbstractTableModel
 			      DefaultTableColumnModel TableColumn)))
 
 (def *dlg-size* (Dimension. 450 250))
 (def *cr-panel-size* (Dimension. 450 80))
 (def *btn-panel-size* (Dimension. 450 40))
-(def *odd-row-color* (Color. 224 233 246))
-
-(defn- tbl-renderer []
-  (proxy [DefaultTableCellRenderer][]
-    (getTableCellRendererComponent
-     [tbl val selected focus row col]
-     (proxy-super getTableCellRendererComponent tbl val selected focus row col)
-     (if selected
-       (doto this
-	 (.setForeground (.getSelectionForeground tbl))
-	 (.setBackground (.getSelectionBackground tbl)))
-       (doto this
-	 (.setForeground (.getForeground tbl))
-	 (.setBackground (if (odd? row) *odd-row-color* (.getBackground tbl)))))
-     this)))
 
 (def *coldef*
      (list
       {:colName "key", :width 100, :class String
-       :renderer (tbl-renderer)}
+       :renderer (nico.ui.StripeRenderer.)}
       {:colName "value", :width 300, :class String
-       :renderer (tbl-renderer)}))
+       :renderer (nico.ui.StripeRenderer.)}))
 
 (gen-class
  :name nico.ui.EnvTableModel

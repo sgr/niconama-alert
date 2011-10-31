@@ -1,41 +1,46 @@
 ;; -*- coding: utf-8-unix -*-
 (ns #^{:author "sgr"
-       :doc "番組情報表示テーブル。SwingXのJXTableを使用している。"}
+       :doc "番組情報表示テーブル。"}
   nico.ui.pgm-table
   (:use [clojure.contrib.swing-utils :only [add-action-listener]]
 	[clojure.contrib.seq-utils :only [indexed]])
   (:require [clojure.string :as s]
 	    [nico.prefs :as p]
 	    [str-utils :as su]
-	    [time-utils :as tu]
-	    [nico.pgm :as pgm])
-  (:import (java.awt Color Cursor Font)
-	   (java.awt.event MouseListener MouseMotionListener)
-	   (javax.swing BorderFactory JMenuItem JPopupMenu JTable ListSelectionModel
-	                SwingConstants SwingUtilities)
-	   (javax.swing.border EtchedBorder)
-	   (javax.swing.table AbstractTableModel DefaultTableModel
-			      DefaultTableColumnModel TableColumn)
-	   (org.jdesktop.swingx JXTable)
-	   (org.jdesktop.swingx.decorator ColorHighlighter FontHighlighter
-					  HighlighterFactory HighlightPredicate)
-	   (org.jdesktop.swingx.renderer DefaultTableRenderer StringValue StringValues)))
+	    [time-utils :as tu])
+  (:import (java.awt Color Font)
+	   (java.awt.event MouseListener)
+	   (javax.swing JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities)
+	   (javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn)))
 
 (def *desc-col* 64)
+(def *font-bold* (Font. Font/DIALOG Font/BOLD 12))
+
+(gen-class
+ :name nico.ui.PgmRenderer
+ :extends nico.ui.StripeRenderer
+ :exposes-methods {getTableCellRendererComponent gtcrc}
+ :prefix "pr-"
+ :constructors {[] []}
+ :state state
+ :init init)
+
+(defn- pr-init [] [[] nil])
+(defn- pr-getTableCellRendererComponent [this tbl val selected focus row col]
+  (.gtcrc this tbl val selected focus row col)
+  (let [mr (.convertRowIndexToModel tbl row) pgm (.getPgm (.getModel tbl) mr)]
+    (when (= nico.pgm.Pgm (class pgm))
+      (do
+	(when (tu/within? (:fetched_at pgm) (tu/now) 60) (.setFont this *font-bold*))
+	(when (:member_only pgm) (.setForeground this Color/BLUE)))))
+  this)
 
 (def *pgm-columns*
      (list
-      {:key :title, :colName "タイトル", :width 300,
-       :renderer (DefaultTableRenderer. StringValues/TO_STRING)}
-      {:key :comm_name, :colName "コミュ名", :width 300,
-       :renderer (DefaultTableRenderer. StringValues/TO_STRING)}
-      {:key :pubdate, :colName "開始", :width 50,
-       :renderer (DefaultTableRenderer.
-		   (proxy [StringValue][]
-		     (getString [val] (tu/format-time-short val)))
-		   SwingConstants/CENTER)}
-      {:key :owner_name, :colName "放送主", :width 60,
-       :renderer (DefaultTableRenderer. StringValues/TO_STRING)}))
+      {:key :title, :colName "タイトル", :width 300, :renderer (nico.ui.PgmRenderer.)}
+      {:key :comm_name, :colName "コミュ名", :width 300, :renderer (nico.ui.PgmRenderer.)}
+      {:key :pubdate, :colName "開始", :width 50, :renderer (nico.ui.PgmRenderer.)}
+      {:key :owner_name, :colName "放送主", :width 60, :renderer (nico.ui.PgmRenderer.)}))
 
 (defn- pgm-colnum
   "*pgm-columns*の中から、指定されたキーのカラム番号を得る"
@@ -74,12 +79,13 @@
 ;; ツールチップを表示できる。
 (gen-class
  :name nico.ui.ProgramsTable
- :extends org.jdesktop.swingx.JXTable
+ :extends javax.swing.JTable
  :prefix "pt-"
  :constructors {[nico.ui.ProgramsTableModel javax.swing.table.TableColumnModel]
 		[javax.swing.table.TableModel javax.swing.table.TableColumnModel]}
  :state state
- :init init)
+ :init init
+ :methods [[setSortable [boolean] void]])
 
 (defn pgm-table
   "番組情報テーブルを生成する"
@@ -87,22 +93,6 @@
   (let [tbl (nico.ui.ProgramsTable. (nico.ui.ProgramsTableModel. {}) (pgm-column-model))]
     (doto tbl
       (.setSelectionMode ListSelectionModel/SINGLE_SELECTION)
-      (.addHighlighter	;; 新着はボールドで表示する
-       (FontHighlighter.
-	(proxy [HighlightPredicate] []
-	  (isHighlighted
-	   [renderer adapter]
-	   (let [r (.row adapter)]
-	     (if (<= 0 r) (.isNew (.getModel tbl) (.convertRowIndexToModel tbl r)) false))))
-	(Font. Font/DIALOG Font/BOLD 12)))
-      (.addHighlighter	;; コミュ限は青字で表示する
-       (ColorHighlighter.
-	(proxy [HighlightPredicate] []
-	  (isHighlighted
-	   [renderer adapter]
-	   (let [r (.row adapter)]
-	     (if (<= 0 r) (.isMemberOnly (.getModel tbl) (.convertRowIndexToModel tbl r)) false))))
-	nil Color/BLUE))
       (.addMouseListener
        (proxy [MouseListener] []
 	 (mouseClicked
@@ -133,9 +123,7 @@
 	 (mouseEntered [e])
 	 (mouseExited [e])
 	 (mousePressed [e])
-	 (mouseReleased [e])))
-      (.addHighlighter	;; 偶数行奇数行で色を変える
-       (HighlighterFactory/createSimpleStriping)))))
+	 (mouseReleased [e]))))))
 
 (defn- ptm-init [pgms]
   [[] (atom (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))])
@@ -199,3 +187,4 @@
 		 (format "カテゴリ: %s<br>" (su/ifstr (:category pgm) ""))
 		 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))))
 
+(defn- pt-setSortable [this sortability] (.setAutoCreateRowSorter this sortability))

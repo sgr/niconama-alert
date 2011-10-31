@@ -2,12 +2,15 @@
 (ns #^{:author "sgr"
        :doc "UI Utilities."}
   nico.ui.util
-  (:import (java.awt Dimension Font)
-	   (javax.swing JButton JTextArea SpringLayout)))
+  (:require [time-utils :as tu])
+  (:import (java.awt Color Dimension Font)
+	   (javax.swing JButton JLabel JTextArea SpringLayout)
+	   (javax.swing.table DefaultTableCellRenderer)))
 
 (def *font* (Font. "Default" Font/PLAIN 12))
 (def *btn-height* 25)
 (def *btn-size* (Dimension. 100 *btn-height*))
+(def *odd-row-color* (Color. 224 233 246))
 
 (defn btn [text]
   (let [b (JButton.)]
@@ -41,3 +44,59 @@
      (let [ml (mlabel text)]
        (doto ml
 	 (.setPreferredSize size)))))
+
+(gen-class
+ :name nico.ui.StripeRenderer
+ :extends javax.swing.table.DefaultTableCellRenderer
+ :exposes-methods {getTableCellRendererComponent superGtcrc}
+ :prefix "sr-"
+ :constructors {[] []}
+ :state state
+ :init init)
+
+(defn- sr-init [] [[] nil])
+(defn- sr-getTableCellRendererComponent
+  [this tbl val selected focus row col]
+  (.superGtcrc this tbl val selected focus row col)
+  (if selected
+    (doto this
+      (.setForeground (.getSelectionForeground tbl))
+      (.setBackground (.getSelectionBackground tbl)))
+    (doto this
+      (.setForeground (.getForeground tbl))
+      (.setBackground (if (odd? row) *odd-row-color* (.getBackground tbl)))))
+  (when (= java.util.Date (class val)) (.setHorizontalAlignment this JLabel/CENTER))
+  this)
+(defn- sr-setValue [this val]
+  (.setText this
+	    (if val
+	      (condp = (class val)
+		  java.util.Date (do (.setHorizontalTextPosition this DefaultTableCellRenderer/CENTER)
+				     (tu/format-time-short val))
+		  (.toString val))
+	      "")))
+
+(defn stripe-renderer
+  "奇数行の背景を色付けするテーブルレンダラー"
+  []
+  (proxy [DefaultTableCellRenderer][]
+    (getTableCellRendererComponent
+     [tbl val selected focus row col]
+     (proxy-super getTableCellRendererComponent tbl val selected focus row col)
+     (if selected
+       (doto this
+	 (.setForeground (.getSelectionForeground tbl))
+	 (.setBackground (.getSelectionBackground tbl)))
+       (doto this
+	 (.setForeground (.getForeground tbl))
+	 (.setBackground (if (odd? row) *odd-row-color* (.getBackground tbl)))))
+     this)
+    (setValue
+     [val]
+     (.setText this (if val
+		      (condp = (class val)
+			  java.util.Date (do (.setHorizontalTextPosition this
+									 DefaultTableCellRenderer/CENTER)
+					     (tu/format-time-short val))
+			  (.toString val))
+		      "")))))

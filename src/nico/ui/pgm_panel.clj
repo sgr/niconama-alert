@@ -11,7 +11,7 @@
 	    [nico.alert :as al]
 	    [nico.pgm :as pgm]
 	    [nico.api-updator :as nau])
-  (:import (java.awt Dimension)
+  (:import (java.awt Color Dimension)
 	   (javax.swing BorderFactory JCheckBoxMenuItem JLabel JMenuItem
 			JPanel JScrollPane SpringLayout)
 	   (javax.swing.border EtchedBorder)))
@@ -98,10 +98,9 @@
 			 (do-swing (.setEnabled (:tbl @(.state this)) true))))))))
 
 (defn- pp-post-init [this pref]
-  (let [tbl (upt/pgm-table)
-	spane (JScrollPane. tbl)
+  (let [tbl (doto (upt/pgm-table) (.setSortable (get-sortability pref)) (.setEnabled false))
+	spane (doto (JScrollPane. tbl) (-> .getViewport (.setBackground Color/WHITE)))
 	layout (SpringLayout.)]
-    (doto tbl (.setSortable (get-sortability pref)) (.setEnabled false))
     (swap! (.state this) assoc :tbl tbl)
     ;; init-fnを実行し、終了したところでtblを有効化する。
     (invoke-init-fn this)
