@@ -132,53 +132,53 @@
 (let [pool (Executors/newFixedThreadPool *nthreads*)
       fetching (ref '())]
   (defn listen [ref-alert-status connected-fn pgm-fn]
-    (with-open [clnt (let [as (first @ref-alert-status)]
-		       (doto (java.net.Socket. (:addr as) (:port as))
-			 (.setSoTimeout 60000)))
+    (with-open [sock (let [as (first @ref-alert-status)]
+		       (doto (java.net.Socket. (:addr as) (:port as)) (.setSoTimeout 60000)))
 		rdr (java.io.BufferedReader.
-		     (java.io.InputStreamReader. (.getInputStream clnt) "UTF8"))
-		wtr (java.io.OutputStreamWriter. (.getOutputStream clnt))]
+		     (java.io.InputStreamReader. (.getInputStream sock) "UTF8"))
+		wtr (java.io.OutputStreamWriter. (.getOutputStream sock))]
       ;; res_fromを-1200にすると、全ての番組を取得するらしい。
       (let [as (first @ref-alert-status)
 	    q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0" (:thrd as))]
-	(do (.write wtr q) (.flush wtr)
-	    (connected-fn)
-	    (loop [c (.read rdr) s nil]
-	      (condp = c
-		  -1 (info "******* Connection closed *******")
-		  0 (let [received (tu/now)]
-		      (letfn [(f [pid cid uid]
-				 ;; 繁忙期は番組ページ閲覧すら重い。
-				 ;; 番組ID受信後この関数が呼ばれるまで30分経過していたら諦める。
-				 (let [now (tu/now)]
-				   (if (tu/within? received now 1800)
-				     (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
-				       (do
-					 (trace
-					  (format "fetched pgm: %s %s pubdate: %s, received: %s, fetched_at: %s"
-						  (:id pgm) (:title pgm) (:pubdate pgm)
-						  (tu/format-time-long received)
-						  (:fetched_at pgm)))
-					 (pgm-fn pgm))
-				       (warn
-					(format "couldn't create-pgm: %s/%s/%s" pid cid uid)))
-				     (warn
-				      (format "too late to fetch: %s/%s/%s received: %s, called: %s"
-					      pid cid uid
+	(.write wtr q) (.flush wtr)
+	(connected-fn)
+	(loop [c (.read rdr) s nil]
+	  (condp = c
+	      -1 (info "******* Connection closed *******")
+	      0 (let [received (tu/now)]
+		  (letfn [(f [pid cid uid]
+			     ;; 繁忙期は番組ページ閲覧すら重い。
+			     ;; 番組ID受信後この関数が呼ばれるまで30分経過していたら諦める。
+			     (let [now (tu/now)]
+			       (if (tu/within? received now 1800)
+				 (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
+				   (do
+				     (trace
+				      (format
+				       "fetched pgm: %s %s pubdate: %s, received: %s, fetched_at: %s"
+					      (:id pgm) (:title pgm) (:pubdate pgm)
 					      (tu/format-time-long received)
-					      (tu/format-time-long now))))))]
-			(if-let [[date pid cid uid] (parse-chat-str s)]
-			  (let [t (if (some #(contains? (set (:comms %)) (keyword cid))
-					    @ref-alert-status)
-				    ;; 所属コミュニティの放送は優先的に取得
-				    (do (trace (format "lv%s: %s is joined community." pid cid))
-					(future #(f pid cid uid)))
-				    (do (trace (format "lv%s: %s isn't your community." pid cid))
-					(.submit pool #(f pid cid uid) :finished)))]
-			    (dosync (alter fetching conj t)))
-			  (warn (format "couldn't parse the chat str: %s" s)))
-			(recur (.read rdr) nil)))
-		  (recur (.read rdr) (str s (char c)))))))))
+					      (:fetched_at pgm)))
+				     (pgm-fn pgm))
+				   (warn
+				    (format "couldn't create-pgm: %s/%s/%s" pid cid uid)))
+				 (warn
+				  (format "too late to fetch: %s/%s/%s received: %s, called: %s"
+					  pid cid uid
+					  (tu/format-time-long received)
+					  (tu/format-time-long now))))))]
+		    (if-let [[date pid cid uid] (parse-chat-str s)]
+		      (let [t (if (some #(contains? (set (:comms %)) (keyword cid))
+					@ref-alert-status)
+				;; 所属コミュニティの放送は優先的に取得
+				(do (trace (format "lv%s: %s is joined community." pid cid))
+				    (future #(f pid cid uid)))
+				(do (trace (format "lv%s: %s isn't your community." pid cid))
+				    (.submit pool #(f pid cid uid) :finished)))]
+			(dosync (alter fetching conj t)))
+		      (warn (format "couldn't parse the chat str: %s" s)))
+		    (recur (.read rdr) nil)))
+	      (recur (.read rdr) (str s (char c))))))))
   (defn count-fetching []
     (dosync (alter fetching (fn [l] (filter #(not (or (.isDone %) (.isCancelled %))) l))))
     (count @fetching)))
