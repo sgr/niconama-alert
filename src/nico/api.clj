@@ -95,26 +95,24 @@
 
 (defn- create-pgm-from-scrapedinfo
   [pid cid]
-  (let [id (str "lv" pid)
-	info (ns/fetch-pgm-info id)]
-    (if info
-      (nico.pgm.Pgm.
-       (keyword id)
-       (:title info)
-       (:pubdate info)
-       (:desc info)
-       (:category info)
-       (:link info)
-       (:thumbnail info)
-       (:owner_name info)
-       (:member_only info)
-       (:type info)
-       (:comm_name info)
-       (keyword cid)
-       false
-       (:fetched_at info)
-       (:updated_at info))
-      nil)))
+  (if-let [info (ns/fetch-pgm-info pid)]
+    (nico.pgm.Pgm.
+     (keyword pid)
+     (:title info)
+     (:pubdate info)
+     (:desc info)
+     (:category info)
+     (:link info)
+     (:thumbnail info)
+     (:owner_name info)
+     (:member_only info)
+     (:type info)
+     (:comm_name info)
+     (keyword cid)
+     false
+     (:fetched_at info)
+     (:updated_at info))
+    nil))
 
 (defn- parse-chat-str [^String chat-str]
   (try
@@ -167,13 +165,14 @@
 					  pid cid uid
 					  (tu/format-time-long received)
 					  (tu/format-time-long now))))))]
-		    (if-let [[date pid cid uid] (parse-chat-str s)]
-		      (let [t (if (some #(contains? (set (:comms %)) (keyword cid))
+		    (if-let [[date id cid uid] (parse-chat-str s)]
+		      (let [pid (str "lv" id)
+			    t (if (some #(contains? (set (:comms %)) (keyword cid))
 					@ref-alert-status)
 				;; 所属コミュニティの放送は優先的に取得
-				(do (trace (format "lv%s: %s is joined community." pid cid))
+				(do (trace (format "%s: %s is joined community." pid cid))
 				    (future #(f pid cid uid)))
-				(do (trace (format "lv%s: %s isn't your community." pid cid))
+				(do (trace (format "%s: %s isn't your community." pid cid))
 				    (.submit pool #(f pid cid uid) :finished)))]
 			(dosync (alter fetching conj t)))
 		      (warn (format "couldn't parse the chat str: %s" s)))
