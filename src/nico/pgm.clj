@@ -191,7 +191,7 @@
 	 (if (contains? @id-pgms id)
 	   (add-clean (merge-aux pgm))
 	   (if-let [opgm (get @idx-comm cid)]
-	     (when (and (not (= id (:id opgm)))
+	     (when (and (not= id (:id opgm))
 			(tu/later? (:pubdate pgm) (:pubdate opgm)))
 	       (do (rem-aux (:id opgm))
 		   (add-clean pgm)))

@@ -19,7 +19,7 @@
 	(let [[cur_total cur_pgms] (rss/get-programs-from-rss-page (rss/get-nico-rss page))
 	      fetched-upd (reduce conj fetched (map :id cur_pgms))
 	      cfetched (count fetched-upd)]
-	  (when (and (< 0 cur_total) (not (= (pgm/get-total) cur_total)))
+	  (when (and (< 0 cur_total) (not= (pgm/get-total) cur_total))
 	    (pgm/set-total cur_total))
 	  ;; 番組の追加と取得状況のリアルタイム更新
 	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
