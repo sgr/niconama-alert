@@ -65,7 +65,6 @@
     (doto this
       (.setForeground (.getForeground tbl))
       (.setBackground (if (odd? row) *odd-row-color* (.getBackground tbl)))))
-  (when (= java.util.Date (class val)) (.setHorizontalAlignment this JLabel/CENTER))
   this)
 (defn- sr-setValue [this val]
   (.setText this

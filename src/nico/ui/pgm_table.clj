@@ -10,53 +10,22 @@
 	    [time-utils :as tu])
   (:import (java.awt Color Font)
 	   (java.awt.event MouseListener)
-	   (javax.swing JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities)
+	   (javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities)
 	   (javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn)))
 
 (def *desc-col* 64)
 (def *font-bold* (Font. Font/DIALOG Font/BOLD 12))
 
+;; PgmCellRendererは、番組表のセルレンダラー。
+;; 新着の番組をボールド、コミュ限の番組を青字で表示する。
 (gen-class
- :name nico.ui.PgmRenderer
+ :name nico.ui.PgmCellRenderer
  :extends nico.ui.StripeRenderer
  :exposes-methods {getTableCellRendererComponent gtcrc}
  :prefix "pr-"
  :constructors {[] []}
  :state state
  :init init)
-
-(defn- pr-init [] [[] nil])
-(defn- pr-getTableCellRendererComponent [this tbl val selected focus row col]
-  (.gtcrc this tbl val selected focus row col)
-  (let [mr (.convertRowIndexToModel tbl row) pgm (.getPgm (.getModel tbl) mr)]
-    (when (= nico.pgm.Pgm (class pgm))
-      (do
-	(when (tu/within? (:fetched_at pgm) (tu/now) 60) (.setFont this *font-bold*))
-	(when (:member_only pgm) (.setForeground this Color/BLUE)))))
-  this)
-
-(def *pgm-columns*
-     (list
-      {:key :title, :colName "タイトル", :width 300, :renderer (nico.ui.PgmRenderer.)}
-      {:key :comm_name, :colName "コミュ名", :width 300, :renderer (nico.ui.PgmRenderer.)}
-      {:key :pubdate, :colName "開始", :width 50, :renderer (nico.ui.PgmRenderer.)}
-      {:key :owner_name, :colName "放送主", :width 60, :renderer (nico.ui.PgmRenderer.)}))
-
-(defn- pgm-colnum
-  "*pgm-columns*の中から、指定されたキーのカラム番号を得る"
-  [k]
-  (some #(if (= (:key (fnext %)) k) (first %)) (indexed *pgm-columns*)))
-
-(defn- pgm-column-model
-  "番組情報テーブルのカラムモデルを生成する"
-  []
-  (letfn [(gen-col [i pc]
-		   (doto (TableColumn. i (:width pc))
-		     (.setHeaderValue (:colName pc))
-		     (.setCellRenderer (:renderer pc))))]
-    (let [col-model (DefaultTableColumnModel.)]
-      (doseq [[i pc] (indexed *pgm-columns*)] (.addColumn col-model (gen-col i pc)))
-      col-model)))
 
 ;; ProgramsTableModelは、pgmsを開始時刻でソートしたものを表示するTableModel。
 ;; 拡張メソッドgetUrlにより、番組URLを返す。
@@ -75,7 +44,7 @@
 	   [updateData [clojure.lang.IPersistentMap] void]
 	   [getPgm [int] nico.pgm.Pgm]])
 
-;; ProgramsTableは、ProgramsTableModelを表示するJXTable。
+;; ProgramsTableは、ProgramsTableModelを表示するJTable。
 ;; ツールチップを表示できる。
 (gen-class
  :name nico.ui.ProgramsTable
@@ -86,6 +55,40 @@
  :state state
  :init init
  :methods [[setSortable [boolean] void]])
+
+(defn- pr-init [] [[] nil])
+(defn- pr-getTableCellRendererComponent [this tbl val selected focus row col]
+  (.gtcrc this tbl val selected focus row col)
+  (when-let [pmdl (let [mdl (.getModel tbl)]
+		    (if (= nico.ui.ProgramsTableModel (class mdl)) mdl nil))]
+    (let [mr (.convertRowIndexToModel tbl row) pgm (.getPgm pmdl mr)]
+      (when (tu/within? (:fetched_at pgm) (tu/now) 60) (.setFont this *font-bold*))
+      (when (:member_only pgm) (.setForeground this Color/BLUE))))
+  this)
+
+(def *pgm-columns*
+     (list
+      {:key :title, :colName "タイトル", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
+      {:key :comm_name, :colName "コミュ名", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
+      {:key :pubdate, :colName "開始", :width 50,
+       :renderer (doto (nico.ui.PgmCellRenderer.) (.setHorizontalAlignment JLabel/CENTER))}
+      {:key :owner_name, :colName "放送主", :width 60, :renderer (nico.ui.PgmCellRenderer.)}))
+
+(defn- pgm-colnum
+  "*pgm-columns*の中から、指定されたキーのカラム番号を得る"
+  [k]
+  (some #(if (= (:key (fnext %)) k) (first %)) (indexed *pgm-columns*)))
+
+(defn- pgm-column-model
+  "番組情報テーブルのカラムモデルを生成する"
+  []
+  (letfn [(gen-col [i pc]
+		   (doto (TableColumn. i (:width pc))
+		     (.setHeaderValue (:colName pc))
+		     (.setCellRenderer (:renderer pc))))]
+    (let [col-model (DefaultTableColumnModel.)]
+      (doseq [[i pc] (indexed *pgm-columns*)] (.addColumn col-model (gen-col i pc)))
+      col-model)))
 
 (defn pgm-table
   "番組情報テーブルを生成する"
