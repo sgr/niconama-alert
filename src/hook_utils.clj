@@ -21,10 +21,10 @@
                              :fetching hook-fetching
                              :fetched hook-fetched))]
             (apply f args))))"
-  [& hooks]
-  (when (< 0 (count hooks))
-    (doseq [a hooks] (when-not (= Keyword (type a)) (throw (IllegalArgumentException.))))
-    (let [h# (reduce #(assoc %1 %2 (symbol (str "hooks-" (name %2)))) {} hooks)]
+  [hook & hooks]
+  (let [hks (conj hooks hook)]
+    (doseq [a hks] (when-not (= Keyword (type a)) (throw (IllegalArgumentException.))))
+    (let [h# (reduce #(assoc %1 %2 (symbol (str "hooks-" (name %2)))) {} hks)]
       `(let [~@(mapcat #(list (first %) (second %))
 		       (for [n (vals h#)] (list (symbol n) '(atom '()))))]
 	 (defn ~'add-hook [^Keyword kind# f#]
