@@ -153,9 +153,7 @@
 		 (fn [e] (let [pref (:pref @(.state this))
 			       dlg (ukvd/user-password-dialog
 				    (.getTopLevelAncestor this) "ユーザー情報の編集" pref
-				    (fn [email passwd]
-				      (let [npref (assoc pref :email email :passwd passwd)]
-					(.setTabPref this npref))))]
+				    (fn [npref] (.setTabPref this npref)))]
 			   (do-swing (.setVisible dlg true))))))
 	      (doto aitem
 		(add-action-listener
@@ -170,8 +168,7 @@
 		(fn [e] (let [dlg (uktd/keyword-tab-dialog
 				   (.getTopLevelAncestor this) "番組検索設定の編集"
 				   (:pref @(.state this))
-				   (fn [npref]
-				     (.setTabPref this npref)))]
+				   (fn [npref] (.setTabPref this npref)))]
 			  (do-swing (.setVisible dlg true))))))
 	      (doto aitem
 		(add-action-listener
