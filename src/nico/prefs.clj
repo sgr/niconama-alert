@@ -8,7 +8,7 @@
   (:import (java.awt Desktop GraphicsEnvironment)
 	   (java.net URI URL)))
 
-(def *default-frame-width* 900)
+(def *default-frame-width* 950)
 (def *default-frame-height* 500)
 
 (defn- gen-initial-pref []
