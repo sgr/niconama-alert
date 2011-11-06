@@ -3,8 +3,8 @@
        :doc "Utility for networking."}
   net-utils)
 
-(def *connect-timeout* 10000)
-(def *read-timeout* 15000)
+(def *connect-timeout* 5000)
+(def *read-timeout* 10000)
 
 (defn url-stream
   ([^String url ^int connect-timeout ^int read-timeout]

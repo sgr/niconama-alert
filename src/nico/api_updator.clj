@@ -14,6 +14,8 @@
 (def *reconnect-sec* 3)    ;; API接続が切れたときのリトライ間隔(秒)
 (def *nthreads-comm* 1)    ;; 所属コミュニティの番組情報取得スレッド数
 (def *nthreads-normal* 3)  ;; それ以外の番組情報取得スレッド数
+(def *limit-elapsed* 1200) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
+(def *limit-pool* 999)     ;; スレッドプールにリトライ登録可能な数の目安
 (def *wait-resubmit* 2000) ;; スレッドプールにsubmit出来無い場合のリトライ間隔(ミリ秒)
 (def *rate-ui-update* 5)   ;; UIの更新間隔(秒)
 
@@ -40,8 +42,8 @@
 
 (defn- create-pgm [pid cid uid received]
   (let [now (tu/now)]
-    ;; 繁忙期は番組ページ閲覧すら重い。番組ID受信から15分経過していたら諦める。
-    (if-not (tu/within? received now 900)
+    ;; 繁忙期は番組ページ閲覧すら重い。番組ID受信から*limit-elapsed*秒経過していたら諦める。
+    (if-not (tu/within? received now *limit-elapsed*)
       (do (warn (format "too late to fetch: %s/%s/%s received: %s, called: %s"
 			pid cid uid (tu/format-time-long received) (tu/format-time-long now)))
 	  :aborted)
@@ -71,11 +73,12 @@
   (defn- add-pgm [pgm]
     (when (some nil? (list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
       (warn (format "Some nil properties found in: %s" (pr-str pgm))))
-    (let [now (tu/now)]
-      (swap! fetched conj now)
-      (pgm/add pgm)))
+    (swap! fetched conj (tu/now))
+    (pgm/add pgm))
   (defn- create-task [pid cid uid received]
-    (let [task (proxy [Callable] [] (call [] (create-pgm pid cid uid received)))]
+    (let [task (proxy [Callable] []
+		 (call [] (let [r (create-pgm pid cid uid received)]
+			    (if (instance? nico.pgm.Pgm r) (do (add-pgm r) :succeeded) r))))]
       (if (some #(contains? (set (:comms %)) (keyword cid)) @alert-statuses)
 	;; 所属コミュニティの番組情報は専用のスレッドプールで(優先的に)取得
 	(do (trace (format "%s: %s is joined community." pid cid))
@@ -115,12 +118,9 @@
 			 [(select-keys futures-map undone-fs) failed-tasks]
 			 (let [[f task] (first m)]
 			   (if (or (.isDone f) (.isCancelled f))
-			     (let [r (.get f)]
-			       (cond
-				(instance? nico.pgm.Pgm r)
-				(do (add-pgm r) (recur undone-fs failed-tasks (rest m)))
-				(= :failed r) (recur undone-fs (conj failed-tasks task) (rest m))
-				:else (recur undone-fs failed-tasks (rest m))))
+			     (if (= :failed (.get f))
+			       (recur undone-fs (conj failed-tasks task) (rest m))
+			       (recur undone-fs failed-tasks (rest m)))
 			     (recur (conj undone-fs f) failed-tasks (rest m)))))))
 	      (submit-aux [t pool]
 			  (try (.submit pool ^Callable t)
@@ -142,8 +142,17 @@
 	;; リトライキューのタスクを再度スレッドプールに登録する。
 	;; スレッドプールへの登録が副作用であるためトランザクションを分けざるをえない。
 	;; この間*-futuresに追加が発生する可能性があるが、矛盾は生じない。
-	(let [retry-comm-futures (reduce #(submit %1 %2 comm-pool) {} @comm-retries)
-	      retry-normal-futures (reduce #(submit %1 %2 normal-pool) {} @normal-retries)]
+	;; 但し*limit-pool*を超えるリクエストがスレッドプールにたまっている場合はリトライを諦める。
+	(let [retry-comm-futures (if (< *limit-pool* (count @comm-futures))
+				   (do (debug (format "too many comm futures (%d) to retry (%d)"
+						      (count @comm-futures) (count @comm-retries)))
+				       {})
+				   (reduce #(submit %1 %2 comm-pool) {} @comm-retries))
+	      retry-normal-futures (if (< *limit-pool* (count @normal-futures))
+				     (do (debug (format "too many normal futures (%d) to retry (%d)"
+							(count @normal-futures) (count @normal-retries)))
+					 {})
+				     (reduce #(submit %1 %2 normal-pool) {} @normal-retries))]
 	  (dosync
 	   (alter comm-futures merge retry-comm-futures)
 	   (alter normal-futures merge retry-normal-futures)))
@@ -155,7 +164,7 @@
   (defn update-rate []
     (loop [last-updated (tu/now)]
       (when (= 1 (.getCount @latch)) (.await @latch))
-      (swap! fetched (fn [coll now] (filter #(tu/within? % now 60) coll)) (tu/now))
+      (swap! fetched (fn [coll] (filter #(tu/within? % last-updated 60) coll)))
       (update-fetching)
       (run-hooks :rate-updated (count @fetched) (count @comm-futures) (count @normal-futures))
       (when (tu/within? last-updated (tu/now) *rate-ui-update*)
