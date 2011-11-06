@@ -12,7 +12,7 @@
 	   (javax.swing.border TitledBorder)))
 
 (def *btn-size* (Dimension. 80 30))
-(def *status-size* (Dimension. 120 30))
+(def *status-size* (Dimension. 150 30))
 
 (defn api-panel []
   (let [panel (JPanel.)
@@ -55,8 +55,10 @@
     (au/add-hook :rate-updated
 		 (fn [] (do-swing
 			 (doto tbtn (.setEnabled false))
-			 (.setText status (format "追加: %d 番組/分\n取得中: %d 番組"
-						  (au/get-fetched-rate) (a/count-fetching))))))
+			 (let [[comm normal] (a/count-fetching)]
+			   (.setText status (format "追加: %d 番組/分\n取得中: %d 番組 (%d + %d)"
+						    (au/get-fetched-rate)
+						    (+ comm normal) comm normal))))))
     (doto tbtn
       (.setPreferredSize *btn-size*)
       (.setToolTipText istr)

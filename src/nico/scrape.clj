@@ -10,7 +10,6 @@
 	    [clojure.contrib.string :as cs])
   (:import (java.util Calendar Date GregorianCalendar Locale TimeZone)))
 
-(def *retry-limit* 5)
 (def *base-url* "http://live.nicovideo.jp/watch/")
 
 (defn- fetch-pgm-info1
@@ -78,21 +77,10 @@
      :fetched_at now
      :updated_at now}))
 
-(defn- fetch-pgm-info2 [pid]
+(defn fetch-pgm-info
+  "ニコ生の番組ページから番組情報を取得する。"
+  [pid]
   (try
     (fetch-pgm-info1 pid)
     (catch Exception _ nil)))
 
-(defn fetch-pgm-info
-  "ニコ生の番組ページから番組情報を取得する。"
-  [pid]
-  (loop [retry *retry-limit*]
-    (if (= 0 retry)
-      (do (warn (format "aborted scraping %s because reached retry limit: %d"
-			(str *base-url* pid) *retry-limit*))
-	  nil)
-      (if-let [pgm (fetch-pgm-info2 pid)]
-	pgm
-	(do
-	  (Thread/sleep 3000)
-	  (recur (dec retry)))))))

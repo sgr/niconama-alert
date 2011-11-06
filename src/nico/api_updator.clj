@@ -22,7 +22,7 @@
      (ref-set awaiting-status :ready))
     (run-hooks :awaiting))
   (defn start-update-api [] (.countDown @latch))
-  (defn- api-update [ref-alert-status]
+  (defn- update-api-aux [ref-alert-status]
     (try
       (api/listen ref-alert-status
 		  (fn [] (run-hooks :connected))
@@ -46,19 +46,18 @@
 		  (ref-set latch (java.util.concurrent.CountDownLatch. 1)))
 		 (recur *retry*))
        @alert-status (do
-		       (api-update alert-status)
+		       (update-api-aux alert-status)
 		       (info "Will reconnect after 3 sec...")
 		       (Thread/sleep 3000)
 		       (run-hooks :reconnecting)
 		       (recur (dec c))))))
   (defn get-fetched-rate [] (count @fetched))
   (defn update-rate []
-    (loop []
-      (Thread/sleep 5000)
+    (loop [last-updated (tu/now)]
       (when (= 1 (.getCount @latch)) ;; pause中かどうか
 	(.await @latch))
       (swap! fetched (fn [coll now] (filter #(tu/within? % now 60) coll)) (tu/now))
+      (api/update-fetching)
       (run-hooks :rate-updated)
-      (recur))))
-
-
+      (when (tu/within? last-updated (tu/now) 5) (Thread/sleep 5000))
+      (recur (tu/now)))))
