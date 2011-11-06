@@ -5,7 +5,6 @@
   nico.api
   (:use [clojure.contrib.logging])
   (:require [nico.pgm :as pgm]
-	    [nico.scrape :as ns]
 	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu]
@@ -14,12 +13,9 @@
 	    [clojure.contrib.zip-filter :as zf]
 	    [clojure.contrib.zip-filter.xml :as zfx]
 	    [clojure.contrib.http.agent :as ha])
-  (:import (java.util Date)
-	   (java.util.concurrent Callable Executors RejectedExecutionException)))
+  (:import (java.util Date)))
 
 (def *user-agent* "Niconama-alert J/1.0.0")
-(def *nthreads-comm* 1)
-(def *nthreads-normal* 3)
 
 (defn- http-req
   ([url func] (http-req url nil func))	; GET
@@ -94,27 +90,6 @@
      fetched_at
      fetched_at)))
 
-(defn- create-pgm-from-scrapedinfo
-  [pid cid]
-  (if-let [info (ns/fetch-pgm-info pid)]
-    (nico.pgm.Pgm.
-     (keyword pid)
-     (:title info)
-     (:pubdate info)
-     (:desc info)
-     (:category info)
-     (:link info)
-     (:thumbnail info)
-     (:owner_name info)
-     (:member_only info)
-     (:type info)
-     (:comm_name info)
-     (keyword cid)
-     false
-     (:fetched_at info)
-     (:updated_at info))
-    nil))
-
 (defn- parse-chat-str [^String chat-str]
   (try
     (let [chat (xml/parse (java.io.StringBufferInputStream. chat-str))]
@@ -128,117 +103,23 @@
 	nil))
     (catch Exception e (error (format "parse error: %s" chat-str e)) nil)))
 
-(let [comm-pool (Executors/newFixedThreadPool *nthreads-comm*), comm-futures (ref {})
-      normal-pool (Executors/newFixedThreadPool *nthreads-normal*), normal-futures (ref {})]
-  (defn listen [ref-alert-status connected-fn pgm-fn]
-    (with-open [sock (let [as (first @ref-alert-status)]
-		       (doto (java.net.Socket. (:addr as) (:port as)) (.setSoTimeout 60000)))
-		rdr (java.io.BufferedReader.
-		     (java.io.InputStreamReader. (.getInputStream sock) "UTF8"))
-		wtr (java.io.OutputStreamWriter. (.getOutputStream sock))]
-      ;; res_fromを-1200にすると、全ての番組を取得するらしい。
-      (let [as (first @ref-alert-status)
-	    q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0" (:thrd as))]
-	(.write wtr q) (.flush wtr)
-	(connected-fn)
-	(loop [c (.read rdr) s nil]
-	  (condp = c
-	      -1 (info "******* Connection closed *******")
-	      0 (let [received (tu/now)]
-		  (letfn [(f [pid cid uid]
-			     ;; 繁忙期は番組ページ閲覧すら重い。番組ID受信から15分経過していたら諦める。
-			     (let [now (tu/now)]
-			       (if (tu/within? received now 900)
-				 (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
-				   (do
-				     (trace
-				      (format
-				       "fetched pgm: %s %s pubdate: %s, received: %s, fetched_at: %s"
-					      (:id pgm) (:title pgm) (:pubdate pgm)
-					      (tu/format-time-long received)
-					      (:fetched_at pgm)))
-				     (pgm-fn pgm)
-				     :succeeded)
-				   (do
-				     (warn (format "couldn't fetching pgm: %s/%s/%s" pid cid uid))
-				     :failed))
-				 (do
-				   (warn (format "too late to fetch: %s/%s/%s received: %s, called: %s"
-						 pid cid uid
-						 (tu/format-time-long received)
-						 (tu/format-time-long now)))
-				   :aborted))))]
-		    (if-let [[date id cid uid] (parse-chat-str s)]
-		      (let [pid (str "lv" id) task (proxy [Callable] [] (call [] (f pid cid uid)))]
-			(if (some #(contains? (set (:comms %)) (keyword cid))
-				  @ref-alert-status)
-			  ;; 所属コミュニティの放送は優先的に取得
-			  (do (trace (format "%s: %s is joined community." pid cid))
-			      (let [f (.submit comm-pool ^Callable task)]
-				(dosync (alter comm-futures conj [f task]))))
-			  (do (trace (format "%s: %s isn't your community." pid cid))
-			      (let [f (.submit normal-pool ^Callable task)]
-				(dosync (alter normal-futures conj [f task]))))))
-		      (warn (format "couldn't parse the chat str: %s" s)))
-		    (recur (.read rdr) nil)))
-	      (recur (.read rdr) (str s (char c))))))))
-  (defn update-fetching []
-    (let [comm-retries (ref '()) normal-retries (ref '())]
-      (letfn [(sweep [futures-map]
-		     (loop [undone-fs '() failed-tasks '() m futures-map]
-		       (if (= 0 (count m)) [(select-keys futures-map undone-fs) failed-tasks]
-			   (let [[f task] (first m)]
-			     (if (or (.isDone f) (.isCancelled f))
-			       (if (= :failed (.get f))
-				 (recur undone-fs (conj failed-tasks task) (rest m))
-				 (recur undone-fs failed-tasks (rest m)))
-			       (recur (conj undone-fs f) failed-tasks (rest m)))))))
-	      (submit-aux [t pool]
-			  (try (.submit pool ^Callable t)
-			       (catch RejectedExecutionException e
-				 (error (format "rejected execution.") e) nil)))
-	      (submit [m task pool]
-		      (assoc m (loop [t task]
-				 (if-let [f (submit-aux t pool)] f
-					 (do (Thread/sleep 2000) (recur t))))
-			     task))]
-	;; 終了したタスクを削除。取得失敗したタスクはリトライキューに追加。
-	(dosync
-	 (let [[swept-comm-futures failed-comm-tasks] (sweep @comm-futures)
-	       [swept-normal-futures failed-normal-tasks] (sweep @normal-futures)]
-	   (ref-set comm-futures swept-comm-futures)
-	   (ref-set comm-retries failed-comm-tasks)
-	   (ref-set normal-futures swept-normal-futures)
-	   (ref-set normal-retries failed-normal-tasks)))
-	;; リトライキューのタスクを再度スレッドプールに登録する。
-	;; スレッドプールへの登録が副作用であるためトランザクションを分けざるをえない。
-	;; この間*-futuresに追加が発生する可能性があるが、矛盾は生じない。
-	(let [retry-comm-futures (reduce #(submit %1 %2 comm-pool) {} @comm-retries)
-	      retry-normal-futures (reduce #(submit %1 %2 normal-pool) {} @normal-retries)]
-	  (dosync
-	   (alter comm-futures merge retry-comm-futures)
-	   (alter normal-futures merge retry-normal-futures)))
-	(trace
-	 (format "comm-retries: %d, normal-retries: %d, comm-futures: %d, normal-futures: %d"
-		 (count @comm-retries) (count @normal-retries)
-		 (count @comm-futures) (count @normal-futures)))
-	[(count @comm-futures) (count @normal-futures)]))))
-
-(defn- gen-listener [alert-status pgm-fn]
-  (fn []
-    (try
-      (listen alert-status pgm-fn)
-      (catch java.net.SocketTimeoutException e (error "Socket timeout" e) false)
-      (catch java.net.UnknownHostException e (error "Unknown host" e) false)
-      (catch java.io.IOException e (error "IO error" e) false)
-      (catch Exception e (error "Unknown error" e) false))))
-
-(let [listener (atom nil)]
-  (defn- run-listener
-    ([alert-status]
-       (run-listener alert-status (fn [pgm] (println (:title pgm))(pgm/add pgm))))
-    ([alert-status pgm-fn]
-       (when-not @listener
-	 (do
-	   (reset! listener (Thread. (gen-listener alert-status pgm-fn)))
-	   (.start @listener))))))
+(defn listen [alert-status connected-fn create-task-fn]
+  (with-open [sock (doto (java.net.Socket. (:addr alert-status) (:port alert-status))
+		     (.setSoTimeout 60000))
+	      rdr (java.io.BufferedReader.
+		   (java.io.InputStreamReader. (.getInputStream sock) "UTF8"))
+	      wtr (java.io.OutputStreamWriter. (.getOutputStream sock))]
+    ;; res_fromを-1200にすると、全ての番組を取得するらしい。
+    (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
+		    (:thrd alert-status))]
+      (.write wtr q) (.flush wtr)
+      (connected-fn)
+      (loop [c (.read rdr) s nil]
+	(condp = c
+	    -1 (info "******* Connection closed *******")
+	    0  (let [received (tu/now)]
+		 (if-let [[date id cid uid] (parse-chat-str s)]
+		   (let [pid (str "lv" id)] (create-task-fn pid cid uid received))
+		   (warn (format "couldn't parse the chat str: %s" s)))
+		 (recur (.read rdr) nil))
+	    (recur (.read rdr) (str s (char c))))))))
