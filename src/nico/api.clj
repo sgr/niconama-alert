@@ -221,8 +221,8 @@
 	(trace
 	 (format "comm-retries: %d, normal-retries: %d, comm-futures: %d, normal-futures: %d"
 		 (count @comm-retries) (count @normal-retries)
-		 (count @comm-futures) (count @normal-futures))))))
-  (defn count-fetching [] [(count @comm-futures) (count @normal-futures)]))
+		 (count @comm-futures) (count @normal-futures)))
+	[(count @comm-futures) (count @normal-futures)]))))
 
 (defn- gen-listener [alert-status pgm-fn]
   (fn []

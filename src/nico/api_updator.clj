@@ -22,17 +22,15 @@
      (ref-set awaiting-status :ready))
     (run-hooks :awaiting))
   (defn start-update-api [] (.countDown @latch))
+  (defn- add-pgm [pgm]
+    (when (some nil? (list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
+      (warn (format "Some nil properties found in: %s" (pr-str pgm))))
+    (let [now (tu/now)]
+      (swap! fetched conj now)
+      (pgm/add pgm)))
   (defn- update-api-aux [ref-alert-status]
     (try
-      (api/listen ref-alert-status
-		  (fn [] (run-hooks :connected))
-		  (fn [pgm]
-		    (when (some nil?
-				(list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
-		      (warn (format "Some nil properties found in: %s" (pr-str pgm))))
-		    (let [now (tu/now)]
-		      (swap! fetched conj now)
-		      (pgm/add pgm))))
+      (api/listen ref-alert-status (fn [] (run-hooks :connected)) add-pgm)
       (catch Exception e (warn "** disconnected" e) nil)))
   (defn update-api []
     (loop [c *retry*]
@@ -57,7 +55,7 @@
       (when (= 1 (.getCount @latch)) ;; pause中かどうか
 	(.await @latch))
       (swap! fetched (fn [coll now] (filter #(tu/within? % now 60) coll)) (tu/now))
-      (api/update-fetching)
-      (run-hooks :rate-updated)
+      (let [[comm normal] (api/update-fetching)]
+	(run-hooks :rate-updated (count @fetched) comm normal))
       (when (tu/within? last-updated (tu/now) 5) (Thread/sleep 5000))
       (recur (tu/now)))))

@@ -3,8 +3,7 @@
        :doc "APIによる番組情報取得状況表示パネル"}
   nico.ui.api-panel
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
-  (:require [nico.api :as a]
-	    [nico.api-updator :as au]
+  (:require [nico.api-updator :as au]
 	    [nico.ui.util :as uu]
 	    [time-utils :as tu])
   (:import (java.awt Dimension)
@@ -53,12 +52,12 @@
 			 (doto tbtn (.setEnabled false))
 			 (.setText status "接続中断のため再接続中"))))
     (au/add-hook :rate-updated
-		 (fn [] (do-swing
-			 (doto tbtn (.setEnabled false))
-			 (let [[comm normal] (a/count-fetching)]
-			   (.setText status (format "追加: %d 番組/分\n取得中: %d 番組 (%d + %d)"
-						    (au/get-fetched-rate)
-						    (+ comm normal) comm normal))))))
+		 (fn [fetched-rate fetching-comm fetching-normal]
+		   (do-swing
+		    (doto tbtn (.setEnabled false))
+		    (.setText status (format "追加: %d 番組/分\n取得中: %d 番組 (%d + %d)"
+					     fetched-rate (+ fetching-comm fetching-normal)
+					     fetching-comm fetching-normal)))))
     (doto tbtn
       (.setPreferredSize *btn-size*)
       (.setToolTipText istr)
