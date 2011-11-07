@@ -93,20 +93,20 @@
       (catch Exception e (warn "** disconnected" e) nil)))
   (defn update-api []
     (letfn [(reset [astatus]
+		   (trace (format "reset to: %s" (name astatus)))
 		   (dosync
 		    (ref-set awaiting-status astatus)
-		    (ref-set latch (java.util.concurrent.CountDownLatch. 1)))
-		   (recur *retry-connect*))]
+		    (ref-set latch (java.util.concurrent.CountDownLatch. 1))))]
     (loop [c *retry-connect*]
       (when (= 1 (.getCount @latch)) ;; pause中かどうか
 	(do (run-hooks :awaiting)
 	    (.await @latch)))
       (cond
-       (= 0 c) (reset :aborted)
-       (empty? @alert-statuses) (reset :need_login)
+       (= 0 c) (do (reset :aborted) (recur *retry-connect*))
+       (empty? @alert-statuses) (do (reset :need_login) (recur *retry-connect*))
        :else (do
 	       (update-api-aux)
-	       (info (format "Will reconnect after %d sec..." *reconnect-sec*))
+	       (info (format "Will reconnect (%d/%d) after %d sec..." c *retry-connect* *reconnect-sec*))
 	       (Thread/sleep (* 1000 *reconnect-sec*))
 	       (run-hooks :reconnecting)
 	       (recur (dec c)))))))
