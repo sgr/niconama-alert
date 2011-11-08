@@ -113,15 +113,15 @@
   (defn- update-fetching []
     (let [comm-retries (ref '()) normal-retries (ref '())]
       (letfn [(sweep [futures-map]
-		     (loop [undone-fs '() failed-tasks '() m futures-map]
+		     (loop [done-futures '() failed-tasks '() m futures-map]
 		       (if (= 0 (count m))
-			 [(select-keys futures-map undone-fs) failed-tasks]
+			 [done-futures failed-tasks]
 			 (let [[f task] (first m)]
 			   (if (or (.isDone f) (.isCancelled f))
 			     (if (= :failed (.get f))
-			       (recur undone-fs (conj failed-tasks task) (rest m))
-			       (recur undone-fs failed-tasks (rest m)))
-			     (recur (conj undone-fs f) failed-tasks (rest m)))))))
+			       (recur (conj done-futures f) (conj failed-tasks task) (rest m))
+			       (recur (conj done-futures f) failed-tasks (rest m)))
+			     (recur done-futures failed-tasks (rest m)))))))
 	      (submit-aux [t pool]
 			  (try (.submit pool ^Callable t)
 			       (catch RejectedExecutionException e
@@ -132,12 +132,12 @@
 					 (do (Thread/sleep *wait-resubmit*) (recur t))))
 			     task))]
 	;; 終了したタスクを削除。取得失敗したタスクはリトライキューに追加。
-	(dosync
-	 (let [[swept-comm-futures failed-comm-tasks] (sweep @comm-futures)
-	       [swept-normal-futures failed-normal-tasks] (sweep @normal-futures)]
-	   (ref-set comm-futures swept-comm-futures)
+	(let [[done-comm-futures failed-comm-tasks] (sweep @comm-futures)
+	      [done-normal-futures failed-normal-tasks] (sweep @normal-futures)]
+	  (dosync
+	   (alter comm-futures #(apply dissoc % done-comm-futures))
 	   (ref-set comm-retries failed-comm-tasks)
-	   (ref-set normal-futures swept-normal-futures)
+	   (alter normal-futures #(apply dissoc % done-normal-futures))
 	   (ref-set normal-retries failed-normal-tasks)))
 	;; リトライキューのタスクを再度スレッドプールに登録する。
 	;; スレッドプールへの登録が副作用であるためトランザクションを分けざるをえない。
