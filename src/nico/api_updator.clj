@@ -15,7 +15,7 @@
 (def *nthreads-comm* 1)    ;; 所属コミュニティの番組情報取得スレッド数
 (def *nthreads-normal* 3)  ;; それ以外の番組情報取得スレッド数
 (def *limit-elapsed* 1200) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
-(def *limit-pool* 999)     ;; スレッドプールにリトライ登録可能な数の目安
+(def *limit-pool* 1000)     ;; スレッドプールにリトライ登録可能な数の目安
 (def *wait-resubmit* 2000) ;; スレッドプールにsubmit出来無い場合のリトライ間隔(ミリ秒)
 (def *rate-ui-update* 5)   ;; UIの更新間隔(秒)
 
@@ -111,55 +111,57 @@
 	       (run-hooks :reconnecting)
 	       (recur (dec c)))))))
   (defn- update-fetching []
-    (let [comm-retries (ref '()) normal-retries (ref '())]
-      (letfn [(sweep [futures-map]
-		     (loop [done-futures '() failed-tasks '() m futures-map]
-		       (if (= 0 (count m))
-			 [done-futures failed-tasks]
-			 (let [[f task] (first m)]
-			   (if (or (.isDone f) (.isCancelled f))
-			     (if (= :failed (.get f))
-			       (recur (conj done-futures f) (conj failed-tasks task) (rest m))
-			       (recur (conj done-futures f) failed-tasks (rest m)))
-			     (recur done-futures failed-tasks (rest m)))))))
-	      (submit-aux [t pool]
-			  (try (.submit pool ^Callable t)
-			       (catch RejectedExecutionException e
-				 (error (format "rejected execution.") e) nil)))
-	      (submit [m task pool]
-		      (assoc m (loop [t task]
-				 (if-let [f (submit-aux t pool)] f
-					 (do (Thread/sleep *wait-resubmit*) (recur t))))
-			     task))]
-	;; 終了したタスクを削除。取得失敗したタスクはリトライキューに追加。
-	(let [[done-comm-futures failed-comm-tasks] (sweep @comm-futures)
-	      [done-normal-futures failed-normal-tasks] (sweep @normal-futures)]
-	  (dosync
-	   (alter comm-futures #(apply dissoc % done-comm-futures))
-	   (ref-set comm-retries failed-comm-tasks)
-	   (alter normal-futures #(apply dissoc % done-normal-futures))
-	   (ref-set normal-retries failed-normal-tasks)))
+    (letfn [(sweep [futures-map]
+		   (loop [done-futures '() failed-tasks '() m futures-map]
+		     (if (= 0 (count m))
+		       [done-futures failed-tasks]
+		       (let [[f task] (first m)]
+			 (if (or (.isDone f) (.isCancelled f))
+			   (if (= :failed (.get f))
+			     (recur (conj done-futures f) (conj failed-tasks task) (rest m))
+			     (recur (conj done-futures f) failed-tasks (rest m)))
+			   (recur done-futures failed-tasks (rest m)))))))
+	    (submit-aux [t pool]
+			(try (.submit pool ^Callable t)
+			     (catch RejectedExecutionException e
+			       (error (format "rejected execution.") e) nil)))
+	    (submit [m task pool]
+		    (assoc m (loop [t task]
+			       (if-let [f (submit-aux t pool)] f
+				       (do (Thread/sleep *wait-resubmit*) (recur t))))
+			   task))]
+      ;; 終了したタスクを削除。取得失敗したタスクはリトライキューに追加。
+      (let [[done-comm-futures failed-comm-tasks] (sweep @comm-futures)
+	    [done-normal-futures failed-normal-tasks] (sweep @normal-futures)]
+	(trace (format "done-comm-futures: %d, done-normal-futures: %d"
+		       (count done-comm-futures) (count done-normal-futures)))
+	;; (1) Sweeping done tasks
+	(dosync
+	 (alter comm-futures #(apply dissoc % done-comm-futures))
+	 (alter normal-futures #(apply dissoc % done-normal-futures)))
 	;; リトライキューのタスクを再度スレッドプールに登録する。
 	;; スレッドプールへの登録が副作用であるためトランザクションを分けざるをえない。
 	;; この間*-futuresに追加が発生する可能性があるが、矛盾は生じない。
 	;; 但し*limit-pool*を超えるリクエストがスレッドプールにたまっている場合はリトライを諦める。
-	(let [retry-comm-futures (if (< *limit-pool* (count @comm-futures))
-				   (do (debug (format "too many comm futures (%d) to retry (%d)"
-						      (count @comm-futures) (count @comm-retries)))
-				       {})
-				   (reduce #(submit %1 %2 comm-pool) {} @comm-retries))
-	      retry-normal-futures (if (< *limit-pool* (count @normal-futures))
-				     (do (debug (format "too many normal futures (%d) to retry (%d)"
-							(count @normal-futures) (count @normal-retries)))
-					 {})
-				     (reduce #(submit %1 %2 normal-pool) {} @normal-retries))]
+	(let [comm-retries (if (> *limit-pool* (count @comm-futures))
+			     (reduce #(submit %1 %2 comm-pool) {} failed-comm-tasks)
+			     (do (debug (format "too many comm futures (%d) to retry (%d)"
+						(count @comm-futures) (count failed-comm-tasks)))
+				 {}))
+	      normal-retries (if (> *limit-pool* (count @normal-futures))
+			       (reduce #(submit %1 %2 normal-pool) {} failed-normal-tasks)
+			       (do (debug (format "too many normal futures (%d) to retry (%d)"
+						  (count @normal-futures) (count failed-normal-tasks)))
+				   {}))]
+	  ;; (2) Adding retries
 	  (dosync
-	   (alter comm-futures merge retry-comm-futures)
-	   (alter normal-futures merge retry-normal-futures)))
-	(trace
-	 (format "comm-retries: %d, normal-retries: %d, comm-futures: %d, normal-futures: %d"
-		 (count @comm-retries) (count @normal-retries)
-		 (count @comm-futures) (count @normal-futures))))))
+	   (alter comm-futures merge comm-retries)
+	   (alter normal-futures merge normal-retries))
+	  (trace
+	   (format "comm-retries: %d, normal-retries: %d, comm-futures: %d, normal-futures: %d"
+		   (count comm-retries) (count normal-retries)
+		   (count @comm-futures) (count @normal-futures)))))))
+
   (defn get-fetched-rate [] (count @fetched))
   (defn update-rate []
     (loop [last-updated (tu/now)]
