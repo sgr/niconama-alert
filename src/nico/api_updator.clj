@@ -13,7 +13,7 @@
 
 (def *retry-connect* 10)   ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
 (def *reconnect-sec* 3)    ;; API接続が切れたときのリトライ間隔(秒)
-(def *nthreads-comm* 1)    ;; 所属コミュニティの番組情報取得スレッド数
+(def *nthreads-comm* 2)    ;; 所属コミュニティの番組情報取得スレッド数
 (def *nthreads-normal* 3)  ;; それ以外の番組情報取得スレッド数
 (def *limit-elapsed* 1200) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
 (def *limit-pool* 1000)     ;; スレッドプールにリトライ登録可能な数の目安

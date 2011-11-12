@@ -11,7 +11,7 @@
 	   (javax.swing.border TitledBorder)))
 
 (def *btn-size* (Dimension. 80 30))
-(def *status-size* (Dimension. 150 30))
+(def *status-size* (Dimension. 175 30))
 
 (defn api-panel []
   (let [panel (JPanel.)
