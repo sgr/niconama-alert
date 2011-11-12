@@ -20,6 +20,17 @@
 (def *wait-resubmit* 2000) ;; スレッドプールにsubmit出来無い場合のリトライ間隔(ミリ秒)
 (def *rate-ui-update* 5)   ;; UIの更新間隔(秒)
 
+(gen-class
+ :name nico.api-updator.WrappedFutureTask
+ :extends java.util.concurrent.FutureTask
+ :prefix "wft-"
+ :constructors {[java.util.concurrent.Callable] [java.util.concurrent.Callable]}
+ :state state
+ :init init
+ :methods [[task [] java.util.concurrent.Callable]])
+(defn- wft-init [c] [[c] (atom c)])
+(defn- wft-task [this] @(.state this))
+
 (defn- create-pgm-from-scrapedinfo
   [pid cid]
   (if-let [info (ns/fetch-pgm-info pid)]
@@ -56,16 +67,31 @@
 	(do (warn (format "couldn't fetching pgm: %s/%s/%s" pid cid uid))
 	    :failed)))))
 
-(defn- create-pool [nthreads]
-  (ThreadPoolExecutor. 0 nthreads 5 TimeUnit/SECONDS (LinkedBlockingQueue.)))
+(declare add-pgm)
+(defn- create-executor [nthreads queue]
+  (proxy [ThreadPoolExecutor] [0 nthreads 5 TimeUnit/SECONDS queue]
+    (afterExecute
+     [r t]
+     (when (nil? t)
+       (when (instance? nico.api-updator.WrappedFutureTask r)
+	 (let [result (.get r)]
+	   (cond
+	    (instance? nico.pgm.Pgm result) (add-pgm result)
+	    (= :failed result) (if (> *limit-pool* (.getActiveCount this))
+				 (do (.execute this (nico.api-updator.WrappedFutureTask. (.task r)))
+				     (debug (format "retry task %s" (pr-str r))))
+				 (debug (format "too many tasks (%d) to retry (%s)"
+						(.size queue) (pr-str r)))))))))))
 
 (let [latch (ref (CountDownLatch. 1))
       alert-statuses (ref '()) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
       awaiting-status (ref :need_login) ;; API updatorの状態
       fetched (atom []) ;; API updatorにより登録された最近1分間の番組数
       ;; 以下は番組情報取得スレッドプール。所属コミュニティ用とそれ以外用。
-      comm-pool (create-pool *nthreads-comm*), comm-futures (ref {})
-      normal-pool (create-pool *nthreads-normal*), normal-futures (ref {})]
+      comm-q (LinkedBlockingQueue.)
+      comm-executor (create-executor *nthreads-comm* comm-q)
+      normal-q (LinkedBlockingQueue.)
+      normal-executor (create-executor *nthreads-normal* normal-q)]
   (hu/defhook :awaiting :connected :reconnecting :rate-updated)
   (defn get-awaiting-status [] @awaiting-status)
   (defn add-alert-status [as]
@@ -80,17 +106,15 @@
     (swap! fetched conj (tu/now))
     (pgm/add pgm))
   (defn- create-task [pid cid uid received]
-    (let [task (proxy [Callable] []
-		 (call [] (let [r (create-pgm pid cid uid received)]
-			    (if (instance? nico.pgm.Pgm r) (do (add-pgm r) :succeeded) r))))]
+    (let [task (nico.api-updator.WrappedFutureTask.
+		(proxy [Callable] []
+		 (call [] (create-pgm pid cid uid received))))]
       (if (some #(contains? (set (:comms %)) (keyword cid)) @alert-statuses)
 	;; 所属コミュニティの番組情報は専用のスレッドプールで(優先的に)取得
 	(do (trace (format "%s: %s is joined community." pid cid))
-	    (let [f (.submit comm-pool ^Callable task)]
-	      (dosync (alter comm-futures conj [f task]))))
+	    (.execute comm-executor task))
 	(do (trace (format "%s: %s isn't your community." pid cid))
-	    (let [f (.submit normal-pool ^Callable task)]
-	      (dosync (alter normal-futures conj [f task])))))))
+	    (.execute normal-executor task)))))
   (defn- update-api-aux []
     (try
       (api/listen (first @alert-statuses) (fn [] (run-hooks :connected)) create-task)
@@ -114,63 +138,13 @@
 	       (Thread/sleep (* 1000 *reconnect-sec*))
 	       (run-hooks :reconnecting)
 	       (recur (dec c)))))))
-  (defn- update-fetching []
-    (letfn [(sweep [futures-map]
-		   (loop [done-futures '() failed-tasks '() m futures-map]
-		     (if (= 0 (count m))
-		       [done-futures failed-tasks]
-		       (let [[f task] (first m)]
-			 (if (or (.isDone f) (.isCancelled f))
-			   (if (= :failed (.get f))
-			     (recur (conj done-futures f) (conj failed-tasks task) (rest m))
-			     (recur (conj done-futures f) failed-tasks (rest m)))
-			   (recur done-futures failed-tasks (rest m)))))))
-	    (submit-aux [t pool]
-			(try (.submit pool ^Callable t)
-			     (catch RejectedExecutionException e
-			       (error (format "rejected execution.") e) nil)))
-	    (submit [m task pool]
-		    (assoc m (loop [t task]
-			       (if-let [f (submit-aux t pool)] f
-				       (do (Thread/sleep *wait-resubmit*) (recur t))))
-			   task))
-	    (retries [pool futures failed-tasks]
-		     (if (> *limit-pool* (count futures))
-		       (reduce #(submit %1 %2 pool) {} failed-tasks)
-		       (do (debug (format "too many futures (%d) to retry (%d)"
-					  (count futures) (count failed-tasks)))
-			   {})))]
-      ;; 終了したタスクを削除。取得失敗したタスクはリトライキューに追加。
-      (let [[done-comm-futures failed-comm-tasks] (sweep @comm-futures)
-	    [done-normal-futures failed-normal-tasks] (sweep @normal-futures)]
-	(trace (format "done-comm-futures: %d, done-normal-futures: %d"
-		       (count done-comm-futures) (count done-normal-futures)))
-	;; (1) Sweeping done tasks
-	(dosync
-	 (alter comm-futures #(apply dissoc % done-comm-futures))
-	 (alter normal-futures #(apply dissoc % done-normal-futures)))
-	;; リトライキューのタスクを再度スレッドプールに登録する。
-	;; スレッドプールへの登録が副作用であるためトランザクションを分けざるをえない。
-	;; この間*-futuresに追加が発生する可能性があるが、矛盾は生じない。
-	;; 但し*limit-pool*を超えるリクエストがスレッドプールにたまっている場合はリトライを諦める。
-	(let [comm-retries (retries comm-pool @comm-futures failed-comm-tasks)
-	      normal-retries (retries normal-pool @normal-futures failed-normal-tasks)]
-	  ;; (2) Adding retries
-	  (dosync
-	   (alter comm-futures merge comm-retries)
-	   (alter normal-futures merge normal-retries))
-	  (trace
-	   (format "comm-retries: %d, normal-retries: %d, comm-futures: %d, normal-futures: %d"
-		   (count comm-retries) (count normal-retries)
-		   (count @comm-futures) (count @normal-futures)))))))
 
   (defn get-fetched-rate [] (count @fetched))
   (defn update-rate []
     (loop [last-updated (tu/now)]
       (when (= 1 (.getCount @latch)) (.await @latch))
       (swap! fetched (fn [coll] (filter #(tu/within? % last-updated 60) coll)))
-      (update-fetching)
-      (run-hooks :rate-updated (count @fetched) (count @comm-futures) (count @normal-futures))
+      (run-hooks :rate-updated (count @fetched) (.size comm-q) (.size normal-q))
       (when (tu/within? last-updated (tu/now) *rate-ui-update*)
 	(Thread/sleep (* 1000 *rate-ui-update*)))
       (recur (tu/now)))))
