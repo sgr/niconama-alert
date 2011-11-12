@@ -8,7 +8,8 @@
 	    [nico.scrape :as ns]
 	    [hook-utils :as hu]
 	    [time-utils :as tu])
-  (:import (java.util.concurrent Callable Executors RejectedExecutionException)))
+  (:import (java.util.concurrent Callable CountDownLatch LinkedBlockingQueue
+				 RejectedExecutionException ThreadPoolExecutor TimeUnit)))
 
 (def *retry-connect* 10)   ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
 (def *reconnect-sec* 3)    ;; API接続が切れたときのリトライ間隔(秒)
@@ -55,13 +56,16 @@
 	(do (warn (format "couldn't fetching pgm: %s/%s/%s" pid cid uid))
 	    :failed)))))
 
-(let [latch (ref (java.util.concurrent.CountDownLatch. 1))
+(defn- create-pool [nthreads]
+  (ThreadPoolExecutor. 0 nthreads 5 TimeUnit/SECONDS (LinkedBlockingQueue.)))
+
+(let [latch (ref (CountDownLatch. 1))
       alert-statuses (ref '()) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
       awaiting-status (ref :need_login) ;; API updatorの状態
       fetched (atom []) ;; API updatorにより登録された最近1分間の番組数
       ;; 以下は番組情報取得スレッドプール。所属コミュニティ用とそれ以外用。
-      comm-pool (Executors/newFixedThreadPool *nthreads-comm*), comm-futures (ref {})
-      normal-pool (Executors/newFixedThreadPool *nthreads-normal*), normal-futures (ref {})]
+      comm-pool (create-pool *nthreads-comm*), comm-futures (ref {})
+      normal-pool (create-pool *nthreads-normal*), normal-futures (ref {})]
   (hu/defhook :awaiting :connected :reconnecting :rate-updated)
   (defn get-awaiting-status [] @awaiting-status)
   (defn add-alert-status [as]
@@ -96,7 +100,7 @@
 		   (trace (format "reset to: %s" (name astatus)))
 		   (dosync
 		    (ref-set awaiting-status astatus)
-		    (ref-set latch (java.util.concurrent.CountDownLatch. 1))))]
+		    (ref-set latch (CountDownLatch. 1))))]
     (loop [c *retry-connect*]
       (when (= 1 (.getCount @latch)) ;; pause中かどうか
 	(do (run-hooks :awaiting)
@@ -129,7 +133,13 @@
 		    (assoc m (loop [t task]
 			       (if-let [f (submit-aux t pool)] f
 				       (do (Thread/sleep *wait-resubmit*) (recur t))))
-			   task))]
+			   task))
+	    (retries [pool futures failed-tasks]
+		     (if (> *limit-pool* (count futures))
+		       (reduce #(submit %1 %2 pool) {} failed-tasks)
+		       (do (debug (format "too many futures (%d) to retry (%d)"
+					  (count futures) (count failed-tasks)))
+			   {})))]
       ;; 終了したタスクを削除。取得失敗したタスクはリトライキューに追加。
       (let [[done-comm-futures failed-comm-tasks] (sweep @comm-futures)
 	    [done-normal-futures failed-normal-tasks] (sweep @normal-futures)]
@@ -143,16 +153,8 @@
 	;; スレッドプールへの登録が副作用であるためトランザクションを分けざるをえない。
 	;; この間*-futuresに追加が発生する可能性があるが、矛盾は生じない。
 	;; 但し*limit-pool*を超えるリクエストがスレッドプールにたまっている場合はリトライを諦める。
-	(let [comm-retries (if (> *limit-pool* (count @comm-futures))
-			     (reduce #(submit %1 %2 comm-pool) {} failed-comm-tasks)
-			     (do (debug (format "too many comm futures (%d) to retry (%d)"
-						(count @comm-futures) (count failed-comm-tasks)))
-				 {}))
-	      normal-retries (if (> *limit-pool* (count @normal-futures))
-			       (reduce #(submit %1 %2 normal-pool) {} failed-normal-tasks)
-			       (do (debug (format "too many normal futures (%d) to retry (%d)"
-						  (count @normal-futures) (count failed-normal-tasks)))
-				   {}))]
+	(let [comm-retries (retries comm-pool @comm-futures failed-comm-tasks)
+	      normal-retries (retries normal-pool @normal-futures failed-normal-tasks)]
 	  ;; (2) Adding retries
 	  (dosync
 	   (alter comm-futures merge comm-retries)
