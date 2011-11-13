@@ -64,9 +64,10 @@
   (defn- conj-pgm-idx [aset pgm]
     (conj (disj-pgm-idx aset (:id pgm)) pgm))
   (defn- log-pgm [^String mode ^Pgm pgm]
-    (format "%s: %s %s \"%s\" \"%s\" pubdate: %s updated_at: %s elapsed: %d"
+    (format "%s: %s %s \"%s\" \"%s\" %s pubdate: %s updated_at: %s elapsed: %d"
 	    mode (name (:id pgm)) (if-let [cid (:comm_id pgm)] (name cid) "NONE")
 	    (:title pgm) (if-let [cname (:comm_name pgm)] cname "NONE")
+	    (:link pgm)
 	    (tu/format-time-long (:pubdate pgm))
 	    (tu/format-time-long (:updated_at pgm))
 	    (- (.getTime (:updated_at pgm)) (.getTime (:pubdate pgm)))))
