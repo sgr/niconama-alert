@@ -11,13 +11,13 @@
   (:import (java.util.concurrent Callable CountDownLatch LinkedBlockingQueue
 				 RejectedExecutionException ThreadPoolExecutor TimeUnit)))
 
-(def *retry-connect* 10)   ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
-(def *reconnect-sec* 3)    ;; API接続が切れたときのリトライ間隔(秒)
-(def *nthreads-comm* 2)    ;; 所属コミュニティの番組情報取得スレッド数
-(def *nthreads-normal* 3)  ;; それ以外の番組情報取得スレッド数
+(def *retry-connect* 3)    ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
+(def *reconnect-sec* 2)    ;; API接続が切れたときのリトライ間隔(秒)
+(def *nthreads-comm* 2)    ;; 所属コミュニティの番組情報取得スレッドの最大数
+(def *nthreads-normal* 3)  ;; それ以外の番組情報取得スレッドの最大数
+(def *keep-alive* 5)       ;; 番組取得待機時間(秒)。これを過ぎると取得スレッドは終了する。
 (def *limit-elapsed* 1200) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
-(def *limit-pool* 1000)     ;; スレッドプールにリトライ登録可能な数の目安
-(def *wait-resubmit* 2000) ;; スレッドプールにsubmit出来無い場合のリトライ間隔(ミリ秒)
+(def *limit-pool* 1000)    ;; スレッドプールにリトライ登録可能な数の目安
 (def *rate-ui-update* 5)   ;; UIの更新間隔(秒)
 
 (defn- create-pgm-from-scrapedinfo
@@ -75,38 +75,13 @@
 (defn- wft-uid [this] (:uid @(.state this)))
 (defn- wft-received [this] (:received @(.state this)))
 
-(declare add-pgm)
-(defn- create-executor [nthreads queue]
-  (proxy [ThreadPoolExecutor] [0 nthreads 5 TimeUnit/SECONDS queue]
-    (afterExecute
-     [t e]
-     (when (nil? e)
-       (when (instance? nico.api-updator.WrappedFutureTask t)
-	 (let [result (.get t) pid (.pid t) cid (.cid t) uid (.uid t) received (.received t)]
-	   (cond
-	    (instance? nico.pgm.Pgm result) (add-pgm result)
-	    (= :failed result) (if (> *limit-pool* (.getActiveCount this))
-				 (do
-				   (.execute this
-					     (nico.api-updator.WrappedFutureTask.
-					      pid cid uid received))
-				   (debug (format "retry task (%s/%s/%s %s)"
-						  pid uid cid (tu/format-time-long received))))
-				 (debug (format "too many tasks (%d) to retry (%s/%s/%s %s)"
-						(.size queue) pid uid cid
-						(tu/format-time-long received)))))))))))
-
-(let [latch (ref (CountDownLatch. 1))
+(let [latch (ref (CountDownLatch. 1)) ;; API取得に関するラッチ
       alert-statuses (ref '()) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
       awaiting-status (ref :need_login) ;; API updatorの状態
-      fetched (atom []) ;; API updatorにより登録された最近1分間の番組数
-      ;; 以下は番組情報取得スレッドプール。所属コミュニティ用とそれ以外用。
-      comm-q (LinkedBlockingQueue.)
-      comm-executor (create-executor *nthreads-comm* comm-q)
-      normal-q (LinkedBlockingQueue.)
-      normal-executor (create-executor *nthreads-normal* normal-q)]
+      fetched (atom [])] ;; API updatorにより登録された最近1分間の番組数
   (hu/defhook :awaiting :connected :reconnecting :rate-updated)
   (defn get-awaiting-status [] @awaiting-status)
+  (defn get-fetched-rate [] (count @fetched))
   (defn add-alert-status [as]
     (dosync
      (alter alert-statuses conj as)
@@ -118,44 +93,75 @@
       (warn (format "Some nil properties found in: %s" (pr-str pgm))))
     (swap! fetched conj (tu/now))
     (pgm/add pgm))
-  (defn- create-task [pid cid uid received]
-    (let [task (nico.api-updator.WrappedFutureTask. pid cid uid received)]
-      (if (some #(contains? (set (:comms %)) (keyword cid)) @alert-statuses)
-	;; 所属コミュニティの番組情報は専用のスレッドプールで(優先的に)取得
-	(do (trace (format "%s: %s is joined community." pid cid))
-	    (.execute comm-executor task))
-	(do (trace (format "%s: %s isn't your community." pid cid))
-	    (.execute normal-executor task)))))
-  (defn- update-api-aux []
-    (try
-      (api/listen (first @alert-statuses) (fn [] (run-hooks :connected)) create-task)
-      (catch Exception e (warn "** disconnected" e) nil)))
-  (defn update-api []
-    (letfn [(reset [astatus]
-		   (trace (format "reset to: %s" (name astatus)))
-		   (dosync
-		    (ref-set awaiting-status astatus)
-		    (ref-set latch (CountDownLatch. 1))))]
-    (loop [c *retry-connect*]
-      (when (= 1 (.getCount @latch)) ;; pause中かどうか
-	(do (run-hooks :awaiting)
-	    (.await @latch)))
-      (cond
-       (= 0 c) (do (reset :aborted) (recur *retry-connect*))
-       (empty? @alert-statuses) (do (reset :need_login) (recur *retry-connect*))
-       :else (do
-	       (update-api-aux)
-	       (info (format "Will reconnect (%d/%d) after %d sec..." c *retry-connect* *reconnect-sec*))
-	       (Thread/sleep (* 1000 *reconnect-sec*))
-	       (run-hooks :reconnecting)
-	       (recur (dec c)))))))
-
-  (defn get-fetched-rate [] (count @fetched))
-  (defn update-rate []
-    (loop [last-updated (tu/now)]
-      (when (= 1 (.getCount @latch)) (.await @latch))
-      (swap! fetched (fn [coll] (filter #(tu/within? % last-updated 60) coll)))
-      (run-hooks :rate-updated (count @fetched) (.size comm-q) (.size normal-q))
-      (when (tu/within? last-updated (tu/now) *rate-ui-update*)
-	(Thread/sleep (* 1000 *rate-ui-update*)))
-      (recur (tu/now)))))
+  (defn- create-executor [nthreads queue]
+    (proxy [ThreadPoolExecutor] [0 nthreads *keep-alive* TimeUnit/SECONDS queue]
+      (beforeExecute
+       [t r]
+       (when (= 1 (.getCount @latch))
+	 (do (debug "disconnected. awaiting reconnect...")
+	     (.await @latch)
+	     (debug "reconnected. fetching program information..."))))
+      (afterExecute
+       [r e]
+       (when (nil? e)
+	 (when (instance? nico.api-updator.WrappedFutureTask r)
+	   (let [result (.get r) pid (.pid r) cid (.cid r) uid (.uid r) received (.received r)]
+	     (cond
+	      (instance? nico.pgm.Pgm result) (add-pgm result)
+	      (= :failed result)
+	      (if (> *limit-pool* (.getActiveCount this))
+		(do
+		  (.execute this
+			    (nico.api-updator.WrappedFutureTask.
+			     pid cid uid received))
+		  (debug (format "retry task (%s/%s/%s %s)"
+				 pid uid cid (tu/format-time-long received))))
+		(debug (format "too many tasks (%d) to retry (%s/%s/%s %s)"
+			       (.size queue) pid uid cid
+			       (tu/format-time-long received)))))))))))
+  (let [comm-q (LinkedBlockingQueue.)
+	comm-executor (create-executor *nthreads-comm* comm-q) 
+	normal-q (LinkedBlockingQueue.)
+	normal-executor (create-executor *nthreads-normal* normal-q)]
+    (defn- create-task [pid cid uid received]
+      (let [task (nico.api-updator.WrappedFutureTask. pid cid uid received)]
+	(if (some #(contains? (set (:comms %)) (keyword cid)) @alert-statuses)
+	  ;; 所属コミュニティの番組情報は専用のスレッドプールで(優先的に)取得
+	  (do (trace (format "%s: %s is joined community." pid cid))
+	      (.execute comm-executor task))
+	  (do (trace (format "%s: %s isn't your community." pid cid))
+	      (.execute normal-executor task)))))
+    (defn- update-api-aux []
+      (try
+	(api/listen (first @alert-statuses) (fn [] (run-hooks :connected)) create-task)
+	(catch Exception e
+	  (warn "** disconnected" e)
+	  nil)))
+    (defn update-api []
+      (letfn [(reset [astatus]
+		     (trace (format "reset to: %s" (name astatus)))
+		     (dosync
+		      (ref-set awaiting-status astatus)
+		      (ref-set latch (CountDownLatch. 1))))]
+	(loop [c *retry-connect*]
+	  (when (= 1 (.getCount @latch)) ;; pause中かどうか
+	    (do (run-hooks :awaiting)
+		(.await @latch)))
+	  (cond
+	   (= 0 c) (do (reset :aborted) (recur *retry-connect*))
+	   (empty? @alert-statuses) (do (reset :need_login) (recur *retry-connect*))
+	   :else (do
+		   (update-api-aux)
+		   (info (format "Will reconnect (%d/%d) after %d sec..."
+				 c *retry-connect* *reconnect-sec*))
+		   (Thread/sleep (* 1000 *reconnect-sec*))
+		   (run-hooks :reconnecting)
+		   (recur (dec c)))))))
+    (defn update-rate []
+      (loop [last-updated (tu/now)]
+	(when (= 1 (.getCount @latch)) (.await @latch))
+	(swap! fetched (fn [coll] (filter #(tu/within? % last-updated 60) coll)))
+	(run-hooks :rate-updated (count @fetched) (.size comm-q) (.size normal-q))
+	(when (tu/within? last-updated (tu/now) *rate-ui-update*)
+	  (Thread/sleep (* 1000 *rate-ui-update*)))
+	(recur (tu/now))))))
