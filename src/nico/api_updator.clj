@@ -20,17 +20,6 @@
 (def *wait-resubmit* 2000) ;; スレッドプールにsubmit出来無い場合のリトライ間隔(ミリ秒)
 (def *rate-ui-update* 5)   ;; UIの更新間隔(秒)
 
-(gen-class
- :name nico.api-updator.WrappedFutureTask
- :extends java.util.concurrent.FutureTask
- :prefix "wft-"
- :constructors {[java.util.concurrent.Callable] [java.util.concurrent.Callable]}
- :state state
- :init init
- :methods [[task [] java.util.concurrent.Callable]])
-(defn- wft-init [c] [[c] (atom c)])
-(defn- wft-task [this] @(.state this))
-
 (defn- create-pgm-from-scrapedinfo
   [pid cid]
   (if-let [info (ns/fetch-pgm-info pid)]
@@ -67,21 +56,45 @@
 	(do (warn (format "couldn't fetching pgm: %s/%s/%s" pid cid uid))
 	    :failed)))))
 
+(gen-class
+ :name nico.api-updator.WrappedFutureTask
+ :extends java.util.concurrent.FutureTask
+ :prefix "wft-"
+ :constructors {[String String String java.util.Date] [java.util.concurrent.Callable]}
+ :state state
+ :init init
+ :methods [[pid [] String]
+	   [cid [] String]
+	   [uid [] String]
+	   [received [] java.util.Date]])
+(defn- wft-init [pid cid uid received]
+  (let [c (proxy [Callable] [] (call [] (create-pgm pid cid uid received)))]
+    [[c] (atom {:pid pid :cid cid :uid uid :received received})]))
+(defn- wft-pid [this] (:pid @(.state this)))
+(defn- wft-cid [this] (:cid @(.state this)))
+(defn- wft-uid [this] (:uid @(.state this)))
+(defn- wft-received [this] (:received @(.state this)))
+
 (declare add-pgm)
 (defn- create-executor [nthreads queue]
   (proxy [ThreadPoolExecutor] [0 nthreads 5 TimeUnit/SECONDS queue]
     (afterExecute
-     [r t]
-     (when (nil? t)
-       (when (instance? nico.api-updator.WrappedFutureTask r)
-	 (let [result (.get r)]
+     [t e]
+     (when (nil? e)
+       (when (instance? nico.api-updator.WrappedFutureTask t)
+	 (let [result (.get t) pid (.pid t) cid (.cid t) uid (.uid t) received (.received t)]
 	   (cond
 	    (instance? nico.pgm.Pgm result) (add-pgm result)
 	    (= :failed result) (if (> *limit-pool* (.getActiveCount this))
-				 (do (.execute this (nico.api-updator.WrappedFutureTask. (.task r)))
-				     (debug (format "retry task %s" (pr-str r))))
-				 (debug (format "too many tasks (%d) to retry (%s)"
-						(.size queue) (pr-str r)))))))))))
+				 (do
+				   (.execute this
+					     (nico.api-updator.WrappedFutureTask.
+					      pid cid uid received))
+				   (debug (format "retry task (%s/%s/%s %s)"
+						  pid uid cid (tu/format-time-long received))))
+				 (debug (format "too many tasks (%d) to retry (%s/%s/%s %s)"
+						(.size queue) pid uid cid
+						(tu/format-time-long received)))))))))))
 
 (let [latch (ref (CountDownLatch. 1))
       alert-statuses (ref '()) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
@@ -106,9 +119,7 @@
     (swap! fetched conj (tu/now))
     (pgm/add pgm))
   (defn- create-task [pid cid uid received]
-    (let [task (nico.api-updator.WrappedFutureTask.
-		(proxy [Callable] []
-		 (call [] (create-pgm pid cid uid received))))]
+    (let [task (nico.api-updator.WrappedFutureTask. pid cid uid received)]
       (if (some #(contains? (set (:comms %)) (keyword cid)) @alert-statuses)
 	;; 所属コミュニティの番組情報は専用のスレッドプールで(優先的に)取得
 	(do (trace (format "%s: %s is joined community." pid cid))
