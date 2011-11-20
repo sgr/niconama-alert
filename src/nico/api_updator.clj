@@ -68,7 +68,7 @@
 	   [uid [] String]
 	   [received [] java.util.Date]])
 (defn- wft-init [pid cid uid received]
-  (let [c (proxy [Callable] [] (call [] (create-pgm pid cid uid received)))]
+  (let [c #(create-pgm pid cid uid received)]
     [[c] (atom {:pid pid :cid cid :uid uid :received received})]))
 (defn- wft-pid [this] (:pid @(.state this)))
 (defn- wft-cid [this] (:cid @(.state this)))
