@@ -7,7 +7,7 @@
 	    [nico.rss :as rss]
 	    [hook-utils :as hu]
 	    [time-utils :as tu])
-  (:import (clojure.lang Keyword)))
+  (:import [clojure.lang Keyword]))
 
 ;; RSS updator
 (let [counter (atom 1)
@@ -16,7 +16,7 @@
   (defn- fetch-rss []
     (try
       (loop [page 1, total (pgm/get-total), cur_total total, fetched #{}]
-	(let [[cur_total cur_pgms] (rss/get-programs-from-rss-page (rss/get-nico-rss page))
+	(let [[cur_total cur_pgms] (rss/get-programs-from-rss page)
 	      fetched-upd (reduce conj fetched (map :id cur_pgms))
 	      cfetched (count fetched-upd)]
 	  (when (and (< 0 cur_total) (not= (pgm/get-total) cur_total))

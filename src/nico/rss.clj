@@ -17,7 +17,10 @@
   (:import (java.text SimpleDateFormat)
 	   (java.util Locale)))
 
-(defn get-nico-rss
+(def *retry* 10)
+(def *wait* 3000)
+
+(defn get-nico-rss-aux
   [page]
   (try
     (let [s (ds/slurp* (n/url-stream (format "http://live.nicovideo.jp/recent/rss?p=%s" page)))
@@ -27,7 +30,19 @@
 	(catch Exception e
 	  (error (format "failed parsing RSS #%d: %s" page cs) e))))
     (catch Exception e
-      (error (format "failed fetching RSS #%d: %s" page (.getMessage e)) e) {})))
+      (error (format "failed fetching RSS #%d: %s" page (.getMessage e)) e) nil)))
+
+(defn get-nico-rss
+  [page]
+  (loop [c *retry*]
+    (if-let [rss (get-nico-rss-aux page)]
+      (do (debug (format "fetched RSS #%d tried %d times." page (- *retry* c)))
+          rss)
+      (if (= 0 c)
+        (do (error (format "aborted fetching RSS #%d: reached limit." page))
+            {})
+        (do (Thread/sleep *wait*)
+            (recur (dec c)))))))
 
 (defn get-programs-count
   "get the total programs count."
@@ -72,7 +87,7 @@
    fetched_at
    fetched_at))
 
-(defn get-programs-from-rss-page [rss]
+(defn get-programs-from-rss-aux [rss]
   [(get-programs-count rss)
    (for [item (for [x (zfx/xml-> (zip/xml-zip rss) :channel zf/children)
 		    :when (= :item (:tag (first x)))] (first x))]
@@ -82,3 +97,20 @@
 	 (warn (format "Some nil properties found in: %s" (pr-str pgm))))
        pgm))])
 
+(defn get-programs-from-rss [page]
+  (loop [c *retry*
+         rss (get-nico-rss page)
+         [total pgms] (get-programs-from-rss-aux rss)]
+    (if (= 0 c)
+      (do (debug "reached limit fetching RSS")
+          [total pgms])
+      (if (or (= 0 total) (> 0 total))
+        (do (debug (format "retry fetching RSS #%d (%d) caused by wrong total number: %d" page c total))
+            (Thread/sleep *wait*)
+            (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
+        (if (and (= 0 (count pgms)) (> total (* 18 page)))
+          (do (debug (format "retry fetching RSS #%d (%d) caused by lack of programs: %d,%d,%d"
+                             page c total (* 18 page) (count pgms)))
+              (Thread/sleep *wait*)
+              (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
+          [total pgms])))))
