@@ -5,7 +5,8 @@
   (:use [clojure.set :only [union]]
 	[clojure.contrib.logging])
   (:require [hook-utils :as hu]
-	    [time-utils :as tu]))
+	    [time-utils :as tu])
+  (:import [java.util.concurrent Callable Executors]))
 
 (def *scale* 1.15) ;; 最大保持数
 (def *interval-clean* 60) ;; 古い番組情報を削除する間隔
@@ -42,7 +43,8 @@
 			   (let [d (- (elapsed %2) (elapsed %1))]
 			     (if (= 0 d) (.compareTo (name (:id %1)) (name (:id %2))) d)))))
       last-cleaned (ref (tu/now)) ;; 番組情報の最終クリーンアップ時刻
-      called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
+      called-at-hook-updated (ref (tu/now)) ;; フックを呼び出した最終時刻
+      pool (Executors/newSingleThreadExecutor)] ; 番組追加リクエストを処理するワーカースレッドプール
   (defn pgms [] @id-pgms)
   (defn count-pgms [] (count @id-pgms))
   (hu/defhook :updated)
@@ -179,7 +181,7 @@
 			 npgms npubdate nupdated nelapsed ncomm))
 	  nil))))
   (defn- get-last-cleaned [] @last-cleaned)
-  (defn add [^Pgm pgm]
+  (defn add1 [^Pgm pgm]
     (letfn [(add-clean [^Pgm pgm]
 		       (add-aux pgm)
 		       (when-not (tu/within? @last-cleaned (tu/now) *interval-clean*)
@@ -196,4 +198,5 @@
 			(tu/later? (:pubdate pgm) (:pubdate opgm)))
 	       (do (rem-aux (:id opgm))
 		   (add-clean pgm)))
-	     (add-clean pgm))))))))
+	     (add-clean pgm)))))))
+  (defn add [^Pgm pgm] (.execute pool #(add1 pgm))))
