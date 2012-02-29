@@ -7,7 +7,7 @@
 (def *read-timeout* 10000)
 
 (defn url-stream
-  ([^String url ^int connect-timeout ^int read-timeout]
+  ([^String url ^Integer connect-timeout ^Integer read-timeout]
      (let [u (java.net.URL. url)]
        (.getInputStream (doto (.openConnection u)
 			  (.setConnectTimeout connect-timeout)

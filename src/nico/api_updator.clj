@@ -17,7 +17,7 @@
 (def *nthreads-normal* 3)  ;; それ以外の番組情報取得スレッドの最大数
 (def *keep-alive* 5)       ;; 番組取得待機時間(秒)。これを過ぎると取得スレッドは終了する。
 (def *limit-elapsed* 1200) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
-(def *limit-pool* 1000)    ;; スレッドプールにリトライ登録可能な数の目安
+(def *limit-queue* 1000)    ;; スレッドプールにリトライ登録可能な数の目安
 (def *rate-ui-update* 5)   ;; UIの更新間隔(秒)
 
 (defn- create-pgm-from-scrapedinfo
@@ -109,7 +109,7 @@
 	     (cond
 	      (instance? nico.pgm.Pgm result) (add-pgm result)
 	      (= :failed result)
-	      (if (> *limit-pool* (.getActiveCount this))
+	      (if (> *limit-queue* (.getActiveCount this))
 		(do
 		  (.execute this
 			    (nico.api-updator.WrappedFutureTask.
@@ -123,6 +123,15 @@
 	comm-executor (create-executor *nthreads-comm* comm-q) 
 	normal-q (LinkedBlockingQueue.)
 	normal-executor (create-executor *nthreads-normal* normal-q)]
+    (defn clear-normal-q
+      ([]
+	 (trace (format "clear normal queue (%d -> 0)" (.size normal-q)))
+	 (.clear normal-q))
+      ([sec]
+	 (let [c (.size normal-q), now (tu/now)]
+	   (doseq [t (iterator-seq (.iterator normal-q))]
+	     (when-not (tu/within? (.received t) now sec) (.remove normal-q t)))
+	   (trace (format "clear normal queue (%d -> %d)" c (.size normal-q))))))
     (defn- create-task [pid cid uid received]
       (let [task (nico.api-updator.WrappedFutureTask. pid cid uid received)]
 	(if (some #(contains? (set (:comms %)) (keyword cid)) @alert-statuses)
