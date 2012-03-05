@@ -9,15 +9,18 @@
 	    [net-utils :as n]
 	    [str-utils :as su]
 	    [time-utils :as tu])
-  (:import (java.awt Color Dimension FlowLayout Font GraphicsEnvironment RenderingHints
-		     GridBagLayout GridBagConstraints Insets)
-	   (java.awt.event ComponentAdapter MouseListener MouseMotionListener)
-	   (java.awt.geom RoundRectangle2D$Float)
-	   (java.awt.image BufferedImage)
-	   (java.net URL)
-	   (javax.swing BorderFactory ImageIcon JButton JDialog JLabel JPanel JTextArea SpringLayout)
-	   (javax.swing.text.html HTMLEditorKit)
-	   (javax.imageio ImageIO)))
+  (:import [java.awt Color Dimension FlowLayout Font GraphicsEnvironment RenderingHints
+		     GridBagLayout GridBagConstraints Insets]
+	   [java.awt.event ComponentAdapter MouseListener MouseMotionListener]
+	   [java.awt.geom RoundRectangle2D$Float]
+	   [java.awt.image BufferedImage]
+	   [java.net URL]
+	   [javax.swing BorderFactory ImageIcon JButton JDialog JLabel JPanel JTextArea SpringLayout]
+	   [javax.swing.text.html HTMLEditorKit]
+	   [javax.imageio ImageIO]))
+
+(def *opacity* (float 0.9))
+(defn- get-shape [dlg] (RoundRectangle2D$Float. 0 0 (.getWidth dlg) (.getHeight dlg) 20 20))
 
 (def *asize* (Dimension. 220 130))
 (def *lcsr* (.getLinkCursor (HTMLEditorKit.)))
@@ -27,35 +30,57 @@
 (def *desc-size* (Dimension. 115 64))
 (def *retry-limit* 5)
 
+(defn- decorate-aux-sun-java6 []
+  (try
+    (let [cAu (Class/forName "com.sun.awt.AWTUtilities")
+          cWindow (Class/forName "java.awt.Window")
+          cShape (Class/forName "java.awt.Shape")
+          setwo (.getMethod cAu "setWindowOpacity" (into-array Class [cWindow Float/TYPE]))
+          setws (.getMethod cAu "setWindowShape" (into-array Class [cWindow cShape]))]
+      (fn [dlg]
+        (.invoke setwo nil (to-array [dlg *opacity*]))
+        (doto dlg
+          (.addComponentListener
+           (proxy [ComponentAdapter][]
+             (componentResized
+               [e]
+               (try
+                 (.invoke setws nil (to-array [dlg (get-shape dlg)]))
+                 (catch Exception e
+                   (warn "failed invoking setWindowShape" e)))))))))
+    (catch Exception e
+      (warn "This platform doesn't support AWTUtilities" e) nil)))
+
+(defn- decorate-aux-java7 []
+  (let [cWT (Class/forName "java.awt.GraphicsDevice$WindowTranslucency")
+        vo (.getMethod cWT "valueOf" (into-array Class [String]))
+        TRANSLUCENT (.invoke vo nil (to-array ["TRANSLUCENT"]))
+        PERPIXEL_TRANSLUCENT (.invoke vo nil (to-array ["PERPIXEL_TRANSLUCENT"]))
+        PERPIXEL_TRANSPARENT (.invoke vo nil (to-array ["PERPIXEL_TRANSPARENT"]))
+        ge (GraphicsEnvironment/getLocalGraphicsEnvironment)
+        gd (.getDefaultScreenDevice ge)
+        supported-tl  (.isWindowTranslucencySupported gd TRANSLUCENT)
+        supported-ptl (.isWindowTranslucencySupported gd PERPIXEL_TRANSLUCENT)
+        supported-ptp (.isWindowTranslucencySupported gd PERPIXEL_TRANSPARENT)]
+    (debug (format "This environment is supported TRANSLUCENT: %s" supported-tl))
+    (debug (format "This environment is supported PERPIXCEL_TRANSLUCENT: %s" supported-ptl))
+    (debug (format "This environment is supported PERPIXCEL_TRANSPARENT: %s" supported-ptp))
+    (fn [dlg]
+      (try
+        (.setUndecorated dlg true)
+        (when supported-tl  (.setOpacity dlg  *opacity*))
+        (when supported-ptl (.setShape dlg (get-shape dlg)))
+        (catch Exception e (warn "Exception raised" e))))))
+
 (let [decorate-fn (atom nil)]
   (defn- decorate [dlg]
     (when-not @decorate-fn
-      (try
-	(let [cAu (Class/forName "com.sun.awt.AWTUtilities")
-	      cWindow (Class/forName "java.awt.Window")
-	      cShape (Class/forName "java.awt.Shape")
-	      setwo (.getMethod cAu "setWindowOpacity" (into-array Class [cWindow Float/TYPE]))
-	      setws (.getMethod cAu "setWindowShape" (into-array Class [cWindow cShape]))]
-	  (reset! decorate-fn
-		  (fn [dlg]
-		    (.invoke setwo nil (to-array [dlg (float 0.9)]))
-		    (doto dlg
-		      (.addComponentListener
-		       (proxy [ComponentAdapter][]
-			 (componentResized
-			  [e]
-			  (try
-			    (.invoke
-			     setws nil
-			     (to-array
-			      [dlg (RoundRectangle2D$Float.
-				    0 0
-				    (.getWidth dlg) (.getHeight dlg) 20 20)]))
-			    (catch Exception e
-			      (warn "failed invoking setWindowShape" e))))))))))
-	(catch Exception e
-	  (reset! decorate-fn (fn [dlg]))
-	  (warn "This platform doesn't support AWTUtilities" e))))
+      (let [v (System/getProperty "java.version")]
+        (debug (str "java.version: " v))
+        (condp #(.startsWith %2 %1) v
+          "1.6" (when-let [f (decorate-aux-sun-java6)] (reset! decorate-fn f))
+          "1.7" (when-let [f (decorate-aux-java7)] (reset! decorate-fn f)))
+        (when-not @decorate-fn (reset! decorate-fn (fn [dlg])))))
     (@decorate-fn dlg)))
 
 (defn dlg-width [] (.width *asize*))
