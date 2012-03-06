@@ -2,14 +2,18 @@
 (ns #^{:author "sgr"
        :doc "Alert management functions."}
   nico.alert
-  (:use [clojure.contrib.swing-utils :only [do-swing*]])
+  (:use [clojure.contrib.swing-utils :only [do-swing*]]
+	[clojure.contrib.logging])
   (:require [clojure.contrib.seq-utils :as cs]
 	    [time-utils :as tu]
 	    [nico.ui.alert-dlg :as uad]
 	    [nico.pgm :as pgm])
-  (:import (java.awt GraphicsEnvironment)))
+  (:import [java.awt GraphicsEnvironment]
+           [java.util.concurrent LinkedBlockingQueue ThreadPoolExecutor TimeUnit]))
 
-(def *interval* 20)
+(def *display-time* 20) ; アラートウィンドウの表示時間(秒)
+(def *keep-alive* 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
+(def *exec-interval* 500) ; アラートウィンドウ表示処理の実行間隔(ミリ秒)
 
 (defn- divide-plats []
   (let [r (.getMaximumWindowBounds (GraphicsEnvironment/getLocalGraphicsEnvironment))
@@ -19,22 +23,17 @@
 		 {:used false, :x (- rw (* x aw)), :y (- rh (* y ah))})
 	      (for [x (range 1 (inc w)) y (range 1 (inc h))] [x y])))))
 
+(defn- periodic-executor [queue]
+  (proxy [ThreadPoolExecutor] [0 1 *keep-alive* TimeUnit/SECONDS queue]
+    (beforeExecute
+      [t r]
+      (.sleep TimeUnit/MILLISECONDS *exec-interval*)
+      (proxy-super beforeExecute t r))))
+
 (let [plats (atom (divide-plats))	;; アラートダイアログの表示領域
-      queue (atom [])	;; アラート表示リクエストキュー
-      latch (atom (java.util.concurrent.CountDownLatch. 1))
+      pool (periodic-executor (LinkedBlockingQueue.))
+      sentinel (Object.)
       last-modified (atom (tu/now))]
-  (defn- enqueue [req]
-    (swap! queue conj req)
-    (when (= 1 (.getCount @latch)) (.countDown @latch)))
-  (defn- dequeue []
-    (if (seq @queue)
-      (let [top (first @queue)]
-	(do
-	  (swap! queue subvec 1)
-	  (when (and (= 0 (.getCount @latch)) (= 0 (count @queue)))
-	    (reset! latch (java.util.concurrent.CountDownLatch. 1))))
-	top)
-      nil))
   (defn- reserve-plat-aux [i]
     (if-not (:used (nth @plats i))
       (let [plat (nth @plats i)]
@@ -61,36 +60,31 @@
 	[nil nil])))
   (defn- release-plat [i plat]
     (swap! plats assoc i (assoc plat :used false)))
+  (defn- alert-aux [pgm]
+    (let [now (tu/now)
+          [i plat] (if (tu/within? @last-modified now 5) (reserve-plat-A) (reserve-plat-B))]
+      (if i
+        (let [adlg (uad/alert-dlg pgm #(release-plat i plat))]
+          (debug (str "display alert dialog: " (:id pgm)))
+          (reset! last-modified now)
+          (future 
+            (do-swing* :now #(doto adlg
+                               (.setLocation (:x plat) (:y plat))
+                               (.setVisible true)))
+            (.sleep TimeUnit/SECONDS *display-time*)
+            (do-swing* :now #(doto adlg
+                               (.setVisible false)
+                               (.dispose)))
+            (release-plat i plat)))
+        (do (debug (str "waiting plats.." (:id pgm)))
+            (.sleep TimeUnit/SECONDS 5)
+            (recur pgm)))))
   (defn alert-pgm [id]
-    (dosync
-     (when-let [pgm (pgm/get-pgm id)]
-       (when-not (:alerted pgm)
-	 (do (pgm/add (assoc pgm :alerted true))
-	     (enqueue pgm))))))
-  (defn gen-alerter []
-    (Thread.
-     (fn []
-       (Thread/sleep 500)
-       (when (= 1 (.getCount @latch)) (.await @latch))
-       (if (< 0 (count @queue))
-	 (let [now (tu/now)
-	       [i plat] (if (tu/within? @last-modified now 5)
-			  (reserve-plat-A)
-			  (reserve-plat-B))]
-	   (reset! last-modified now)
-	   (if i
-	     (let [adlg (uad/alert-dlg (dequeue) (fn [] (release-plat i plat)))]
-	       (.start (Thread. (fn []
-				  (do-swing* :now
-					     (fn []
-					       (.setLocation adlg (:x plat) (:y plat))
-					       (.setVisible adlg true)))
-				  (Thread/sleep (* *interval* 1000))
-				  (do-swing* :now
-					     (fn []
-					       (.setVisible adlg false)
-					       (.dispose adlg)))
-				  (release-plat i plat))))
-	       (recur))
-	     (recur)))
-	 (recur))))))
+    (locking sentinel
+      (when-let [pgm (pgm/get-pgm id)]
+        (if-not (:alerted pgm)
+          (do
+            (.execute pool #(alert-aux pgm))
+            (pgm/update-alerted id))
+          (debug (str "already alerted: " id)))))))
+

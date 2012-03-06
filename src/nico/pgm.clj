@@ -95,6 +95,10 @@
       (apply str (interpose ", "
 			    (map #(when-not (eq? % from to) (diff-str % from to))
 				 '(:title :pubdate :desc :comm_name :alerted :updated_at))))))
+  (defn update-alerted [id]
+    (when-let [pgm (get @id-pgms id)]
+      (dosync
+       (alter id-pgms assoc id (assoc pgm :alerted true)))))
   (defn- add-aux [^Pgm pgm]
     (if-let [orig (get @id-pgms (:id pgm))]
       (trace (format "update: %s %s \"%s\" {%s}"
@@ -181,7 +185,7 @@
 			 npgms npubdate nupdated nelapsed ncomm))
 	  nil))))
   (defn- get-last-cleaned [] @last-cleaned)
-  (defn add1 [^Pgm pgm]
+  (defn- add1 [^Pgm pgm]
     (letfn [(add-clean [^Pgm pgm]
 		       (add-aux pgm)
 		       (when-not (tu/within? @last-cleaned (tu/now) *interval-clean*)

@@ -4,7 +4,6 @@
     nico.updator
   (:require [nico.rss-updator :as rss]
 	    [nico.api-updator :as api]
-	    [nico.alert :as na]
 	    [nico.pgm :as pgm]))
 
 ;; 各更新スレッドを起動
@@ -13,11 +12,9 @@
       api-updator (atom {:updator (Thread. api/update-api)
 			 :started false})
       rate-updator (atom {:updator (Thread. api/update-rate)
-			  :started false})
-      alerter (atom {:updator (na/gen-alerter)
-		     :started false})]
+			  :started false})]
   (defn start-updators []
-    (doseq [u [rss-updator api-updator rate-updator alerter]]
+    (doseq [u [rss-updator api-updator rate-updator]]
       (when-let [t (:updator (deref u))]
 	(when-not (:started (deref u))
 	  (.start t)

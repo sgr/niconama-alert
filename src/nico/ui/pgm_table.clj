@@ -3,7 +3,8 @@
        :doc "番組情報表示テーブル。"}
   nico.ui.pgm-table
   (:use [clojure.contrib.swing-utils :only [add-action-listener]]
-	[clojure.contrib.seq-utils :only [indexed]])
+	[clojure.contrib.seq-utils :only [indexed]]
+        [nico.ui.util])
   (:require [clojure.string :as s]
 	    [nico.prefs :as p]
 	    [str-utils :as su]
