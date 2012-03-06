@@ -1,6 +1,7 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.pgm-test
-  (:import (java.util Calendar Date))
+  (:import [java.util Calendar Date]
+           [java.util.concurrent TimeUnit])
   (:require [time-utils :as tu])
   (:use [nico.pgm] :reload-all)
   (:use [clojure.test]))
@@ -32,7 +33,7 @@
   (defn- create-pgms [sq] (map #(create-pgm % (str "title" %)) sq))
   (defn- wait [from sec f]
     (loop []
-      (Thread/sleep 1000)
+      (.sleep TimeUnit 1)
       (if (tu/within? from (tu/now) sec) (recur) (f))))
   (defn- apply-single [f n] (doseq [pgm (create-pgms (range 0 n))] (f pgm)))
   (defn- apply-single-constrained [f n]

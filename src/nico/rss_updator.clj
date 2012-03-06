@@ -7,7 +7,8 @@
 	    [nico.rss :as rss]
 	    [hook-utils :as hu]
 	    [time-utils :as tu])
-  (:import [clojure.lang Keyword]))
+  (:import [clojure.lang Keyword]
+           [java.util.concurrent TimeUnit]))
 
 ;; RSS updator
 (let [counter (atom 1)
@@ -54,7 +55,7 @@
 	    (run-hooks :fetched fetched total) ;; 取得状況更新
 	    (recur @counter))
 	  (do
-	    (Thread/sleep 1000)
+	    (.sleep TimeUnit/SECONDS 1)
 	    (set-counter (dec @counter))
 	    (recur max))))
       (catch Exception e (error "failed updating RSS" e))))

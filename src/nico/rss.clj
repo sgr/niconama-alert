@@ -14,11 +14,12 @@
 	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu])
-  (:import (java.text SimpleDateFormat)
-	   (java.util Locale)))
+  (:import [java.text SimpleDateFormat]
+	   [java.util Locale]
+           [java.util.concurrent TimeUnit]))
 
 (def *retry* 10)
-(def *wait* 3000)
+(def *wait* 3)
 
 (defn get-nico-rss-aux
   [page]
@@ -41,7 +42,7 @@
       (if (= 0 c)
         (do (error (format "aborted fetching RSS #%d: reached limit." page))
             {})
-        (do (Thread/sleep *wait*)
+        (do (.sleep TimeUnit/SECONDS *wait*)
             (recur (dec c)))))))
 
 (defn get-programs-count
@@ -106,11 +107,11 @@
           [total pgms])
       (if (or (= 0 total) (> 0 total))
         (do (debug (format "retry fetching RSS #%d (%d) caused by wrong total number: %d" page c total))
-            (Thread/sleep *wait*)
+            (.sleep TimeUnit/SECONDS *wait*)
             (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
         (if (and (= 0 (count pgms)) (> total (* 18 page)))
           (do (debug (format "retry fetching RSS #%d (%d) caused by lack of programs: %d,%d,%d"
                              page c total (* 18 page) (count pgms)))
-              (Thread/sleep *wait*)
+              (.sleep TimeUnit/SECONDS *wait*)
               (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
           [total pgms])))))

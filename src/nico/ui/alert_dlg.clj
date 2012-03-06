@@ -15,6 +15,7 @@
 	   [java.awt.geom RoundRectangle2D$Float]
 	   [java.awt.image BufferedImage]
 	   [java.net URL]
+           [java.util.concurrent TimeUnit]
 	   [javax.swing BorderFactory ImageIcon JButton JDialog JLabel JPanel JTextArea SpringLayout]
 	   [javax.swing.text.html HTMLEditorKit]
 	   [javax.imageio ImageIO]))
@@ -118,7 +119,7 @@
 	(do (warn (format "abort fetching image (%s) because reached retry limit: %d"
 			  url *retry-limit*))
 	    *noimg*)
-	(do (Thread/sleep 1000)
+	(do (.sleep TimeUnit/SECONDS 1)
 	    (recur (dec retry-count)))))))
 
 (defn- get-thumbnail [url]

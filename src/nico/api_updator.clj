@@ -8,8 +8,8 @@
 	    [nico.scrape :as ns]
 	    [hook-utils :as hu]
 	    [time-utils :as tu])
-  (:import (java.util.concurrent Callable CountDownLatch LinkedBlockingQueue
-				 RejectedExecutionException ThreadPoolExecutor TimeUnit)))
+  (:import [java.util.concurrent Callable CountDownLatch LinkedBlockingQueue
+				 RejectedExecutionException ThreadPoolExecutor TimeUnit]))
 
 (def *retry-connect* 3)    ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
 (def *reconnect-sec* 2)    ;; API接続が切れたときのリトライ間隔(秒)
@@ -163,7 +163,7 @@
 		   (update-api-aux)
 		   (info (format "Will reconnect (%d/%d) after %d sec..."
 				 c *retry-connect* *reconnect-sec*))
-		   (Thread/sleep (* 1000 *reconnect-sec*))
+		   (.sleep TimeUnit/SECONDS *reconnect-sec*)
 		   (run-hooks :reconnecting)
 		   (recur (dec c)))))))
     (defn update-rate []
@@ -172,5 +172,5 @@
 	(swap! fetched (fn [coll] (filter #(tu/within? % last-updated 60) coll)))
 	(run-hooks :rate-updated (count @fetched) (.size comm-q) (.size normal-q))
 	(when (tu/within? last-updated (tu/now) *rate-ui-update*)
-	  (Thread/sleep (* 1000 *rate-ui-update*)))
+	  (.sleep TimeUnit/SECONDS *rate-ui-update*))
 	(recur (tu/now))))))
