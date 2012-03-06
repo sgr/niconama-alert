@@ -1,6 +1,6 @@
 ;; -*- coding: utf-8-unix -*-
 (ns time-utils-test
-  (:import (java.util Calendar Date))
+  (:import [java.util Calendar Date])
   (:use [time-utils] :reload-all)
   (:use [clojure.test]))
 

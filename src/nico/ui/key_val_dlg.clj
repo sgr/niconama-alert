@@ -4,11 +4,11 @@
   nico.ui.key-val-dlg
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.ui.util :as uu])
-  (:import (java.awt BorderLayout Color Dimension)
-	   (javax.swing BorderFactory GroupLayout SpringLayout
-			JButton JDialog JLabel JPanel JPasswordField JTextField)
-	   (javax.swing.event DocumentListener)
-	   (javax.swing.text PlainDocument)))
+  (:import [java.awt BorderLayout Color Dimension]
+	   [javax.swing BorderFactory GroupLayout SpringLayout
+			JButton JDialog JLabel JPanel JPasswordField JTextField]
+	   [javax.swing.event DocumentListener]
+	   [javax.swing.text PlainDocument]))
 
 (def *dlg-size* (Dimension. 450 150))
 (def *btn-panel-size* (Dimension. 450 40))

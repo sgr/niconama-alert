@@ -9,11 +9,11 @@
 	    [nico.ui.key-val-dlg :as ukvd]
 	    [nico.ui.kwd-tab-dlg :as uktd]
 	    [nico.ui.browser-dlg :as ubd])
-  (:import (java.awt Desktop)
-	   (java.awt.event KeyEvent InputEvent WindowEvent WindowListener)
-	   (java.net URI)
-	   (javax.swing JMenuBar JMenu JMenuItem JSeparator KeyStroke)
-	   (javax.swing.event MenuListener)))
+  (:import [java.awt Desktop]
+	   [java.awt.event KeyEvent InputEvent WindowEvent WindowListener]
+	   [java.net URI]
+	   [javax.swing JMenuBar JMenu JMenuItem JSeparator KeyStroke]
+	   [javax.swing.event MenuListener]))
 
 (def *help-url* "https://github.com/sgr/niconama-alert/wiki/Help")
 

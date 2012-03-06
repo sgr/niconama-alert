@@ -6,9 +6,9 @@
   (:require [nico.api-updator :as au]
 	    [nico.ui.util :as uu]
 	    [time-utils :as tu])
-  (:import (java.awt Dimension)
-	   (javax.swing GroupLayout ImageIcon JPanel JButton)
-	   (javax.swing.border TitledBorder)))
+  (:import [java.awt Dimension]
+	   [javax.swing GroupLayout ImageIcon JPanel JButton]
+	   [javax.swing.border TitledBorder]))
 
 (def *btn-size* (Dimension. 80 30))
 (def *status-size* (Dimension. 175 30))

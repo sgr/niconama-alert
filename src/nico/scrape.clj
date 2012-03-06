@@ -8,7 +8,7 @@
 	    [str-utils :as s]
 	    [time-utils :as tu]
 	    [clojure.contrib.string :as cs])
-  (:import (java.util Calendar Date GregorianCalendar Locale TimeZone)))
+  (:import [java.util Calendar Date GregorianCalendar Locale TimeZone]))
 
 (def *base-url* "http://live.nicovideo.jp/watch/")
 

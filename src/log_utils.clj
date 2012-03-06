@@ -4,10 +4,10 @@
   log-utils
   (:use [prefs-utils :only [pref-base-path]])
   (:require [clojure.contrib.str-utils :as s])
-  (:import (java.io File FileInputStream FileOutputStream)
-	   (java.util Date Properties)
-	   (java.util.logging Formatter LogManager LogRecord)
-	   (java.text SimpleDateFormat)))
+  (:import [java.io File FileInputStream FileOutputStream]
+	   [java.util Date Properties]
+	   [java.util.logging Formatter LogManager LogRecord]
+	   [java.text SimpleDateFormat]))
 
 (def *s* (System/getProperty "line.separator"))
 

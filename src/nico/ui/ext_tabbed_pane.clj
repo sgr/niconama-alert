@@ -6,10 +6,10 @@
   (:require [time-utils :as tu]
 	    [nico.pgm :as pgm]
 	    [nico.ui.pgm-panel])
-  (:import (java.awt BorderLayout Dimension)
-	   (java.awt.event MouseListener)
-	   (javax.swing BorderFactory ImageIcon JButton JLabel JMenuItem
-			JOptionPane JPanel JPopupMenu SwingUtilities)))
+  (:import [java.awt BorderLayout Dimension]
+	   [java.awt.event MouseListener]
+	   [javax.swing BorderFactory ImageIcon JButton JLabel JMenuItem
+			JOptionPane JPanel JPopupMenu SwingUtilities]))
 
 (gen-class
  :name nico.ui.ExtTabbedPane

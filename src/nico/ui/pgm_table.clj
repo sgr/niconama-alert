@@ -9,10 +9,10 @@
 	    [nico.prefs :as p]
 	    [str-utils :as su]
 	    [time-utils :as tu])
-  (:import (java.awt Color Font)
-	   (java.awt.event MouseListener)
-	   (javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities)
-	   (javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn)))
+  (:import [java.awt Color Font]
+	   [java.awt.event MouseListener]
+	   [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
+	   [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]))
 
 (def *desc-col* 64)
 (def *font-bold* (Font. Font/DIALOG Font/BOLD 12))

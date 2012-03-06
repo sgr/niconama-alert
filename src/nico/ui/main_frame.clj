@@ -7,9 +7,9 @@
 	[nico.ui.control-panel :only [control-panel]])
   (:require [nico.prefs :as p]
 	    [nico.ui.menu :as m])
-  (:import (java.awt Dimension Font)
-	   (java.awt.event WindowEvent WindowListener)
-	   (javax.swing JFrame ImageIcon SpringLayout ToolTipManager UIManager)))
+  (:import [java.awt Dimension Font]
+	   [java.awt.event WindowEvent WindowListener]
+	   [javax.swing JFrame ImageIcon SpringLayout ToolTipManager UIManager]))
 
 (def *fkeys* ["Button.font" "Menu.font" "MenuItem.font" "ColorChooser.font" "CheckBox.font"
 	      "CheckBoxMenuItem.font" "ToggleButton.font" "Label.font"

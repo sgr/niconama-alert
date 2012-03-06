@@ -4,7 +4,7 @@
   str-utils
   (:use [clojure.contrib.logging])
   (:require [clojure.string :as s])
-  (:import (java.io ByteArrayInputStream)))
+  (:import [java.io ByteArrayInputStream]))
 
 (defn cleanup
   "絵文字など制御文字扱いになる文字を削除する"

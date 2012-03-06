@@ -4,9 +4,9 @@
   nico.ui.rss-panel
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.rss-updator :as nru])
-  (:import (java.awt Dimension)
-	   (javax.swing GroupLayout ImageIcon JPanel JButton JProgressBar JLabel)
-	   (javax.swing.border TitledBorder)))
+  (:import [java.awt Dimension]
+	   [javax.swing GroupLayout ImageIcon JPanel JButton JProgressBar JLabel]
+	   [javax.swing.border TitledBorder]))
 
 (def *btn-size* (Dimension. 80 30))
 (def *bar-size* (Dimension. 200 20))

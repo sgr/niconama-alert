@@ -13,7 +13,7 @@
 	    [clojure.contrib.zip-filter :as zf]
 	    [clojure.contrib.zip-filter.xml :as zfx]
 	    [clojure.contrib.http.agent :as ha])
-  (:import (java.util Date)))
+  (:import [java.util Date]))
 
 (def *user-agent* "Niconama-alert J/1.0.0")
 

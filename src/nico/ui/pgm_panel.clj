@@ -11,10 +11,10 @@
 	    [nico.alert :as al]
 	    [nico.pgm :as pgm]
 	    [nico.api-updator :as nau])
-  (:import (java.awt Color Dimension)
-	   (javax.swing BorderFactory JCheckBoxMenuItem JLabel JMenuItem
-			JPanel JScrollPane SpringLayout)
-	   (javax.swing.border EtchedBorder)))
+  (:import [java.awt Color Dimension]
+	   [javax.swing BorderFactory JCheckBoxMenuItem JLabel JMenuItem
+			JPanel JScrollPane SpringLayout]
+	   [javax.swing.border EtchedBorder]))
 
 (gen-class
  :name nico.ui.ProgramsPanel

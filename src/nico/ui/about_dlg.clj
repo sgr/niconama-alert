@@ -5,9 +5,9 @@
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.ui.util :as uu]
 	    [nico.ui.env-panel :as ue])
-  (:import (java.awt BorderLayout Dimension Font)
-	   (javax.swing BorderFactory BoxLayout SpringLayout
-			JButton JDialog JLabel JPanel JTabbedPane)))
+  (:import [java.awt BorderLayout Dimension Font]
+	   [javax.swing BorderFactory BoxLayout SpringLayout
+			JButton JDialog JLabel JPanel JTabbedPane]))
 
 (def *dlg-size* (Dimension. 500 300))
 (def *cr-panel-size* (Dimension. 450 80))

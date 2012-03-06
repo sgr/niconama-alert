@@ -3,9 +3,9 @@
        :doc "UI Utilities."}
   nico.ui.util
   (:require [time-utils :as tu])
-  (:import (java.awt Color Dimension Font)
-	   (javax.swing JButton JLabel JTextArea SpringLayout)
-	   (javax.swing.table DefaultTableCellRenderer)))
+  (:import [java.awt Color Dimension Font]
+	   [javax.swing JButton JLabel JTextArea SpringLayout]
+	   [javax.swing.table DefaultTableCellRenderer]))
 
 (def *font* (Font. "Default" Font/PLAIN 12))
 (def *btn-height* 25)

@@ -10,9 +10,9 @@
 	    [nico.rss :as rss]
 	    [nico.updator :as nu]
 	    [time-utils :as tu])
-  (:import (java.awt BorderLayout Dimension)
-	   (javax.swing ImageIcon JPanel JButton JProgressBar JLabel
-			SpringLayout GroupLayout)))
+  (:import [java.awt BorderLayout Dimension]
+	   [javax.swing ImageIcon JPanel JButton JProgressBar JLabel
+			SpringLayout GroupLayout]))
 
 (def *size* (Dimension. 500 90))
 

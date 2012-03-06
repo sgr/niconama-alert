@@ -5,14 +5,14 @@
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.ui.util :as uu]
 	    [nico.ui.key-val-dlg :as ukvd])
-  (:import (java.awt BorderLayout Dimension)
-	   (javax.swing DefaultCellEditor GroupLayout SpringLayout SwingConstants
+  (:import [java.awt BorderLayout Dimension]
+	   [javax.swing DefaultCellEditor GroupLayout SpringLayout SwingConstants
 			JButton JCheckBox JDialog JLabel JPanel JScrollPane JTable
-			ListSelectionModel DefaultListSelectionModel)
-	   (javax.swing.event CellEditorListener ChangeEvent TableModelEvent
-			      ListSelectionListener TableModelListener)
-	   (javax.swing.table DefaultTableCellRenderer DefaultTableModel TableColumn
-			      TableCellEditor TableCellRenderer)))
+			ListSelectionModel DefaultListSelectionModel]
+	   [javax.swing.event CellEditorListener ChangeEvent TableModelEvent
+			      ListSelectionListener TableModelListener]
+	   [javax.swing.table DefaultTableCellRenderer DefaultTableModel TableColumn
+			      TableCellEditor TableCellRenderer]))
 
 (def *dlg-size* (Dimension. 500 270))
 (def *btn-panel-size* (Dimension. 500 40))

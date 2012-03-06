@@ -5,8 +5,8 @@
   (:use [clojure.contrib.logging])
   (:require [prefs-utils :as pu]
 	    [str-utils :as s])
-  (:import (java.awt Desktop GraphicsEnvironment)
-	   (java.net URI URL)))
+  (:import [java.awt Desktop GraphicsEnvironment]
+	   [java.net URI URL]))
 
 (def *default-frame-width* 950)
 (def *default-frame-height* 500)

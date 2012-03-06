@@ -3,7 +3,7 @@
        :doc "設定ファイルの読み込み、書き出しインタフェース"}
   prefs-utils
   (:use [clojure.contrib.io :only [with-out-writer]])
-  (:import (java.io File)))
+  (:import [java.io File]))
 
 (defn- pref-dir-unix [uhome]
   (str uhome File/separator))

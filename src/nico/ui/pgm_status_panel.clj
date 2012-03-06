@@ -5,9 +5,9 @@
   (:use [clojure.contrib.swing-utils :only [do-swing]])
   (:require [nico.pgm :as pgm]
 	    [time-utils :as tu])
-  (:import (java.awt Dimension)
-	   (javax.swing GroupLayout ImageIcon JPanel JLabel)
-	   (javax.swing.border TitledBorder)))
+  (:import [java.awt Dimension]
+	   [javax.swing GroupLayout ImageIcon JPanel JLabel]
+	   [javax.swing.border TitledBorder]))
 
 (def *panel-size* (Dimension. 350 40))
 

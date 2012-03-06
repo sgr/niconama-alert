@@ -4,10 +4,10 @@
   nico.ui.env-panel
   (:use [clojure.contrib.seq-utils :only [indexed]])
 ;;  (:require [nico.ui.util :as uu])
-  (:import (java.awt BorderLayout Dimension)
-	   (javax.swing JPanel JScrollPane JTable)
-	   (javax.swing.table AbstractTableModel
-			      DefaultTableColumnModel TableColumn)))
+  (:import [java.awt BorderLayout Dimension]
+	   [javax.swing JPanel JScrollPane JTable]
+	   [javax.swing.table AbstractTableModel
+			      DefaultTableColumnModel TableColumn]))
 
 (def *dlg-size* (Dimension. 450 250))
 (def *cr-panel-size* (Dimension. 450 80))

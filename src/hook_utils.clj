@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "Utility macro for adding hook features easily."}
     hook-utils
-  (:import (clojure.lang Keyword)))
+  (:import [clojure.lang Keyword]))
 
 (defmacro defhook
   "EXAMPLE:

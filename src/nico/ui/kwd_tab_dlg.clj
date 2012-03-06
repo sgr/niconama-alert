@@ -5,11 +5,11 @@
   (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]]
 	[clojure.contrib.logging])
   (:require [nico.ui.util :as uu])
-  (:import (java.awt BorderLayout Color FlowLayout Dimension)
-	   (javax.swing BorderFactory GroupLayout SpringLayout
-			JButton JCheckBox JDialog JLabel JPanel JScrollPane JTextArea JTextField)
-	   (javax.swing.event DocumentListener)
-	   (javax.swing.text PlainDocument)))
+  (:import [java.awt BorderLayout Color FlowLayout Dimension]
+	   [javax.swing BorderFactory GroupLayout SpringLayout
+			JButton JCheckBox JDialog JLabel JPanel JScrollPane JTextArea JTextField]
+	   [javax.swing.event DocumentListener]
+	   [javax.swing.text PlainDocument]))
 
 (def *dlg-size* (Dimension. 450 340))
 (def *title-panel-size* (Dimension. 440 40))

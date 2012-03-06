@@ -3,8 +3,8 @@
        :doc "時間に関する操作"}
   time-utils
   (:require [clojure.contrib.math :as math])
-  (:import (java.text SimpleDateFormat)
-	   (java.util Calendar Date)))
+  (:import [java.text SimpleDateFormat]
+	   [java.util Calendar Date]))
 
 (defn now [] (.getTime (Calendar/getInstance)))
 (defn format-time [date fmt]
