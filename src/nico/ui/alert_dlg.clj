@@ -40,15 +40,9 @@
           setws (.getMethod cAu "setWindowShape" (into-array Class [cWindow cShape]))]
       (fn [dlg]
         (.invoke setwo nil (to-array [dlg *opacity*]))
-        (doto dlg
-          (.addComponentListener
-           (proxy [ComponentAdapter][]
-             (componentResized
-               [e]
-               (try
-                 (.invoke setws nil (to-array [dlg (get-shape dlg)]))
-                 (catch Exception e
-                   (warn "failed invoking setWindowShape" e)))))))))
+        (try
+          (.invoke setws nil (to-array [dlg (get-shape dlg)]))
+          (catch Exception e (warn "failed invoking setWindowShape" e)))))
     (catch Exception e
       (warn "This platform doesn't support AWTUtilities" e) nil)))
 
@@ -67,11 +61,9 @@
     (debug (format "This environment is supported PERPIXCEL_TRANSLUCENT: %s" supported-ptl))
     (debug (format "This environment is supported PERPIXCEL_TRANSPARENT: %s" supported-ptp))
     (fn [dlg]
-      (try
         (.setUndecorated dlg true)
         (when supported-tl  (.setOpacity dlg  *opacity*))
-        (when supported-ptl (.setShape dlg (get-shape dlg)))
-        (catch Exception e (warn "Exception raised" e))))))
+        (when supported-ptl (.setShape dlg (get-shape dlg))))))
 
 (let [decorate-fn (atom nil)]
   (defn- decorate [dlg]
@@ -79,8 +71,12 @@
       (let [v (System/getProperty "java.version")]
         (debug (str "java.version: " v))
         (condp #(.startsWith %2 %1) v
-          "1.6" (when-let [f (decorate-aux-sun-java6)] (reset! decorate-fn f))
-          "1.7" (when-let [f (decorate-aux-java7)] (reset! decorate-fn f)))
+          "1.6" (when-let [f (decorate-aux-sun-java6)]
+                  (debug "use Sun Java SE6 Update 10 API (AWTUtilities)")
+                  (reset! decorate-fn f))
+          "1.7" (when-let [f (decorate-aux-java7)]
+                  (debug "use Java 7 API")
+                  (reset! decorate-fn f)))
         (when-not @decorate-fn (reset! decorate-fn (fn [dlg])))))
     (@decorate-fn dlg)))
 
@@ -195,7 +191,8 @@
 	  (.setLayout layout)
 	  (.add tpanel) (.add dpanel) (.add olabel) (.add time))))
     (doto dlg
-      (decorate)
+      (.addComponentListener
+       (proxy [ComponentAdapter][] (componentResized [e] (decorate dlg))))
       (.setFocusableWindowState false)
       (.setAlwaysOnTop true)
       (.setMinimumSize *asize*)
