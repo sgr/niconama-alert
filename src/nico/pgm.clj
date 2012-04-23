@@ -190,8 +190,8 @@
     (letfn [(add2 [^Pgm pgm]
               (add-aux pgm)
               (when-not (tu/within? @last-cleaned (tu/now) *interval-clean*)
-                (do (clean-old-aux)
-                    (ref-set last-cleaned (tu/now))))
+                (clean-old-aux)
+                (ref-set last-cleaned (tu/now)))
               (call-hook-updated))]
       (dosync
        (let [id (:id pgm) cid (:comm_id pgm)]
@@ -200,7 +200,7 @@
 	   (if-let [cpgm (get @idx-comm cid)]
 	     (when (and (not= id (:id cpgm))
 			(tu/later? (:pubdate pgm) (:pubdate cpgm)))
-	       (do (rem-aux (:id cpgm))
-		   (add2 pgm)))
+	       (rem-aux (:id cpgm))
+               (add2 pgm))
 	     (add2 pgm)))))))
   (defn add [^Pgm pgm] (.execute pool #(add1 pgm))))
