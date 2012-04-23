@@ -110,8 +110,8 @@
     (alter idx-pubdate conj-pgm-idx pgm)
     (alter idx-updated-at conj-pgm-idx pgm)
     (alter idx-elapsed conj-pgm-idx pgm))
-  (defn- merge-aux [^Pgm pgm]
-    (if-let [orig (get @id-pgms (:id pgm))]
+  (defn- merge-aux [^Pgm pgm1 ^Pgm pgm2]
+    (if (and pgm1 pgm2)
       (letfn [(longer [^String x ^String y]
 		      (cond (and x y) (if (> (.length x) (.length y)) x y)
 			    (nil? x) y
@@ -124,17 +124,30 @@
 			   (nil? y) x
 			   :else nil))
 	      (later-for [k ^Pgm x ^Pgm y] (later (get x k) (get y k)))]
-	(assoc orig
-	  :title (longer-for :title pgm orig)
-	  :pubdate (later-for :pubdate pgm orig)
-	  :desc (longer-for :desc pgm orig)
-	  :comm_name (longer-for :comm_name pgm orig)
-	  :alerted (or (:alerted orig) (:alerted pgm))
+	(assoc pgm2
+	  :title (longer-for :title pgm1 pgm2)
+	  :pubdate (later-for :pubdate pgm1 pgm2)
+	  :desc (longer-for :desc pgm1 pgm2)
+	  :comm_name (longer-for :comm_name pgm1 pgm2)
+	  :alerted (or (:alerted pgm2) (:alerted pgm1))
 	  :updated_at (tu/now)))
-      pgm))
+      (or pgm1 pgm2)))
   (defn- rem-pgms-without-aux [ids]
     (debug (format "removing old pgms: %d" (- (count-pgms) (count ids))))
     (doseq [id (filter #(not (contains? ids %)) (keys @id-pgms))] (rem-aux id)))
+  (defn- check-consistency []
+    (let [npgms (count-pgms)
+	  ncomm (count @idx-comm)
+	  npubdate (count @idx-pubdate)
+	  nupdated (count @idx-updated-at)
+	  nelapsed (count @idx-elapsed)]
+      ;; 公式などコミュニティIDがついていない放送もあるためncommでは比較しない。
+      (if (= npgms npubdate nupdated nelapsed)
+	(format "all numbers are consistently: %d" npgms)
+	(let [msg (format "what's wrong! [npgms: %d, npubdate: %d, nupdated: %d, nelapsed: %d (ncomm: %d)]"
+			 npgms npubdate nupdated nelapsed ncomm)] 
+	  (error msg)
+	  msg))))
   (defn- clean-old-aux []
     (when (< 0 @total)
       (let [c (int (* *scale* @total))] ;; 総番組数のscale倍までは許容
@@ -170,37 +183,24 @@
 							    @idx-elapsed)))))]
 		    (debug (format "rem-pgms-without elapsed (t: %d, c: %d, c2: %d, with-elapsed: %d)"
 				   @total, c c2 (count with-elapsed)))
-		    (rem-pgms-without-aux with-elapsed))))))))))
-  (defn- check-consistency []
-    (let [npgms (count-pgms)
-	  ncomm (count @idx-comm)
-	  npubdate (count @idx-pubdate)
-	  nupdated (count @idx-updated-at)
-	  nelapsed (count @idx-elapsed)]
-      ;; 公式などコミュニティIDがついていない放送もあるためncommでは比較しない。
-      (if (= npgms npubdate nupdated nelapsed)
-	npgms
-	(do
-	  (error (format "pgms: %d, pubdate: %d, updated: %d, elapsed: %d (comm: %d)"
-			 npgms npubdate nupdated nelapsed ncomm))
-	  nil))))
+		    (rem-pgms-without-aux with-elapsed)))))
+            (trace (format "checked consistency: %s" (check-consistency))))))))
   (defn- get-last-cleaned [] @last-cleaned)
   (defn- add1 [^Pgm pgm]
-    (letfn [(add-clean [^Pgm pgm]
-		       (add-aux pgm)
-		       (when-not (tu/within? @last-cleaned (tu/now) *interval-clean*)
-			 (do (clean-old-aux)
-			     (ref-set last-cleaned (tu/now))))
-		       (check-consistency)
-		       (call-hook-updated))]
+    (letfn [(add2 [^Pgm pgm]
+              (add-aux pgm)
+              (when-not (tu/within? @last-cleaned (tu/now) *interval-clean*)
+                (do (clean-old-aux)
+                    (ref-set last-cleaned (tu/now))))
+              (call-hook-updated))]
       (dosync
        (let [id (:id pgm) cid (:comm_id pgm)]
-	 (if (contains? @id-pgms id)
-	   (add-clean (merge-aux pgm))
-	   (if-let [opgm (get @idx-comm cid)]
-	     (when (and (not= id (:id opgm))
-			(tu/later? (:pubdate pgm) (:pubdate opgm)))
-	       (do (rem-aux (:id opgm))
-		   (add-clean pgm)))
-	     (add-clean pgm)))))))
+	 (if-let [opgm (get @id-pgms id)]
+	   (add2 (merge-aux pgm opgm))
+	   (if-let [cpgm (get @idx-comm cid)]
+	     (when (and (not= id (:id cpgm))
+			(tu/later? (:pubdate pgm) (:pubdate cpgm)))
+	       (do (rem-aux (:id cpgm))
+		   (add2 pgm)))
+	     (add2 pgm)))))))
   (defn add [^Pgm pgm] (.execute pool #(add1 pgm))))
