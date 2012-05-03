@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "時間に関する操作"}
   time-utils
-  (:require [clojure.contrib.math :as math])
+  (:require [clojure.math.numeric-tower :as math])
   (:import [java.text SimpleDateFormat]
 	   [java.util Calendar Date]))
 

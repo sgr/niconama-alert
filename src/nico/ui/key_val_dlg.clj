@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "common key-value dialog."}
   nico.ui.key-val-dlg
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
+  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.ui.util :as uu])
   (:import [java.awt BorderLayout Color Dimension]
 	   [javax.swing BorderFactory GroupLayout SpringLayout
@@ -10,8 +10,8 @@
 	   [javax.swing.event DocumentListener]
 	   [javax.swing.text PlainDocument]))
 
-(def *dlg-size* (Dimension. 450 150))
-(def *btn-panel-size* (Dimension. 450 40))
+(def ^{:private true} DLG-SIZE (Dimension. 450 150))
+(def ^{:private true} BTN-PANEL-SIZE (Dimension. 450 40))
 
 (defn- kv-dlg
   [parent title label-key key label-val val ok-fn secure]
@@ -70,7 +70,7 @@
 	  (.putConstraint SpringLayout/EAST btn-ok -5 SpringLayout/WEST btn-cancel)
 	  (.putConstraint SpringLayout/EAST btn-cancel -10 SpringLayout/EAST btn-panel))
 	(doto btn-panel
-	  (.setPreferredSize *btn-panel-size*)
+	  (.setPreferredSize BTN-PANEL-SIZE)
 	  (.setLayout btn-layout) (.add btn-ok) (.add btn-cancel)))
       (doto btn-ok
 	(add-action-listener
@@ -87,10 +87,10 @@
 	(.add kv-panel BorderLayout/CENTER)
 	(.add btn-panel BorderLayout/SOUTH))
       (doto dlg
-	(.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth *dlg-size*)) 2)))
-		      (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight *dlg-size*)) 2))))
+	(.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth DLG-SIZE)) 2)))
+		      (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight DLG-SIZE)) 2))))
 	(.setResizable false)
-	(.setMinimumSize *dlg-size*)))))
+	(.setMinimumSize DLG-SIZE)))))
 
 (defn user-password-dialog
   [parent title pref ok-fn]

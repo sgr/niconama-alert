@@ -2,21 +2,21 @@
 (ns #^{:author "sgr"
        :doc "本アプリケーションの設定"}
   nico.prefs
-  (:use [clojure.contrib.logging])
+  (:use [clojure.tools.logging])
   (:require [prefs-utils :as pu]
 	    [str-utils :as s])
   (:import [java.awt Desktop GraphicsEnvironment]
 	   [java.net URI URL]))
 
-(def *default-frame-width* 950)
-(def *default-frame-height* 500)
+(def ^{:private true} DEFAULT-FRAME-WIDTH 950)
+(def ^{:private true} DEFAULT-FRAME-HEIGHT 500)
 
 (defn- gen-initial-pref []
   (let [e (GraphicsEnvironment/getLocalGraphicsEnvironment)
 	p (.getCenterPoint e)]
-    {:window {:width *default-frame-width* :height *default-frame-height*
-	      :posx (- (.x p) (int (/ *default-frame-width* 2)))
-	      :posy (- (.y p) (int (/ *default-frame-height* 2)))}
+    {:window {:width DEFAULT-FRAME-WIDTH :height DEFAULT-FRAME-HEIGHT
+	      :posx (- (.x p) (int (/ DEFAULT-FRAME-WIDTH 2)))
+	      :posy (- (.y p) (int (/ DEFAULT-FRAME-HEIGHT 2)))}
      :tabs [{:type :all :title "All" :alert false}]
      :browsers [[:default :default true]]}))
 

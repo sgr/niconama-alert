@@ -2,18 +2,17 @@
 (ns #^{:author "sgr"
        :doc "Alert management functions."}
   nico.alert
-  (:use [clojure.contrib.swing-utils :only [do-swing*]]
-	[clojure.contrib.logging])
-  (:require [clojure.contrib.seq-utils :as cs]
-	    [time-utils :as tu]
+  (:use [clojure.tools.swing-utils :only [do-swing*]]
+	[clojure.tools.logging])
+  (:require [time-utils :as tu]
 	    [nico.ui.alert-dlg :as uad]
 	    [nico.pgm :as pgm])
   (:import [java.awt GraphicsEnvironment]
            [java.util.concurrent LinkedBlockingQueue ThreadPoolExecutor TimeUnit]))
 
-(def *display-time* 20) ; アラートウィンドウの表示時間(秒)
-(def *keep-alive* 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
-(def *exec-interval* 500) ; アラートウィンドウ表示処理の実行間隔(ミリ秒)
+(def ^{:private true} DISPLAY-TIME 20) ; アラートウィンドウの表示時間(秒)
+(def ^{:private true} KEEP-ALIVE 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
+(def ^{:private true} EXEC-INTERVAL 500) ; アラートウィンドウ表示処理の実行間隔(ミリ秒)
 
 (defn- divide-plats []
   (let [r (.getMaximumWindowBounds (GraphicsEnvironment/getLocalGraphicsEnvironment))
@@ -24,10 +23,10 @@
 	      (for [x (range 1 (inc w)) y (range 1 (inc h))] [x y])))))
 
 (defn- periodic-executor [queue]
-  (proxy [ThreadPoolExecutor] [0 1 *keep-alive* TimeUnit/SECONDS queue]
+  (proxy [ThreadPoolExecutor] [0 1 KEEP-ALIVE TimeUnit/SECONDS queue]
     (beforeExecute
       [t r]
-      (.sleep TimeUnit/MILLISECONDS *exec-interval*)
+      (.sleep TimeUnit/MILLISECONDS EXEC-INTERVAL)
       (proxy-super beforeExecute t r))))
 
 (let [plats (atom (divide-plats))	;; アラートダイアログの表示領域
@@ -42,17 +41,17 @@
       [nil nil]))
   (defn- reserve-plat-A []
     (if-let [i (some #(let [[i plat] %] (if (:used plat) i nil))
-		     (reverse (cs/indexed @plats)))]
+		     (reverse (map-indexed vector @plats)))]
       (if (< i (dec (count @plats)))
 	(reserve-plat-aux (inc i))
 	(if-let [i (some #(let [[i plat] %] (if-not (:used plat) i nil))
-			 (cs/indexed @plats))]
+			 (map-indexed vector @plats))]
 	  (reserve-plat-aux i)
 	  [nil nil]))
       (reserve-plat-aux 0)))
   (defn- reserve-plat-B []
     (let [iplat (some #(let [[i plat] %] (if-not (:used plat) [i plat] nil))
-		      (cs/indexed @plats))]
+		      (map-indexed vector @plats))]
       (if-let [[i plat] iplat]
 	(do
 	  (swap! plats assoc i (assoc plat :used true))
@@ -71,7 +70,7 @@
             (do-swing* :now #(doto adlg
                                (.setLocation (:x plat) (:y plat))
                                (.setVisible true)))
-            (.sleep TimeUnit/SECONDS *display-time*)
+            (.sleep TimeUnit/SECONDS DISPLAY-TIME)
             (do-swing* :now #(doto adlg
                                (.setVisible false)
                                (.dispose)))

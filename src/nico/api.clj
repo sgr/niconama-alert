@@ -3,89 +3,103 @@
        :doc "公式のニコ生アラートAPIで番組情報を取得する。
              番組情報はスクレイピングで取得。"}
   nico.api
-  (:use [clojure.contrib.logging])
+  (:use [clojure.tools.logging])
   (:require [nico.pgm :as pgm]
 	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu]
 	    [clojure.xml :as xml]
 	    [clojure.zip :as zip]
-	    [clojure.contrib.zip-filter :as zf]
-	    [clojure.contrib.zip-filter.xml :as zfx]
-	    [clojure.contrib.http.agent :as ha])
+	    [clojure.data.zip.xml :as dzx]
+	    [clj-http.client :as client])
   (:import [java.util Date]))
 
-(def *user-agent* "Niconama-alert J/1.0.0")
+(def ^{:private true} USER-AGENT "Niconama-alert J/1.0.0")
 
-(defn- http-req
-  ([url func] (http-req url nil func))	; GET
-  ([url body func]
-     (let [agnt (ha/http-agent
-		 url
-		 :headers {"user-agent" *user-agent*}
-		 :method (if body "POST" "GET")
-		 :body body
-		 :connect-timeout n/*connect-timeout*
-		 :read-timeout n/*read-timeout*)
-	   raw-res (s/cleanup (ha/string agnt))]
-       (if-let [err (agent-error agnt)]
-	 (error (format "failed http-req (%s): %s" url err))
-	 (func raw-res)))))
+(def ^{:private true} HTTP-OPTS
+  {:headers {"user-agent" USER-AGENT}
+   :socket-timeout n/SOCKET-TIMEOUT
+   :conn-timeout n/CONNECT-TIMEOUT})
 
-(defn- nico-ans-handler [func]
-  (fn [raw-res]
-    (let [res (xml/parse (s/utf8stream raw-res))
-	  status (-> res :attrs :status)]
-      (if (.equalsIgnoreCase status "ok")
-	(func res)
-	(let [err (zfx/xml-> (zip/xml-zip res) :error :description zfx/text)]
-	  (error (format "returned failure from server: %s" err))
-	  nil)))))
+(defmacro ^{:private true} assert-args
+  "imported from clojure.core"
+  [fnname & pairs]
+  `(do (when-not ~(first pairs)
+         (throw (IllegalArgumentException.
+                  ~(str fnname " requires " (second pairs)))))
+     ~(let [more (nnext pairs)]
+        (when more
+          (list* `assert-args fnname more)))))
+
+(defmacro ^{:private true} with-nico-res [bindings & body]
+  (assert-args with-nico-rss
+               (vector? bindings) "a vector for its binding"
+               (= 2 (count bindings)) "two number of forms in binding vector")
+  `(let ~bindings
+     (let [status# (-> ~(first bindings) :attrs :status)]
+       (if (.equalsIgnoreCase status# "ok")
+         (do ~@body)
+         (let [err# (dzx/xml-> (zip/xml-zip ~(first bindings)) :error :description dzx/text)]
+           (error (format "returned failure from server: %s" err#))
+           nil)))))
 
 ;; 認証APIでチケットを得る
 (defn- get-ticket [email passwd]
-  (http-req "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
-	    (format "mail=%s&password=%s" email passwd)
-	    (nico-ans-handler
-	     (fn [res] (zfx/xml1-> (zip/xml-zip res) :ticket zfx/text)))))
+  (let [raw-res (client/post "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
+                             (assoc HTTP-OPTS :form-params {:mail email :password passwd}))]
+    (if (= 200 (:status raw-res))
+      (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
+        (dzx/xml1-> (zip/xml-zip res) :ticket dzx/text))
+      (let [msg (format "returned HTTP error: %d, %s" (:status raw-res) (:body raw-res))]
+        (error msg)
+        (throw (Exception. msg))))))
 
 (defn- get-alert-status1 [ticket]
-  (http-req (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
-	    (nico-ans-handler
-	     (fn [res]
-	       (let [xz (zip/xml-zip res)]
-		 {:user_id (zfx/xml1-> xz :user_id zfx/text)
-		  :user_name (zfx/xml1-> xz :user_name zfx/text)
-		  :comms (map #(keyword %) (zfx/xml-> xz :communities :community_id zfx/text))
-		  :addr (zfx/xml1-> xz :ms :addr zfx/text)
-		  :port (Integer/parseInt (zfx/xml1-> xz :ms :port zfx/text))
-		  :thrd (zfx/xml1-> xz :ms :thread zfx/text)})))))
+  (let [raw-res (client/get (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
+                            HTTP-OPTS)]
+    (if (= 200 (:status raw-res))
+      (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
+        (let [xz (zip/xml-zip res)]
+          {:user_id (dzx/xml1-> xz :user_id dzx/text)
+           :user_name (dzx/xml1-> xz :user_name dzx/text)
+           :comms (map #(keyword %) (dzx/xml-> xz :communities :community_id dzx/text))
+           :addr (dzx/xml1-> xz :ms :addr dzx/text)
+           :port (Integer/parseInt (dzx/xml1-> xz :ms :port dzx/text))
+           :thrd (dzx/xml1-> xz :ms :thread dzx/text)}))
+      (let [msg (format "returned HTTP error: %d, %s" (:status raw-res) (:body raw-res))]
+        (error msg)
+        (throw (Exception. msg))))))
 
 (defn get-alert-status [email passwd]
   (get-alert-status1 (get-ticket email passwd)))
 
 (defn- get-stream-info [pid]
-  (http-req (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
-	    (nico-ans-handler
-	     (fn [res] (zip/xml-zip res)))))
+  (let [raw-res (client/get (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
+                            HTTP-OPTS)]
+    (if (= 200 (:status raw-res))
+      (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
+        (zip/xml-zip res))
+      (let [msg (format "returned HTTP error: %d, %s" (:status raw-res) (:body raw-res))]
+        (error msg)
+        (throw (Exception. msg))))))
 
 (defn- create-pgm-from-getstreaminfo
   "getstreaminfoで得られた情報から番組情報を生成する。が、足りない情報がポロポロあって使えない・・・"
   [zipped-res fetched_at]
-  (let [id (zfx/xml1-> zipped-res :request_id zfx/text)]
+  (let [id (dzx/xml1-> zipped-res :request_id dzx/text)]
     (nico.pgm.Pgm.
      (keyword id)
-     (zfx/xml1-> zipped-res :streaminfo :title zfx/text)
+     (dzx/xml1-> zipped-res :streaminfo :title dzx/text)
      nil; pubdate
-     (zfx/xml1-> zipped-res :streaminfo :description zfx/text)
+     (dzx/xml1-> zipped-res :streaminfo :description dzx/text)
      nil ;category
      (str "http://live.nicovideo.jp/watch/" id)
-     (zfx/xml1-> zipped-res :communityinfo :thumbnail zfx/text)
+     (dzx/xml1-> zipped-res :communityinfo :thumbnail dzx/text)
      nil ;owner_name
      nil ;member_only
-     (zfx/xml1-> zipped-res :streaminfo :provider_type zfx/text)
-     (zfx/xml1-> zipped-res :communityinfo :name zfx/text)
-     (keyword (zfx/xml1-> zipped-res :streaminfo :default_community zfx/text))
+     (dzx/xml1-> zipped-res :streaminfo :provider_type dzx/text)
+     (dzx/xml1-> zipped-res :communityinfo :name dzx/text)
+     (keyword (dzx/xml1-> zipped-res :streaminfo :default_community dzx/text))
      false
      fetched_at
      fetched_at)))

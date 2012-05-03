@@ -2,19 +2,19 @@
 (ns #^{:author "sgr"
        :doc "ニコ生のページから情報を取得する。"}
     nico.scrape
-  (:use [clojure.contrib.logging])
+  (:use [clojure.tools.logging])
   (:require [net.cgrand.enlive-html :as html]
 	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu]
-	    [clojure.contrib.string :as cs])
+	    [clojure.string :as cs])
   (:import [java.util Calendar Date GregorianCalendar Locale TimeZone]))
 
-(def *base-url* "http://live.nicovideo.jp/watch/")
+(def ^{:private true} BASE-URL "http://live.nicovideo.jp/watch/")
 
 (defn- fetch-pgm-info1
   [pid]
-  (let [url (str *base-url* pid)
+  (let [url (str BASE-URL pid)
 	h (html/html-resource (n/url-stream url))
 	base (-> (html/select h [:base]) first :attrs :href)
 	infobox (first (html/select h [:div.infobox]))

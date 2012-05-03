@@ -7,18 +7,18 @@
 	   [javax.swing JButton JLabel JTextArea SpringLayout]
 	   [javax.swing.table DefaultTableCellRenderer]))
 
-(def *font* (Font. "Default" Font/PLAIN 12))
-(def *btn-height* 25)
-(def *btn-size* (Dimension. 100 *btn-height*))
-(def *odd-row-color* (Color. 224 233 246))
+(def DEFAULT-FONT (Font. "Default" Font/PLAIN 12))
+(def ^{:private true} BTN-HEIGHT 25)
+(def ^{:private true} BTN-SIZE (Dimension. 100 BTN-HEIGHT))
+(def ^{:private true} ODD-ROW-COLOR (Color. 224 233 246))
 
 (defn btn [text]
   (let [b (JButton.)]
     (doto b
       (.setText text)
-      (.setMaximumSize *btn-size*)
-      (.setMinimumSize *btn-size*)
-      (.setPreferredSize *btn-size*))))
+      (.setMaximumSize BTN-SIZE)
+      (.setMinimumSize BTN-SIZE)
+      (.setPreferredSize BTN-SIZE))))
 
 (defn do-add-expand
   "親コンポーネントに子を追加する。その際、指定されたパディングを残して一杯にひろげる。"
@@ -38,7 +38,7 @@
   ([^String text]
      (let [l (JTextArea. text)]
        (doto l
-	 (.setFont *font*)
+	 (.setFont DEFAULT-FONT)
 	 (.setOpaque false) (.setEditable false) (.setFocusable false) (.setLineWrap true))))
   ([^String text ^Dimension size]
      (let [ml (mlabel text)]
@@ -64,7 +64,7 @@
       (.setBackground (.getSelectionBackground tbl)))
     (doto this
       (.setForeground (.getForeground tbl))
-      (.setBackground (if (odd? row) *odd-row-color* (.getBackground tbl)))))
+      (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl)))))
   this)
 (defn- sr-setValue [this val]
   (.setText this
@@ -88,7 +88,7 @@
 	 (.setBackground (.getSelectionBackground tbl)))
        (doto this
 	 (.setForeground (.getForeground tbl))
-	 (.setBackground (if (odd? row) *odd-row-color* (.getBackground tbl)))))
+	 (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl)))))
      this)
     (setValue
      [val]

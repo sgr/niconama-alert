@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "ニコ生の番組情報を更新する。(API)"}
     nico.api-updator
-  (:use [clojure.contrib.logging])
+  (:use [clojure.tools.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.api :as api]
 	    [nico.scrape :as ns]
@@ -11,14 +11,14 @@
   (:import [java.util.concurrent Callable CountDownLatch LinkedBlockingQueue
 				 RejectedExecutionException ThreadPoolExecutor TimeUnit]))
 
-(def *retry-connect* 3)    ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
-(def *reconnect-sec* 2)    ;; API接続が切れたときのリトライ間隔(秒)
-(def *nthreads-comm* 2)    ;; 所属コミュニティの番組情報取得スレッドの最大数
-(def *nthreads-normal* 3)  ;; それ以外の番組情報取得スレッドの最大数
-(def *keep-alive* 5)       ;; 番組取得待機時間(秒)。これを過ぎると取得スレッドは終了する。
-(def *limit-elapsed* 1200) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
-(def *limit-queue* 1000)    ;; スレッドプールにリトライ登録可能な数の目安
-(def *rate-ui-update* 5)   ;; UIの更新間隔(秒)
+(def ^{:private true} RETRY-CONNECT 3)    ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
+(def ^{:private true} RECONNECT-SEC 2)    ;; API接続が切れたときのリトライ間隔(秒)
+(def ^{:private true} NTHREADS-COMM 2)    ;; 所属コミュニティの番組情報取得スレッドの最大数
+(def ^{:private true} NTHREADS-NORMAL 3)  ;; それ以外の番組情報取得スレッドの最大数
+(def ^{:private true} KEEP-ALIVE 5)       ;; 番組取得待機時間(秒)。これを過ぎると取得スレッドは終了する。
+(def ^{:private true} LIMIT-ELAPSED 1200) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
+(def ^{:private true} LIMIT-QUEUE 1000)    ;; スレッドプールにリトライ登録可能な数の目安
+(def ^{:private true} RATE-UI-UPDATE 5)   ;; UIの更新間隔(秒)
 
 (defn- create-pgm-from-scrapedinfo
   [pid cid]
@@ -43,8 +43,8 @@
 
 (defn- create-pgm [pid cid uid received]
   (let [now (tu/now)]
-    ;; 繁忙期は番組ページ閲覧すら重い。番組ID受信から*limit-elapsed*秒経過していたら諦める。
-    (if-not (tu/within? received now *limit-elapsed*)
+    ;; 繁忙期は番組ページ閲覧すら重い。番組ID受信から LIMIT-ELAPSED 秒経過していたら諦める。
+    (if-not (tu/within? received now LIMIT-ELAPSED)
       (do (warn (format "too late to fetch: %s/%s/%s received: %s, called: %s"
 			pid cid uid (tu/format-time-long received) (tu/format-time-long now)))
 	  :aborted)
@@ -94,7 +94,7 @@
     (swap! fetched conj (tu/now))
     (pgm/add pgm))
   (defn- create-executor [nthreads queue]
-    (proxy [ThreadPoolExecutor] [0 nthreads *keep-alive* TimeUnit/SECONDS queue]
+    (proxy [ThreadPoolExecutor] [0 nthreads KEEP-ALIVE TimeUnit/SECONDS queue]
       (beforeExecute
        [t r]
        (when (= 1 (.getCount @latch))
@@ -109,7 +109,7 @@
 	     (cond
 	      (instance? nico.pgm.Pgm result) (add-pgm result)
 	      (= :failed result)
-	      (if (> *limit-queue* (.getActiveCount this))
+	      (if (> LIMIT-QUEUE (.getActiveCount this))
 		(do
 		  (.execute this
 			    (nico.api-updator.WrappedFutureTask.
@@ -120,9 +120,9 @@
 			       (.size queue) pid uid cid
 			       (tu/format-time-long received)))))))))))
   (let [comm-q (LinkedBlockingQueue.)
-	comm-executor (create-executor *nthreads-comm* comm-q) 
+	comm-executor (create-executor NTHREADS-COMM comm-q) 
 	normal-q (LinkedBlockingQueue.)
-	normal-executor (create-executor *nthreads-normal* normal-q)]
+	normal-executor (create-executor NTHREADS-NORMAL normal-q)]
     (defn clear-normal-q
       ([]
 	 (trace (format "clear normal queue (%d -> 0)" (.size normal-q)))
@@ -152,18 +152,18 @@
 		     (dosync
 		      (ref-set awaiting-status astatus)
 		      (ref-set latch (CountDownLatch. 1))))]
-	(loop [c *retry-connect*]
+	(loop [c RETRY-CONNECT]
 	  (when (= 1 (.getCount @latch)) ;; pause中かどうか
 	    (do (run-hooks :awaiting)
 		(.await @latch)))
 	  (cond
-	   (= 0 c) (do (reset :aborted) (recur *retry-connect*))
-	   (empty? @alert-statuses) (do (reset :need_login) (recur *retry-connect*))
+	   (= 0 c) (do (reset :aborted) (recur RETRY-CONNECT))
+	   (empty? @alert-statuses) (do (reset :need_login) (recur RETRY-CONNECT))
 	   :else (do
 		   (update-api-aux)
 		   (info (format "Will reconnect (%d/%d) after %d sec..."
-				 c *retry-connect* *reconnect-sec*))
-		   (.sleep TimeUnit/SECONDS *reconnect-sec*)
+				 c RETRY-CONNECT RECONNECT-SEC))
+		   (.sleep TimeUnit/SECONDS RECONNECT-SEC)
 		   (run-hooks :reconnecting)
 		   (recur (dec c)))))))
     (defn update-rate []
@@ -171,6 +171,6 @@
 	(when (= 1 (.getCount @latch)) (.await @latch))
 	(swap! fetched (fn [coll] (filter #(tu/within? % last-updated 60) coll)))
 	(run-hooks :rate-updated (count @fetched) (.size comm-q) (.size normal-q))
-	(when (tu/within? last-updated (tu/now) *rate-ui-update*)
-	  (.sleep TimeUnit/SECONDS *rate-ui-update*))
+	(when (tu/within? last-updated (tu/now) RATE-UI-UPDATE)
+	  (.sleep TimeUnit/SECONDS RATE-UI-UPDATE))
 	(recur (tu/now))))))

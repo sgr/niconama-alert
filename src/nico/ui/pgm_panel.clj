@@ -2,8 +2,8 @@
 (ns #^{:author "sgr"
        :doc "番組リスト表示パネル"}
   nico.ui.pgm-panel
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]]
-	[clojure.contrib.logging])
+  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]]
+	[clojure.tools.logging])
   (:require [nico.api :as api]
 	    [nico.ui.pgm-table :as upt]
 	    [nico.ui.key-val-dlg :as ukvd]

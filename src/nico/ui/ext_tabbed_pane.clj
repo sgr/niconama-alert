@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "タブに閉じるボタンと種別アイコンがついたJTabbedPane"}
   nico.ui.ext-tabbed-pane
-  (:use [clojure.contrib.swing-utils :only [do-swing do-swing* add-action-listener]])
+  (:use [clojure.tools.swing-utils :only [do-swing do-swing* add-action-listener]])
   (:require [time-utils :as tu]
 	    [nico.pgm :as pgm]
 	    [nico.ui.pgm-panel])

@@ -3,8 +3,9 @@
        :doc "Utility for networking."}
   net-utils)
 
-(def *connect-timeout* 5000)
-(def *read-timeout* 10000)
+(def SOCKET-TIMEOUT  5000)
+(def CONNECT-TIMEOUT 5000)
+(def READ-TIMEOUT   10000)
 
 (defn url-stream
   ([^String url ^Integer connect-timeout ^Integer read-timeout]
@@ -12,4 +13,4 @@
        (.getInputStream (doto (.openConnection u)
 			  (.setConnectTimeout connect-timeout)
 			  (.setReadTimeout read-timeout)))))
-  ([^String url] (url-stream url *connect-timeout* *read-timeout*)))
+  ([^String url] (url-stream url CONNECT-TIMEOUT READ-TIMEOUT)))

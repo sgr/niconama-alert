@@ -2,8 +2,18 @@
 (ns #^{:author "sgr"
        :doc "設定ファイルの読み込み、書き出しインタフェース"}
   prefs-utils
-  (:use [clojure.contrib.io :only [with-out-writer]])
+  (:use [clojure.java.io :only [writer]])
   (:import [java.io File]))
+
+(defmacro with-out-writer
+  "Opens a writer on f, binds it to *out*, and evalutes body.
+  Anything printed within body will be written to f.
+
+  imported this macro from old clojure.contrib.io"
+  [f & body]
+  `(with-open [stream# (writer ~f)]
+     (binding [*out* stream#]
+       ~@body)))
 
 (defn- pref-dir-unix [uhome]
   (str uhome File/separator))

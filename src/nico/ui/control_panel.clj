@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "コントロールパネル"}
   nico.ui.control-panel
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]]
+  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]]
 	[nico.ui.api-panel :only [api-panel]]
 	[nico.ui.pgm-status-panel :only [pgm-status-panel]]
 	[nico.ui.rss-panel :only [rss-panel]])
@@ -14,7 +14,7 @@
 	   [javax.swing ImageIcon JPanel JButton JProgressBar JLabel
 			SpringLayout GroupLayout]))
 
-(def *size* (Dimension. 500 90))
+(def ^{:private true} SIZE (Dimension. 500 90))
 
 (defn control-panel []
   (let [panel (JPanel.)
@@ -34,7 +34,7 @@
       (.putConstraint SpringLayout/EAST apanel -1 SpringLayout/WEST rpanel)
       (.putConstraint SpringLayout/EAST rpanel -1 SpringLayout/EAST panel))
     (doto panel
-      (.setPreferredSize *size*)
+      (.setPreferredSize SIZE)
       (.add apanel)
       (.add ppanel)
       (.add rpanel)

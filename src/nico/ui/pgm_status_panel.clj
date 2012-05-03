@@ -2,14 +2,14 @@
 (ns #^{:author "sgr"
        :doc "コントロールパネル"}
   nico.ui.pgm-status-panel
-  (:use [clojure.contrib.swing-utils :only [do-swing]])
+  (:use [clojure.tools.swing-utils :only [do-swing]])
   (:require [nico.pgm :as pgm]
 	    [time-utils :as tu])
   (:import [java.awt Dimension]
 	   [javax.swing GroupLayout ImageIcon JPanel JLabel]
 	   [javax.swing.border TitledBorder]))
 
-(def *panel-size* (Dimension. 350 40))
+(def ^{:private true} PANEL-SIZE (Dimension. 350 40))
 
 (defn pgm-status-panel []
   (let [pspanel (JPanel.)
@@ -40,7 +40,7 @@
       (.setAutoCreateGaps true)
       (.setAutoCreateContainerGaps true))
     (doto pspanel
-      (.setPreferredSize *panel-size*)
-      (.setMinimumSize *panel-size*)
+      (.setPreferredSize PANEL-SIZE)
+      (.setMinimumSize PANEL-SIZE)
       (.setBorder (TitledBorder. "Programs Status"))
       (.setLayout layout))))

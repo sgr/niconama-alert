@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "menu bar."}
   nico.ui.menu
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]]
+  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]]
 	[nico.ui.ext-tabbed-pane :only [add-tab]])
   (:require [nico.prefs :as p]
 	    [nico.ui.about-dlg :as uad]
@@ -15,7 +15,7 @@
 	   [javax.swing JMenuBar JMenu JMenuItem JSeparator KeyStroke]
 	   [javax.swing.event MenuListener]))
 
-(def *help-url* "https://github.com/sgr/niconama-alert/wiki/Help")
+(def ^{:private true} HELP-URL "https://github.com/sgr/niconama-alert/wiki/Help")
 
 (defn menu-bar [frame tpane]
   (let [menubar (JMenuBar.)
@@ -56,7 +56,7 @@
 		 (do-swing (.setVisible dlg true))))))
     (doto miHelp
       (add-action-listener
-       (fn [e] (.browse (Desktop/getDesktop) (URI. *help-url*))))
+       (fn [e] (.browse (Desktop/getDesktop) (URI. HELP-URL))))
       (.setAccelerator (KeyStroke/getKeyStroke KeyEvent/VK_F1 0)))
     (doto miAbout
       (add-action-listener

@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "APIによる番組情報取得状況表示パネル"}
   nico.ui.api-panel
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
+  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.api-updator :as au]
 	    [nico.ui.util :as uu]
 	    [time-utils :as tu])
@@ -10,13 +10,13 @@
 	   [javax.swing GroupLayout ImageIcon JPanel JButton]
 	   [javax.swing.border TitledBorder]))
 
-(def *btn-size* (Dimension. 80 30))
-(def *status-size* (Dimension. 175 30))
-(def *threshold-sec* 600)
+(def ^{:private true} BTN-SIZE (Dimension. 80 30))
+(def ^{:private true} STATUS-SIZE (Dimension. 175 30))
+(def ^{:private true} THRESHOLD-SEC 600)
 
 (defn api-panel []
   (let [panel (JPanel.)
-	status (uu/mlabel "有効なユーザータブが必要です" *status-size*)
+	status (uu/mlabel "有効なユーザータブが必要です" STATUS-SIZE)
 	cloader (.getClassLoader (class (fn [])))
 	sicn (ImageIcon. (.getResource cloader "start.png"))
 	picn (ImageIcon. (.getResource cloader "pause.png"))
@@ -26,7 +26,7 @@
 	istr "APIによる番組情報取得はできません"
 	tstr "APIによる番組情報取得を開始します"
 	pstr "APIによる番組情報取得を中止します"
-	cstr (format "開始から%d秒経過した番組情報取得をあきらめます" *threshold-sec*)
+	cstr (format "開始から%d秒経過した番組情報取得をあきらめます" THRESHOLD-SEC)
 	layout (GroupLayout. panel)
 	hgrp (.createSequentialGroup layout)
 	vgrp (.createSequentialGroup layout)]
@@ -69,15 +69,15 @@
 					     fetched-rate (+ fetching-comm fetching-normal)
 					     fetching-comm fetching-normal)))))
     (doto tbtn
-      (.setPreferredSize *btn-size*)
+      (.setPreferredSize BTN-SIZE)
       (.setToolTipText istr)
       (.setEnabled false)
       (add-action-listener (fn [e] (au/start-update-api))))
     (doto cbtn
-      (.setPreferredSize *btn-size*)
+      (.setPreferredSize BTN-SIZE)
       (.setToolTipText cstr)
       (.setEnabled false)
-      (add-action-listener (fn [e] (au/clear-normal-q *threshold-sec*))))
+      (add-action-listener (fn [e] (au/clear-normal-q THRESHOLD-SEC))))
     (doto hgrp
       (.addGroup (.. layout createParallelGroup
 		     (addComponent status)))

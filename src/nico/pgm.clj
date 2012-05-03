@@ -3,13 +3,13 @@
        :doc "ニコニコ生放送の番組情報とその操作"}
   nico.pgm
   (:use [clojure.set :only [union]]
-	[clojure.contrib.logging])
+	[clojure.tools.logging])
   (:require [hook-utils :as hu]
 	    [time-utils :as tu])
   (:import [java.util.concurrent Callable Executors]))
 
-(def *scale* 1.15) ;; 最大保持数
-(def *interval-clean* 60) ;; 古い番組情報を削除する間隔
+(def ^{:private true} SCALE 1.05) ;; 最大保持数
+(def ^{:private true} INTERCAL-CLEAN 60) ;; 古い番組情報を削除する間隔
 
 (defrecord Pgm
   [id		;; 番組ID
@@ -150,7 +150,7 @@
 	  msg))))
   (defn- clean-old-aux []
     (when (< 0 @total)
-      (let [c (int (* *scale* @total))] ;; 総番組数のscale倍までは許容
+      (let [c (int (* SCALE @total))] ;; 総番組数のscale倍までは許容
 	(when (< c (count-pgms))
 	  (let [now (tu/now)
 		updated (set
@@ -189,7 +189,7 @@
   (defn- add1 [^Pgm pgm]
     (letfn [(add2 [^Pgm pgm]
               (add-aux pgm)
-              (when-not (tu/within? @last-cleaned (tu/now) *interval-clean*)
+              (when-not (tu/within? @last-cleaned (tu/now) INTERCAL-CLEAN)
                 (clean-old-aux)
                 (ref-set last-cleaned (tu/now)))
               (call-hook-updated))]

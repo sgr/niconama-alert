@@ -4,12 +4,12 @@
              RSSは文字数制限があるようで、タイトルや説明が切れることがある。
              また、絵文字の類いがそのまま？RSSに混入するようなので、まずいものは除去する。"}
     nico.rss
-  (:use [clojure.contrib.logging])
+  (:use [clojure.tools.logging])
   (:require [clojure.xml :as xml]
 	    [clojure.zip :as zip]
-	    [clojure.contrib.zip-filter :as zf]
-	    [clojure.contrib.zip-filter.xml :as zfx]
-	    [clojure.contrib.duck-streams :as ds]
+	    [clojure.data.zip :as dz]
+	    [clojure.data.zip.xml :as dzx]
+	    [clj-http.client :as client]
 	    [nico.pgm :as pgm]
 	    [net-utils :as n]
 	    [str-utils :as s]
@@ -18,31 +18,31 @@
 	   [java.util Locale]
            [java.util.concurrent TimeUnit]))
 
-(def *retry* 10)
-(def *wait* 3)
+(def ^{:private true} RETRY 10)
+(def ^{:private true} WAIT 3)
 
 (defn get-nico-rss-aux
   [page]
   (try
-    (let [s (ds/slurp* (n/url-stream (format "http://live.nicovideo.jp/recent/rss?p=%s" page)))
-	  cs (s/cleanup s)]
-      (try
-	(xml/parse (s/utf8stream cs))
-	(catch Exception e
-	  (error (format "failed parsing RSS #%d: %s" page cs) e))))
+    (let [raw-res (client/get (format "http://live.nicovideo.jp/recent/rss?p=%s" page))]
+      (if (= 200 (:status raw-res))
+        (-> raw-res :body s/cleanup s/utf8stream xml/parse)
+        (let [msg (format "returned HTTP error: %d, %s" (:status raw-res) (:body raw-res))]
+          (error msg)
+          (throw (Exception. msg)))))
     (catch Exception e
       (error (format "failed fetching RSS #%d: %s" page (.getMessage e)) e) nil)))
 
 (defn get-nico-rss
   [page]
-  (loop [c *retry*]
+  (loop [c RETRY]
     (if-let [rss (get-nico-rss-aux page)]
-      (do (debug (format "fetched RSS #%d tried %d times." page (- *retry* c)))
+      (do (debug (format "fetched RSS #%d tried %d times." page (- RETRY c)))
           rss)
       (if (= 0 c)
         (do (error (format "aborted fetching RSS #%d: reached limit." page))
             {})
-        (do (.sleep TimeUnit/SECONDS *wait*)
+        (do (.sleep TimeUnit/SECONDS WAIT)
             (recur (dec c)))))))
 
 (defn get-programs-count
@@ -50,7 +50,7 @@
   ([] (get-programs-count (get-nico-rss 1)))
   ([rss] (try
 	   (Integer/parseInt
-	    (first (zfx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count zfx/text)))
+	    (first (dzx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count dzx/text)))
 	   (catch NumberFormatException e
 	     (error (format "failed fetching RSS for get programs count: %s" rss) e)
 	     0))))
@@ -90,7 +90,7 @@
 
 (defn get-programs-from-rss-aux [rss]
   [(get-programs-count rss)
-   (for [item (for [x (zfx/xml-> (zip/xml-zip rss) :channel zf/children)
+   (for [item (for [x (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
 		    :when (= :item (:tag (first x)))] (first x))]
      (let [pgm (create-pgm item (tu/now))]
        (when (some nil?
@@ -99,7 +99,7 @@
        pgm))])
 
 (defn get-programs-from-rss [page]
-  (loop [c *retry*
+  (loop [c RETRY
          rss (get-nico-rss page)
          [total pgms] (get-programs-from-rss-aux rss)]
     (if (= 0 c)
@@ -107,11 +107,11 @@
           [total pgms])
       (if (or (= 0 total) (> 0 total))
         (do (debug (format "retry fetching RSS #%d (%d) caused by wrong total number: %d" page c total))
-            (.sleep TimeUnit/SECONDS *wait*)
+            (.sleep TimeUnit/SECONDS WAIT)
             (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
         (if (and (= 0 (count pgms)) (> total (* 18 page)))
           (do (debug (format "retry fetching RSS #%d (%d) caused by lack of programs: %d,%d,%d"
                              page c total (* 18 page) (count pgms)))
-              (.sleep TimeUnit/SECONDS *wait*)
+              (.sleep TimeUnit/SECONDS WAIT)
               (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
           [total pgms])))))

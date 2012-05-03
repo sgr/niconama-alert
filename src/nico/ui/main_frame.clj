@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "main frame"}
   nico.ui.main-frame
-  (:use [clojure.contrib.swing-utils :only [do-swing do-swing*]]
+  (:use [clojure.tools.swing-utils :only [do-swing do-swing*]]
 	[nico.ui.ext-tabbed-pane :only [ext-tabbed-pane add-tab]]
 	[nico.ui.control-panel :only [control-panel]])
   (:require [nico.prefs :as p]
@@ -11,17 +11,16 @@
 	   [java.awt.event WindowEvent WindowListener]
 	   [javax.swing JFrame ImageIcon SpringLayout ToolTipManager UIManager]))
 
-(def *fkeys* ["Button.font" "Menu.font" "MenuItem.font" "ColorChooser.font" "CheckBox.font"
-	      "CheckBoxMenuItem.font" "ToggleButton.font" "Label.font"
-	      "FormattedTextField.font" "Spinner.font" "PasswordField.font"
-	      ;; "ProgressBar.font"
-	      "List.font" "TableHeader.font" "ComboBox.font"])
+(def ^{:private true} F-KEYS ["Button.font" "Menu.font" "MenuItem.font" "ColorChooser.font" "CheckBox.font"
+                              "CheckBoxMenuItem.font" "ToggleButton.font" "Label.font"
+                              "FormattedTextField.font" "Spinner.font" "PasswordField.font"
+                              "List.font" "TableHeader.font" "ComboBox.font"])
 
 (defn main-frame []
   (UIManager/setLookAndFeel (UIManager/getSystemLookAndFeelClassName))
   (UIManager/put "OptionPane.okButtonText" "OK")
   (UIManager/put "OptionPane.cancelButtonText" "キャンセル")
-  (doseq [k *fkeys*] (UIManager/put k (Font. "Default" Font/PLAIN 12)))
+  (doseq [k F-KEYS] (UIManager/put k (Font. "Default" Font/PLAIN 12)))
   (let [appicn (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "dempakun.png"))
 	pref @(p/get-pref)
 	frame (JFrame. "NicoNama Alert (J)")

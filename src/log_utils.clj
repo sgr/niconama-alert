@@ -3,13 +3,12 @@
        :doc "ログやエラー処理に関する操作"}
   log-utils
   (:use [prefs-utils :only [pref-base-path]])
-  (:require [clojure.contrib.str-utils :as s])
   (:import [java.io File FileInputStream FileOutputStream]
 	   [java.util Date Properties]
 	   [java.util.logging Formatter LogManager LogRecord]
 	   [java.text SimpleDateFormat]))
 
-(def *s* (System/getProperty "line.separator"))
+(def ^{:private true} SEPARATOR (System/getProperty "line.separator"))
 
 (gen-class
  :name utils.Log4JLikeFormatter
@@ -20,8 +19,8 @@
   (loop [s msg t thrown]
     (let [ss (reduce #(str %1 %2)
 		     (str s (format "Caused by %s: %s%s" (.getName (class t))
-				    (if-let [m (.getMessage t)] m "") *s*))
-		     (map #(format "        at %s%s" % *s*) (.getStackTrace t)))]
+				    (if-let [m (.getMessage t)] m "") SEPARATOR))
+		     (map #(format "        at %s%s" % SEPARATOR) (.getStackTrace t)))]
       (if-let [c (.getCause t)] (recur ss c) ss))))
 
 (defn- l4f-format [this ^LogRecord r]
@@ -31,7 +30,7 @@
 		    (.getLoggerName r)
 		    (.getThreadID r)
 		    (.getMessage r)
-		    *s*)]
+		    SEPARATOR)]
     (if-let [e (.getThrown r)] (with-throwable msg e) msg)))
 
 (defn- path-log-props [appname]

@@ -2,8 +2,7 @@
 (ns #^{:author "sgr"
        :doc "番組情報表示テーブル。"}
   nico.ui.pgm-table
-  (:use [clojure.contrib.swing-utils :only [add-action-listener]]
-	[clojure.contrib.seq-utils :only [indexed]]
+  (:use [clojure.tools.swing-utils :only [add-action-listener]]
         [nico.ui.util])
   (:require [clojure.string :as s]
 	    [nico.prefs :as p]
@@ -14,8 +13,8 @@
 	   [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
 	   [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]))
 
-(def *desc-col* 64)
-(def *font-bold* (Font. Font/DIALOG Font/BOLD 12))
+(def ^{:private true} DESC-COL 64)
+(def ^{:private true} FONT-BOLD (Font. Font/DIALOG Font/BOLD 12))
 
 ;; PgmCellRendererは、番組表のセルレンダラー。
 ;; 新着の番組をボールド、コミュ限の番組を青字で表示する。
@@ -63,11 +62,11 @@
   (when-let [pmdl (let [mdl (.getModel tbl)]
 		    (if (= nico.ui.ProgramsTableModel (class mdl)) mdl nil))]
     (let [mr (.convertRowIndexToModel tbl row) pgm (.getPgm pmdl mr)]
-      (when (tu/within? (:fetched_at pgm) (tu/now) 60) (.setFont this *font-bold*))
+      (when (tu/within? (:fetched_at pgm) (tu/now) 60) (.setFont this FONT-BOLD))
       (when (:member_only pgm) (.setForeground this Color/BLUE))))
   this)
 
-(def *pgm-columns*
+(def ^{:private true} PGM-COLUMNS
      (list
       {:key :title, :colName "タイトル", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
       {:key :comm_name, :colName "コミュ名", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
@@ -76,9 +75,9 @@
       {:key :owner_name, :colName "放送主", :width 60, :renderer (nico.ui.PgmCellRenderer.)}))
 
 (defn- pgm-colnum
-  "*pgm-columns*の中から、指定されたキーのカラム番号を得る"
+  "PGM-COLUMNS の中から、指定されたキーのカラム番号を得る"
   [k]
-  (some #(if (= (:key (fnext %)) k) (first %)) (indexed *pgm-columns*)))
+  (some #(if (= (:key (fnext %)) k) (first %)) (map-indexed vector PGM-COLUMNS)))
 
 (defn- pgm-column-model
   "番組情報テーブルのカラムモデルを生成する"
@@ -88,7 +87,7 @@
 		     (.setHeaderValue (:colName pc))
 		     (.setCellRenderer (:renderer pc))))]
     (let [col-model (DefaultTableColumnModel.)]
-      (doseq [[i pc] (indexed *pgm-columns*)] (.addColumn col-model (gen-col i pc)))
+      (doseq [[i pc] (map-indexed vector PGM-COLUMNS)] (.addColumn col-model (gen-col i pc)))
       col-model)))
 
 (defn pgm-table
@@ -146,10 +145,10 @@
   (:title (fnext (nth (seq @(.state this)) row))))
 
 (defn- ptm-getColumnCount [this]
-  (count *pgm-columns*))
+  (count PGM-COLUMNS))
 
 (defn- ptm-getColumnName [this col]
-  (:colName (nth *pgm-columns* col)))
+  (:colName (nth PGM-COLUMNS col)))
 
 (defn- ptm-getRowCount [this]
   (count @(.state this)))
@@ -161,7 +160,7 @@
   (:member_only (fnext (nth (seq @(.state this)) row))))
 
 (defn- ptm-getValueAt [this row col]
-  ((:key (nth *pgm-columns* col)) (fnext (nth (seq @(.state this)) row))))
+  ((:key (nth PGM-COLUMNS col)) (fnext (nth (seq @(.state this)) row))))
 
 (defn- ptm-getPgm [this row]
   (fnext (nth (seq @(.state this)) row)))
@@ -187,7 +186,7 @@
 			 (su/ifstr (:comm_name pgm) ""))
 		 (format "放送主: %s<br>" (su/ifstr (:owner_name pgm) ""))
 		 (format "%s<br>" (s/join "<br>" (su/split-by-length
-						  (su/ifstr (:desc pgm) "") *desc-col*)))
+						  (su/ifstr (:desc pgm) "") DESC-COL)))
 		 (format "カテゴリ: %s<br>" (su/ifstr (:category pgm) ""))
 		 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))))
 

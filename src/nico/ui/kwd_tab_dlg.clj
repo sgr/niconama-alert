@@ -2,8 +2,8 @@
 (ns #^{:author "sgr"
        :doc "keyword tab preference dialog."}
   nico.ui.kwd-tab-dlg
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]]
-	[clojure.contrib.logging])
+  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]]
+	[clojure.tools.logging])
   (:require [nico.ui.util :as uu])
   (:import [java.awt BorderLayout Color FlowLayout Dimension]
 	   [javax.swing BorderFactory GroupLayout SpringLayout
@@ -11,10 +11,10 @@
 	   [javax.swing.event DocumentListener]
 	   [javax.swing.text PlainDocument]))
 
-(def *dlg-size* (Dimension. 450 340))
-(def *title-panel-size* (Dimension. 440 40))
-(def *query-panel-size* (Dimension. 440 130))
-(def *btn-panel-size* (Dimension. 440 30))
+(def ^{:private true} DLG-SIZE (Dimension. 450 340))
+(def ^{:private true} TITLE-PANEL-SIZE (Dimension. 440 40))
+(def ^{:private true} QUERY-PANEL-SIZE (Dimension. 440 130))
+(def ^{:private true} BTN-PANEL-SIZE (Dimension. 440 30))
 
 (defn transq
   "translate query string into function sexp.
@@ -127,7 +127,7 @@
 	  (.putConstraint SpringLayout/WEST title-field 10 SpringLayout/EAST title-label)
 	  (.putConstraint SpringLayout/EAST title-field -10 SpringLayout/EAST title-panel))
 	(doto title-panel
-	  (.setPreferredSize *title-panel-size*)
+	  (.setPreferredSize TITLE-PANEL-SIZE)
 	  (.setLayout layout) (.add title-label) (.add title-field)))
       (doto query-area
 	(.setLineWrap true)
@@ -135,7 +135,7 @@
       (when-let [q (:query pref)] (.setText query-area q))
       (doto query-panel
 	(.setBorder (BorderFactory/createTitledBorder "検索条件"))
-	(.setPreferredSize *query-panel-size*)
+	(.setPreferredSize QUERY-PANEL-SIZE)
 	(uu/do-add-expand (JScrollPane. query-area) 5))
       (doto target-panel
 	(.setLayout (FlowLayout.))
@@ -170,7 +170,7 @@
 	(doto btn-panel
 	  (.setLayout layout)
 	  (.add btn-ok) (.add btn-cancel)
-	  (.setPreferredSize *btn-panel-size*)))
+	  (.setPreferredSize BTN-PANEL-SIZE)))
       (let [cpane (.getContentPane dlg), layout (SpringLayout.)]
 	(doto layout
 	  (.putConstraint SpringLayout/WEST title-panel 5 SpringLayout/WEST cpane)
@@ -191,8 +191,8 @@
 	  (.setLayout layout)))
       (check)
       (doto dlg
-	(.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth *dlg-size*)) 2)))
-		      (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight *dlg-size*)) 2))))
+	(.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth DLG-SIZE)) 2)))
+		      (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight DLG-SIZE)) 2))))
 	(.setResizable false)
-	(.setMinimumSize *dlg-size*)))))
+	(.setMinimumSize DLG-SIZE)))))
 

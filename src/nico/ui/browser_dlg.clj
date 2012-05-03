@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "browser setting dialog."}
   nico.ui.browser-dlg
-  (:use [clojure.contrib.swing-utils :only [do-swing add-action-listener]])
+  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.ui.util :as uu]
 	    [nico.ui.key-val-dlg :as ukvd])
   (:import [java.awt BorderLayout Dimension]
@@ -14,8 +14,8 @@
 	   [javax.swing.table DefaultTableCellRenderer DefaultTableModel TableColumn
 			      TableCellEditor TableCellRenderer]))
 
-(def *dlg-size* (Dimension. 500 270))
-(def *btn-panel-size* (Dimension. 500 40))
+(def ^{:private true} DLG-SIZE (Dimension. 500 270))
+(def ^{:private true} BTN-PANEL-SIZE (Dimension. 500 40))
 
 (defn- browsers-to-model [browsers]
   (let [model
@@ -179,7 +179,7 @@
 	(.putConstraint SpringLayout/EAST btn-ok -5 SpringLayout/WEST btn-cancel)
 	(.putConstraint SpringLayout/EAST btn-cancel -10 SpringLayout/EAST btn-panel))
       (doto btn-panel
-	(.setPreferredSize *btn-panel-size*)
+	(.setPreferredSize BTN-PANEL-SIZE)
 	(.setLayout layout) (.add btn-ok) (.add btn-cancel)))
     (doto tbl-layout
       (.putConstraint SpringLayout/NORTH tbl-pane 5 SpringLayout/NORTH tbl-panel)
@@ -195,7 +195,7 @@
       (.add tbtn-panel BorderLayout/EAST)
       (.add btn-panel BorderLayout/SOUTH))
     (doto dlg
-      (.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth *dlg-size*)) 2)))
-		    (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight *dlg-size*)) 2))))
+      (.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth DLG-SIZE)) 2)))
+		    (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight DLG-SIZE)) 2))))
       (.setResizable false)
-      (.setMinimumSize *dlg-size*))))
+      (.setMinimumSize DLG-SIZE))))

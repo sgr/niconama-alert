@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "ニコ生の番組情報を更新する。"}
     nico.rss-updator
-  (:use [clojure.contrib.logging])
+  (:use [clojure.tools.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.rss :as rss]
 	    [hook-utils :as hu]
