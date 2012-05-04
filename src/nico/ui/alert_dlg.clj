@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "Alert dialog."}
   nico.ui.alert-dlg
-  (:use [clojure.tools.swing-utils :only [add-action-listener do-swing*]]
+  (:use [clojure.tools.swing-utils :only [add-action-listener do-swing-and-wait]]
 	[clojure.tools.logging])
   (:require [nico.prefs :as p]
 	    [nico.ui.util :as uu]
@@ -144,10 +144,7 @@
 	(doto cbtn
 	  (add-action-listener
 	   (fn [e]
-	     (do-swing* :now
-			(fn []
-			  (.setVisible dlg false)
-			  (.dispose dlg)))
+	     (do-swing-and-wait (.setVisible dlg false) (.dispose dlg))
 	     (extra-close-fn)))
 	  (.setPreferredSize (Dimension. (.getIconWidth CLOSE-ICON) (.getIconHeight CLOSE-ICON))))
 	(when (:member_only pgm) (.setBackground cbtn MONLY-BGCOLOR))

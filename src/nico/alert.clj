@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "Alert management functions."}
   nico.alert
-  (:use [clojure.tools.swing-utils :only [do-swing*]]
+  (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
 	[clojure.tools.logging])
   (:require [time-utils :as tu]
 	    [nico.ui.alert-dlg :as uad]
@@ -67,13 +67,13 @@
           (debug (str "display alert dialog: " (:id pgm)))
           (reset! last-modified now)
           (future 
-            (do-swing* :now #(doto adlg
-                               (.setLocation (:x plat) (:y plat))
-                               (.setVisible true)))
+            (do-swing-and-wait (doto adlg
+                                 (.setLocation (:x plat) (:y plat))
+                                 (.setVisible true)))
             (.sleep TimeUnit/SECONDS DISPLAY-TIME)
-            (do-swing* :now #(doto adlg
-                               (.setVisible false)
-                               (.dispose)))
+            (do-swing-and-wait (doto adlg
+                                 (.setVisible false)
+                                 (.dispose)))
             (release-plat i plat)))
         (do (debug (str "waiting plats.." (:id pgm)))
             (.sleep TimeUnit/SECONDS 5)

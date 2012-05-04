@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "タブに閉じるボタンと種別アイコンがついたJTabbedPane"}
   nico.ui.ext-tabbed-pane
-  (:use [clojure.tools.swing-utils :only [do-swing do-swing* add-action-listener]])
+  (:use [clojure.tools.swing-utils :only [do-swing-and-wait add-action-listener]])
   (:require [time-utils :as tu]
 	    [nico.pgm :as pgm]
 	    [nico.ui.pgm-panel])
@@ -133,5 +133,5 @@
   (vec (map #(.getTabPref (.getComponentAt this %)) (range (.getTabCount this)))))
 
 (defn add-tab [tpane tpref]
-  (do-swing* :now #(.addExtTab tpane (:type tpref) (nico.ui.ProgramsPanel. tpref))))
+  (do-swing-and-wait (.addExtTab tpane (:type tpref) (nico.ui.ProgramsPanel. tpref))))
 

@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "main frame"}
   nico.ui.main-frame
-  (:use [clojure.tools.swing-utils :only [do-swing do-swing*]]
+  (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
 	[nico.ui.ext-tabbed-pane :only [ext-tabbed-pane add-tab]]
 	[nico.ui.control-panel :only [control-panel]])
   (:require [nico.prefs :as p]
@@ -53,7 +53,7 @@
 	    (swap! (p/get-pref)
 		   assoc :window {:width w :height h :posx (.x p) :posy (.y p)} :tabs tp)
 	    (p/store-pref)
-	    (do-swing* :now (fn [] (.setVisible frame false) (.dispose frame)))))
+	    (do-swing-and-wait (.setVisible frame false) (.dispose frame))))
 	 (windowClosed [e] (System/exit 0))
 	 (windowOpened [e])
 	 (windowIconified [e])
