@@ -22,7 +22,7 @@
            "clojure.math.numeric-tower 0.0.1"
            "clojure.tools.logging 0.2.3 Copyright (c) 2009 Alex Taggart"
            "clj-http 0.4.0"
-           "swing-utils 0.1.0 Copyright (c) Stephen C. Gilardi and Meikel Brandmeyer. All rights reserved."
+           "swing-utils 0.2.0 Copyright (c) Stephen C. Gilardi and Meikel Brandmeyer. All rights reserved."
            "Enlive 1.0.0 Copyright (c) Christophe Grand, 2009. All rights reserved."
            "... and great dependencies"]))
 
