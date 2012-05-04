@@ -21,20 +21,15 @@
 (def ^{:private true} RETRY 10)
 (def ^{:private true} WAIT 3)
 
-(defn get-nico-rss-aux
-  [page]
+(defn- get-nico-rss-aux [page]
   (try
-    (let [raw-res (client/get (format "http://live.nicovideo.jp/recent/rss?p=%s" page))]
-      (if (= 200 (:status raw-res))
-        (-> raw-res :body s/cleanup s/utf8stream xml/parse)
-        (let [msg (format "returned HTTP error: %d, %s" (:status raw-res) (:body raw-res))]
-          (error msg)
-          (throw (Exception. msg)))))
+    (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/recent/rss?p=%s" page)
+                                          n/HTTP-OPTS)]
+      (-> raw-res :body s/cleanup s/utf8stream xml/parse))
     (catch Exception e
       (error (format "failed fetching RSS #%d: %s" page (.getMessage e)) e) nil)))
 
-(defn get-nico-rss
-  [page]
+(defn- get-nico-rss [page]
   (loop [c RETRY]
     (if-let [rss (get-nico-rss-aux page)]
       (do (debug (format "fetched RSS #%d tried %d times." page (- RETRY c)))
@@ -88,7 +83,7 @@
    fetched_at
    fetched_at))
 
-(defn get-programs-from-rss-aux [rss]
+(defn- get-programs-from-rss-aux [rss]
   [(get-programs-count rss)
    (for [item (for [x (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
 		    :when (= :item (:tag (first x)))] (first x))]
