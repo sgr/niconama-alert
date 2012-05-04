@@ -3,16 +3,28 @@
        :doc "'about this application' dialog."}
   nico.ui.about-dlg
   (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
-  (:require [nico.ui.util :as uu]
+  (:require [clojure.string :as s]
+            [nico.ui.util :as uu]
 	    [nico.ui.env-panel :as ue])
   (:import [java.awt BorderLayout Dimension Font]
 	   [javax.swing BorderFactory BoxLayout SpringLayout
-			JButton JDialog JLabel JPanel JTabbedPane]))
+			JButton JDialog JLabel JPanel JScrollPane JTabbedPane]))
 
 (def ^{:private true} DLG-SIZE (Dimension. 500 300))
-(def ^{:private true} CR-PANEL-SIZE (Dimension. 450 80))
+(def ^{:private true} CR-PANEL-SIZE (Dimension. 450 55))
 (def ^{:private true} BTN-PANEL-SIZE (Dimension. 450 40))
 (def ^{:private true} APP-NAME-FONT (Font. "Default" Font/PLAIN 20))
+
+(def ^{:private true} POWERED-BY
+  (s/join \newline
+          ["Clojure 1.4.0 Copyright (c) Rich Hickey. All rights reserved."
+           "clojure.data.zip 0.0.1 Copyright (c) Rich Hickey and contributors. All rights reserved."
+           "clojure.math.numeric-tower 0.0.1"
+           "clojure.tools.logging 0.2.3 Copyright (c) 2009 Alex Taggart"
+           "clj-http 0.4.0"
+           "swing-utils 0.1.0 Copyright (c) Stephen C. Gilardi and Meikel Brandmeyer. All rights reserved."
+           "Enlive 1.0.0 Copyright (c) Christophe Grand, 2009. All rights reserved."
+           "... and great dependencies"]))
 
 (defn- about-panel []
   (let [cr-panel (JPanel.) lib-panel (JPanel.)]
@@ -22,27 +34,22 @@
       (doto lapp (.setFont APP-NAME-FONT))
       (doto lauthor (.setFont uu/DEFAULT-FONT))
       (doto layout
-	(.putConstraint SpringLayout/NORTH lapp 20 SpringLayout/NORTH cr-panel)
+	(.putConstraint SpringLayout/NORTH lapp 10 SpringLayout/NORTH cr-panel)
 	(.putConstraint SpringLayout/WEST lapp 20 SpringLayout/WEST cr-panel)
-	(.putConstraint SpringLayout/NORTH lauthor 10 SpringLayout/SOUTH lapp)
-	(.putConstraint SpringLayout/EAST lauthor -30 SpringLayout/EAST cr-panel)
-	(.putConstraint SpringLayout/SOUTH lauthor -10 SpringLayout/SOUTH cr-panel))
+	(.putConstraint SpringLayout/NORTH lauthor 5 SpringLayout/SOUTH lapp)
+	(.putConstraint SpringLayout/EAST lauthor -10 SpringLayout/EAST cr-panel)
+	(.putConstraint SpringLayout/SOUTH lauthor -3 SpringLayout/SOUTH cr-panel))
       (doto cr-panel
 	(.setLayout layout)
 	(.setPreferredSize CR-PANEL-SIZE)
 	(.add lapp) (.add lauthor)))
     (let [inner-panel (JPanel.)
-	  lclj (uu/mlabel "Clojure 1.4.0 Copyright (c) Rich Hickey. All rights reserved.")
-	  lcljc (uu/mlabel
-		 "Clojure-contrib 1.2.0 copyrighted by Rich Hickey and the various contributors.")
-	  lsx (uu/mlabel "Enlive 1.0.0 Copyright (c) Christophe Grand, 2009. All rights reserved.")
+	  lpowered-by (uu/mlabel POWERED-BY)
 	  layout (BoxLayout. inner-panel BoxLayout/Y_AXIS)]
-      (doto lclj (.setFont uu/DEFAULT-FONT))
-      (doto lcljc (.setFont uu/DEFAULT-FONT))
-      (doto lsx (.setFont uu/DEFAULT-FONT))
+      (doto lpowered-by (.setFont uu/DEFAULT-FONT))
       (doto inner-panel
 	(.setBorder (BorderFactory/createTitledBorder "Powered by"))
-	(.setLayout layout) (.add lclj) (.add lcljc) (.add lsx))
+	(.setLayout layout) (.add (JScrollPane. lpowered-by)))
       (doto lib-panel
 	(uu/do-add-expand inner-panel 5)))
     (doto (JPanel.)
