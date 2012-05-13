@@ -5,6 +5,7 @@
   (:use [clojure.set :only [union]]
 	[clojure.tools.logging])
   (:require [hook-utils :as hu]
+            [log-utils :as l]
 	    [time-utils :as tu])
   (:import [java.util.concurrent Callable Executors]))
 
@@ -149,42 +150,33 @@
 	  (error msg)
 	  msg))))
   (defn- clean-old-aux []
-    (when (< 0 @total)
-      (let [c (int (* SCALE @total))] ;; 総番組数のscale倍までは許容
-	(when (< c (count-pgms))
-	  (let [now (tu/now)
-		updated (set
-			 (map #(:id %)
-			      (take-while #(tu/within? (:updated_at %) now 300)
-					  @idx-updated-at)))]
-	    ;; 5分以内に存在が確認された番組は多くとも残す
-	    (if (<= c (count updated))
-	      (do
-		(debug (format "rem-pgms-without updated (%d, %d <= %d)"
-			       @total c (count updated)))
-		(rem-pgms-without-aux updated))
-	      (let [with-pubdate (union updated
-					(set
-					 (map #(:id %)
-					      (take-while #(tu/within? (:pubdate %) now 1800)
-							  @idx-pubdate))))]
-		;; 30分以内に開始された番組は多くとも残す
-		(if (<= c (count with-pubdate))
-		  (do
-		    (debug (format "rem-pgms-without pubdate (%d, %d <= %d)"
-				   @total c (count with-pubdate)))
-		    (rem-pgms-without-aux with-pubdate))
-		  (let [c2 (- c (count with-pubdate))
-			with-elapsed (union with-pubdate
-					    (set
-					     (map #(:id %)
-						  (take c2 (filter
-							    #(not (contains? with-pubdate (:id %)))
-							    @idx-elapsed)))))]
-		    (debug (format "rem-pgms-without elapsed (t: %d, c: %d, c2: %d, with-elapsed: %d)"
-				   @total, c c2 (count with-elapsed)))
-		    (rem-pgms-without-aux with-elapsed)))))
-            (trace (format "checked consistency: %s" (check-consistency))))))))
+    (let [c (int (* SCALE @total))] ;; 総番組数のscale倍までは許容
+      (when (and (< 0 @total) (< c (count-pgms)))
+        ;; 5分以内に存在が確認された番組は多くとも残す
+        (let [now (tu/now)
+              updated
+              (set (map #(:id %) (take-while #(tu/within? (:updated_at %) now 300) @idx-updated-at)))]
+          (if (<= c (count updated))
+            (l/with-debug (format "rem-pgms-without updated (%d, %d <= %d)"
+                                  @total c (count updated))
+              (rem-pgms-without-aux updated))
+            ;; 30分以内に開始された番組は多くとも残す
+            (let [with-pubdate
+                  (union updated
+                         (set (map #(:id %) (take-while #(tu/within? (:pubdate %) now 1800) @idx-pubdate))))]
+              (if (<= c (count with-pubdate))
+                (l/with-debug (format "rem-pgms-without pubdate (%d, %d <= %d)"
+                                      @total c (count with-pubdate))
+                  (rem-pgms-without-aux with-pubdate))
+                (let [c2 (- c (count with-pubdate))
+                      with-elapsed
+                      (union with-pubdate
+                             (set (map #(:id %) (take c2 (filter #(not (contains? with-pubdate (:id %)))
+                                                                 @idx-elapsed)))))]
+                  (debug (format "rem-pgms-without elapsed (t: %d, c: %d, c2: %d, with-elapsed: %d)"
+                                 @total, c c2 (count with-elapsed)))
+                  (rem-pgms-without-aux with-elapsed)))))
+          (trace (format "checked consistency: %s" (check-consistency)))))))
   (defn- get-last-cleaned [] @last-cleaned)
   (defn- add1 [^Pgm pgm]
     (letfn [(add2 [^Pgm pgm]

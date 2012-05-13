@@ -6,6 +6,7 @@
   (:require [nico.pgm :as pgm]
 	    [nico.api :as api]
 	    [nico.scrape :as ns]
+            [log-utils :as l]
 	    [hook-utils :as hu]
 	    [time-utils :as tu])
   (:import [java.util.concurrent Callable CountDownLatch LinkedBlockingQueue
@@ -42,19 +43,18 @@
     nil))
 
 (defn- create-pgm [pid cid uid received]
-  (let [now (tu/now)]
+  (let [now (tu/now) lreceived (tu/format-time-long received)]
     ;; 繁忙期は番組ページ閲覧すら重い。番組ID受信から LIMIT-ELAPSED 秒経過していたら諦める。
     (if-not (tu/within? received now LIMIT-ELAPSED)
-      (do (warn (format "too late to fetch: %s/%s/%s received: %s, called: %s"
-			pid cid uid (tu/format-time-long received) (tu/format-time-long now)))
-	  :aborted)
+      (l/with-warn (format "too late to fetch: %s/%s/%s received: %s, called: %s"
+                           pid cid uid lreceived (tu/format-time-long now))
+        :aborted)
       (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
-	(do (trace (format "fetched pgm: %s %s pubdate: %s, received: %s, fetched_at: %s"
-			   (:id pgm) (:title pgm) (:pubdate pgm)
-			   (tu/format-time-long received) (:fetched_at pgm)))
+	(l/with-trace (format "fetched pgm: %s %s pubdate: %s, received: %s, fetched_at: %s"
+                              (:id pgm) (:title pgm) (:pubdate pgm) lreceived (:fetched_at pgm))
 	  pgm)
-	(do (warn (format "couldn't fetching pgm: %s/%s/%s" pid cid uid))
-	    :failed)))))
+	(l/with-warn (format "couldn't fetching pgm: %s/%s/%s" pid cid uid)
+          :failed)))))
 
 (gen-class
  :name nico.api-updator.WrappedFutureTask
@@ -103,55 +103,48 @@
 	     (debug "reconnected. fetching program information..."))))
       (afterExecute
        [r e]
-       (when (nil? e)
-	 (when (instance? nico.api-updator.WrappedFutureTask r)
-	   (let [result (.get r) pid (.pid r) cid (.cid r) uid (.uid r) received (.received r)]
-	     (cond
-	      (instance? nico.pgm.Pgm result) (add-pgm result)
-	      (= :failed result)
-	      (if (> LIMIT-QUEUE (.getActiveCount this))
-		(do
-		  (.execute this
-			    (nico.api-updator.WrappedFutureTask.
-			     pid cid uid received))
-		  (debug (format "retry task (%s/%s/%s %s)"
-				 pid uid cid (tu/format-time-long received))))
-		(debug (format "too many tasks (%d) to retry (%s/%s/%s %s)"
-			       (.size queue) pid uid cid
-			       (tu/format-time-long received)))))))))))
+       (when (and (nil? e) (instance? nico.api-updator.WrappedFutureTask r))
+         (let [result (.get r) pid (.pid r) cid (.cid r) uid (.uid r)
+               received (.received r) lreceived (tu/format-time-long received)]
+           (cond
+            (instance? nico.pgm.Pgm result) (add-pgm result)
+            (= :failed result)
+            (if (> LIMIT-QUEUE (.getActiveCount this))
+              (l/with-debug (format "retry task (%s/%s/%s %s)" pid uid cid lreceived)
+                (.execute this (nico.api-updator.WrappedFutureTask. pid cid uid received)))
+              (debug (format "too many tasks (%d) to retry (%s/%s/%s %s)"
+                             (.size queue) pid uid cid lreceived)))))))))
   (let [comm-q (LinkedBlockingQueue.)
 	comm-executor (create-executor NTHREADS-COMM comm-q) 
 	normal-q (LinkedBlockingQueue.)
 	normal-executor (create-executor NTHREADS-NORMAL normal-q)]
     (defn clear-normal-q
       ([]
-	 (trace (format "clear normal queue (%d -> 0)" (.size normal-q)))
-	 (.clear normal-q))
+	 (l/with-trace (format "clear normal queue (%d -> 0)" (.size normal-q))
+           (.clear normal-q)))
       ([sec]
-	 (let [c (.size normal-q), now (tu/now)]
-	   (doseq [t (iterator-seq (.iterator normal-q))]
-	     (when-not (tu/within? (.received t) now sec) (.remove normal-q t)))
-	   (trace (format "clear normal queue (%d -> %d)" c (.size normal-q))))))
+         (let [c (.size normal-q), now (tu/now)]
+           (l/with-trace (format "clear normal queue (%d -> %d)" c (.size normal-q))
+             (doseq [t (iterator-seq (.iterator normal-q))]
+               (when-not (tu/within? (.received t) now sec) (.remove normal-q t)))))))
     (defn- create-task [pid cid uid received]
       (let [task (nico.api-updator.WrappedFutureTask. pid cid uid received)]
 	(if (some #(contains? (set (:comms %)) (keyword cid)) @alert-statuses)
 	  ;; 所属コミュニティの番組情報は専用のスレッドプールで(優先的に)取得
-	  (do (trace (format "%s: %s is joined community." pid cid))
-	      (.execute comm-executor task))
-	  (do (trace (format "%s: %s isn't your community." pid cid))
-	      (.execute normal-executor task)))))
+	  (l/with-trace (format "%s: %s is joined community." pid cid)
+            (.execute comm-executor task))
+	  (l/with-trace (format "%s: %s isn't your community." pid cid)
+            (.execute normal-executor task)))))
     (defn- update-api-aux []
       (try
 	(api/listen (first @alert-statuses) (fn [] (run-hooks :connected)) create-task)
-	(catch Exception e
-	  (warn "** disconnected" e)
-	  nil)))
+	(catch Exception e (l/with-warn e "** disconnected" nil))))
     (defn update-api []
       (letfn [(reset [astatus]
-		     (trace (format "reset to: %s" (name astatus)))
-		     (dosync
-		      (ref-set awaiting-status astatus)
-		      (ref-set latch (CountDownLatch. 1))))]
+                (l/with-trace (format "reset to: %s" (name astatus))
+                  (dosync
+                   (ref-set awaiting-status astatus)
+                   (ref-set latch (CountDownLatch. 1)))))]
 	(loop [c RETRY-CONNECT]
 	  (when (= 1 (.getCount @latch)) ;; pause中かどうか
 	    (do (run-hooks :awaiting)
@@ -159,10 +152,9 @@
 	  (cond
 	   (= 0 c) (do (reset :aborted) (recur RETRY-CONNECT))
 	   (empty? @alert-statuses) (do (reset :need_login) (recur RETRY-CONNECT))
-	   :else (do
+	   :else (l/with-info (format "Will reconnect (%d/%d) after %d sec..."
+                                      c RETRY-CONNECT RECONNECT-SEC)
 		   (update-api-aux)
-		   (info (format "Will reconnect (%d/%d) after %d sec..."
-				 c RETRY-CONNECT RECONNECT-SEC))
 		   (.sleep TimeUnit/SECONDS RECONNECT-SEC)
 		   (run-hooks :reconnecting)
 		   (recur (dec c)))))))

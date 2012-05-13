@@ -6,6 +6,7 @@
   (:require [nico.pgm :as pgm]
 	    [nico.rss :as rss]
 	    [hook-utils :as hu]
+            [log-utils :as l]
 	    [time-utils :as tu])
   (:import [clojure.lang Keyword]
            [java.util.concurrent TimeUnit]))
@@ -28,17 +29,15 @@
 	  ;; 取得完了・中断・継続の判定
 	  (cond
 	   (or (>= cfetched (pgm/get-total)) (>= cfetched cur_total)) ;; 総番組数分取得したら、取得完了
-	   (do
-	     (info (format "finished fetching programs: %d" cfetched))
+	   (l/with-info (format "finished fetching programs: %d" cfetched)
 	     [:finished cfetched cur_total])
 	   (= 0 (count cur_pgms)) ;; ひとつも番組が取れない場合は中止
-	   (do
-	     (warn (format "aborted fetching programs: %d" cfetched))
+	   (l/with-warn (format "aborted fetching programs: %d" cfetched)
 	     [:aborted cfetched cur_total])
 	   :else
 	   (recur (inc page), total cur_total fetched-upd))))
-      (catch Exception e (error "failed fetching RSS" e)
-	     [:error 0 (rss/get-programs-count)])))
+      (catch Exception e (error e "failed fetching RSS")
+	     [:error 0 0])))
   (defn set-counter [c] (reset! counter c))
   (defn update-rss []
     (try
@@ -58,7 +57,7 @@
 	    (.sleep TimeUnit/SECONDS 1)
 	    (set-counter (dec @counter))
 	    (recur max))))
-      (catch Exception e (error "failed updating RSS" e))))
+      (catch Exception e (error e "failed updating RSS"))))
   (defn pause-rss-updator []
     (if (= 1 (.getCount @latch))
       (do (.countDown @latch) false)

@@ -6,6 +6,7 @@
 	[clojure.tools.logging])
   (:require [nico.prefs :as p]
 	    [nico.ui.util :as uu]
+            [log-utils :as l]
 	    [net-utils :as n]
 	    [str-utils :as su]
 	    [time-utils :as tu])
@@ -112,9 +113,9 @@
     (if-let [img (fetch-image url)]
       img
       (if (zero? retry-count)
-	(do (warn (format "abort fetching image (%s) because reached retry limit: %d"
-			  url RETRY-LIMIT))
-	    NO-IMAGE)
+        (l/with-warn (format "abort fetching image (%s) because reached retry limit: %d"
+                           url RETRY-LIMIT)
+          NO-IMAGE)
 	(do (.sleep TimeUnit/SECONDS 1)
 	    (recur (dec retry-count)))))))
 
@@ -130,7 +131,7 @@
 	  time (JLabel. (format "%s  （%d分前に開始）"
 				(if (:member_only pgm) "※コミュ限" "")
 				(tu/minute (tu/interval (:pubdate pgm) (tu/now)))))]
-      (let [title (JLabel. (su/ifstr (:title pgm) (:id pgm)))
+      (let [title (JLabel. (su/ifstr (:title pgm) (name (:id pgm))))
 	    cbtn (JButton. CLOSE-ICON), layout (SpringLayout.)]
 	(doto title (.setFont uu/DEFAULT-FONT))
 	(doto layout

@@ -4,7 +4,8 @@
   nico.alert
   (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
 	[clojure.tools.logging])
-  (:require [time-utils :as tu]
+  (:require [log-utils :as l]
+            [time-utils :as tu]
 	    [nico.ui.alert-dlg :as uad]
 	    [nico.pgm :as pgm])
   (:import [java.awt GraphicsEnvironment]
@@ -63,26 +64,26 @@
     (let [now (tu/now)
           [i plat] (if (tu/within? @last-modified now 5) (reserve-plat-A) (reserve-plat-B))]
       (if i
-        (let [adlg (uad/alert-dlg pgm #(release-plat i plat))]
-          (debug (str "display alert dialog: " (:id pgm)))
-          (reset! last-modified now)
-          (future 
-            (do-swing-and-wait (doto adlg
-                                 (.setLocation (:x plat) (:y plat))
-                                 (.setVisible true)))
-            (.sleep TimeUnit/SECONDS DISPLAY-TIME)
-            (do-swing-and-wait (doto adlg
-                                 (.setVisible false)
-                                 (.dispose)))
-            (release-plat i plat)))
-        (do (debug (str "waiting plats.." (:id pgm)))
+        (l/with-debug (str "display alert dialog: " (:id pgm))
+          (let [adlg (uad/alert-dlg pgm #(release-plat i plat))]
+            (reset! last-modified now)
+            (future 
+              (do-swing-and-wait (doto adlg
+                                   (.setLocation (:x plat) (:y plat))
+                                   (.setVisible true)))
+              (.sleep TimeUnit/SECONDS DISPLAY-TIME)
+              (do-swing-and-wait (doto adlg
+                                   (.setVisible false)
+                                   (.dispose)))
+              (release-plat i plat))))
+        (l/with-debug (str "waiting plats.." (:id pgm))
             (.sleep TimeUnit/SECONDS 5)
             (recur pgm)))))
   (defn alert-pgm [id]
     (locking sentinel
       (when-let [pgm (pgm/get-pgm id)]
         (if-not (:alerted pgm)
-          (do
+          (l/with-debug (str "alert: " id)
             (.execute pool #(alert-aux pgm))
             (pgm/update-alerted id))
           (debug (str "already alerted: " id)))))))

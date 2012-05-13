@@ -11,6 +11,7 @@
 	    [clojure.data.zip.xml :as dzx]
 	    [clj-http.client :as client]
 	    [nico.pgm :as pgm]
+            [log-utils :as l]
 	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu])
@@ -27,27 +28,27 @@
                                           n/HTTP-OPTS)]
       (-> raw-res :body s/cleanup s/utf8stream xml/parse))
     (catch Exception e
-      (error (format "failed fetching RSS #%d: %s" page (.getMessage e)) e) nil)))
+      (error e (format "failed fetching RSS #%d" page)) nil)))
 
 (defn- get-nico-rss [page]
   (loop [c RETRY]
     (if-let [rss (get-nico-rss-aux page)]
-      (do (debug (format "fetched RSS #%d tried %d times." page (- RETRY c)))
-          rss)
+      (l/with-debug (format "fetched RSS #%d tried %d times." page (- RETRY c))
+        rss)
       (if (= 0 c)
-        (do (error (format "aborted fetching RSS #%d: reached limit." page))
-            {})
+        (l/with-error (format "aborted fetching RSS #%d: reached limit." page)
+          {})
         (do (.sleep TimeUnit/SECONDS WAIT)
             (recur (dec c)))))))
 
-(defn get-programs-count
+(defn- get-programs-count
   "get the total programs count."
   ([] (get-programs-count (get-nico-rss 1)))
   ([rss] (try
 	   (Integer/parseInt
 	    (first (dzx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count dzx/text)))
 	   (catch NumberFormatException e
-	     (error (format "failed fetching RSS for get programs count: %s" rss) e)
+	     (error e (format "failed fetching RSS for get programs count: %s" rss))
 	     0))))
 
 (defn- get-child-elm [tag node]
@@ -88,8 +89,7 @@
    (for [item (for [x (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
 		    :when (= :item (:tag (first x)))] (first x))]
      (let [pgm (create-pgm item (tu/now))]
-       (when (some nil?
-		   (list (:id pgm) (:title pgm) (:pubdate pgm)))
+       (when (some nil? (list (:id pgm) (:title pgm) (:pubdate pgm)))
 	 (warn (format "Some nil properties found in: %s" (pr-str pgm))))
        pgm))])
 
@@ -98,15 +98,15 @@
          rss (get-nico-rss page)
          [total pgms] (get-programs-from-rss-aux rss)]
     (if (= 0 c)
-      (do (debug "reached limit fetching RSS")
-          [total pgms])
+      (l/with-debug "reached limit fetching RSS"
+        [total pgms])
       (if (or (= 0 total) (> 0 total))
-        (do (debug (format "retry fetching RSS #%d (%d) caused by wrong total number: %d" page c total))
+        (l/with-debug (format "retry fetching RSS #%d (%d) caused by wrong total number: %d" page c total)
+          (.sleep TimeUnit/SECONDS WAIT)
+          (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
+        (if (and (= 0 (count pgms)) (> total (* 18 page)))
+          (l/with-debug (format "retry fetching RSS #%d (%d) caused by lack of programs: %d,%d,%d"
+                                page c total (* 18 page) (count pgms))
             (.sleep TimeUnit/SECONDS WAIT)
             (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
-        (if (and (= 0 (count pgms)) (> total (* 18 page)))
-          (do (debug (format "retry fetching RSS #%d (%d) caused by lack of programs: %d,%d,%d"
-                             page c total (* 18 page) (count pgms)))
-              (.sleep TimeUnit/SECONDS WAIT)
-              (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
           [total pgms])))))

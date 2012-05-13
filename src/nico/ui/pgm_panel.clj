@@ -4,7 +4,8 @@
   nico.ui.pgm-panel
   (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]]
 	[clojure.tools.logging])
-  (:require [nico.api :as api]
+  (:require [log-utils :as l]
+            [nico.api :as api]
 	    [nico.ui.pgm-table :as upt]
 	    [nico.ui.key-val-dlg :as ukvd]
 	    [nico.ui.kwd-tab-dlg :as uktd]
@@ -69,10 +70,9 @@
 							(warn (format "parse error: %s, %s"
 								      ts (pr-str pgm)) e)
 							false))
-						    (do
-						      (warn (format "zero length str: %s"
-								    (pr-str pgm)))
-						      false)))
+                                                    (l/with-warn (format "zero length str: %s"
+                                                                         (pr-str pgm))
+                                                      false)))
 						] id))]
 		      (let [npgms (select-keys pgms (matched-keys pgms))]
 			[(count npgms) npgms])))])))))

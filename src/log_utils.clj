@@ -2,7 +2,8 @@
 (ns #^{:author "sgr"
        :doc "ログやエラー処理に関する操作"}
   log-utils
-  (:use [prefs-utils :only [pref-base-path]])
+  (:use [prefs-utils :only [pref-base-path]]
+        [clojure.tools.logging :only [log]])
   (:import [java.io File FileInputStream FileOutputStream]
 	   [java.util Date Properties]
 	   [java.util.logging Formatter LogManager LogRecord]
@@ -46,4 +47,18 @@
     (when-not (.exists file) (create-log-props default-props file))
     (with-open [is (FileInputStream. file)]
       (doto (LogManager/getLogManager) (.readConfiguration is)))))
+
+(defmacro with-log
+  {:arglists '([level msg & body] [level throwable msg & body])}
+  [level x & more]
+  (if (instance? Throwable x)
+    `(do (log ~level ~x ~(first more)) ~@(rest more))
+    `(do (log ~level nil ~x) ~@more)))
+
+(defmacro with-trace [x & more] `(with-log :trace ~x ~@more))
+(defmacro with-debug [x & more] `(with-log :debug ~x ~@more))
+(defmacro with-info  [x & more] `(with-log :info  ~x ~@more))
+(defmacro with-warn  [x & more] `(with-log :warn  ~x ~@more))
+(defmacro with-error [x & more] `(with-log :error ~x ~@more))
+(defmacro with-fatal [x & more] `(with-log :fatal ~x ~@more))
 

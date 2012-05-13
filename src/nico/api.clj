@@ -85,7 +85,7 @@
 	      (list date pid cid uid))
 	    nil))
 	nil))
-    (catch Exception e (error (format "parse error: %s" chat-str e)) nil)))
+    (catch Exception e (error e (format "parse error: %s" chat-str)) nil)))
 
 (defn listen [alert-status connected-fn create-task-fn]
   (with-open [sock (doto (java.net.Socket. (:addr alert-status) (:port alert-status))

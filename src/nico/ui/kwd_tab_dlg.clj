@@ -82,9 +82,9 @@
 		       (.setBorder target-panel (BorderFactory/createLineBorder Color/RED))
 		       (.setBorder target-panel target-border))
 		     (try
-		       (do
-			 (info (format "query: %s" (transq (read-query))))
-			 (eval (transq (read-query)))
+                       (let [tq (transq (read-query))]
+                         (info (format "query: %s" tq))
+			 (eval tq)
 			 (.setBorder query-area query-border)
 			 (.setEnabled btn-ok true))
 		       (catch Exception e
