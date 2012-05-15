@@ -10,7 +10,7 @@
   (:import [java.util.concurrent Callable Executors]))
 
 (def ^{:private true} SCALE 1.05) ;; 最大保持数
-(def ^{:private true} INTERCAL-CLEAN 60) ;; 古い番組情報を削除する間隔
+(def ^{:private true} INTERVAL-CLEAN 60) ;; 古い番組情報を削除する間隔
 
 (defrecord Pgm
   [id		;; 番組ID
@@ -181,7 +181,7 @@
   (defn- add1 [^Pgm pgm]
     (letfn [(add2 [^Pgm pgm]
               (add-aux pgm)
-              (when-not (tu/within? @last-cleaned (tu/now) INTERCAL-CLEAN)
+              (when-not (tu/within? @last-cleaned (tu/now) INTERVAL-CLEAN)
                 (clean-old-aux)
                 (ref-set last-cleaned (tu/now)))
               (call-hook-updated))]
