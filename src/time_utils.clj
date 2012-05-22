@@ -4,9 +4,15 @@
   time-utils
   (:require [clojure.math.numeric-tower :as math])
   (:import [java.text SimpleDateFormat]
+           [java.sql Timestamp]
 	   [java.util Calendar Date]))
 
 (defn now [] (.getTime (Calendar/getInstance)))
+(defn date-to-timestamp [^Date d] (Timestamp. (.getTime d)))
+(defn sql-now [] (date-to-timestamp (now)))
+(defn timestamp-to-date [^Timestamp t]
+  (.getTime (doto (Calendar/getInstance) (.setTimeInMillis (.getTime t)))))
+
 (defn format-time [date fmt]
   (if (instance? java.util.Date date)
     (.format (SimpleDateFormat. fmt) date)

@@ -4,12 +4,14 @@
 	[nico.updator :only [start-updators]]
 	[nico.ui.main-frame :only [main-frame]])
   (:require [nico.prefs :as p]
+            [nico.pgm :as pgm]
 	    [nico.log :as l])
   (:gen-class))
 
 (defn -main []
   (l/load-log-props)
   (p/load-pref)
+  (pgm/init-db)
   (let [frame (main-frame)]
     (do-swing (.setVisible frame true)))
   (start-updators))

@@ -3,14 +3,23 @@
        :doc "ニコニコ生放送の番組情報とその操作"}
   nico.pgm
   (:use [clojure.set :only [union]]
+        [clojure.string :only [lower-case]]
 	[clojure.tools.logging])
   (:require [hook-utils :as hu]
             [log-utils :as l]
-	    [time-utils :as tu])
-  (:import [java.util.concurrent Callable Executors]))
+            [str-utils :as s]
+	    [time-utils :as tu]
+            [clojure.java.jdbc :as jdbc])
+  (:import [clojure.lang Keyword]
+           [java.io File]
+           [java.sql Connection DriverManager SQLException Timestamp]
+           [java.util.concurrent Callable Executors]
+           [com.mchange.v2.c3p0 ComboPooledDataSource]))
 
 (def ^{:private true} SCALE 1.05) ;; 最大保持数
 (def ^{:private true} INTERVAL-CLEAN 60) ;; 古い番組情報を削除する間隔
+
+(def ^{:private true} DB-CLASSNAME "org.apache.derby.jdbc.EmbeddedDriver")
 
 (defrecord Pgm
   [id		;; 番組ID
@@ -29,6 +38,172 @@
    fetched_at	;; 取得時刻
    updated_at])	;; 更新時刻
 
+(defn- create-comms []
+  (jdbc/create-table
+   :comms
+   [:id "varchar(10)" "PRIMARY KEY"]
+   [:comm_name "varchar(64)"]
+   ;;     [:thumbnail "blob(100K)"]
+   [:thumbnail "varchar(64)"]
+   [:fetched_at :timestamp]
+   [:updated_at :timestamp])
+  (jdbc/do-commands "CREATE INDEX idx_comms_id ON comms(id)"
+                    "CREATE INDEX idx_comms_name ON comms(comm_name)"
+                    "CREATE INDEX idx_comms_fetched_at ON comms(fetched_at)"
+                    "CREATE INDEX idx_comms_updated_at ON comms(updated_at)"))
+(defn- create-pgms []
+  (jdbc/create-table
+   :pgms
+   [:id "varchar(10)" "PRIMARY KEY"]
+   [:title "varchar(64)"]
+   [:pubdate :timestamp]
+   [:description "varchar(256)"]
+   [:category "varchar(24)"]
+   [:link "varchar(42)"]
+   [:owner_name "varchar(64)"]
+   [:member_only :smallint] ;; 1: true 0: false
+   [:type :smallint] ;; 0: community 1: channel 2: official
+   [:comm_id "varchar(10)"]
+   [:alerted :smallint] ;; 1: true 0: false
+   [:fetched_at :timestamp]
+   [:updated_at :timestamp])
+  (jdbc/do-commands "CREATE INDEX idx_pgms_id ON pgms(id)"
+                    "CREATE INDEX idx_pgms_title ON pgms(title)"
+                    "CREATE INDEX idx_pgms_pubdate ON pgms(pubdate)"
+                    "CREATE INDEX idx_pgms_description ON pgms(description)"
+                    "CREATE INDEX idx_pgms_category ON pgms(category)"
+                    "CREATE INDEX idx_pgms_owner_name ON pgms(owner_name)"
+                    "CREATE INDEX idx_pgms_comm_id ON pgms(comm_id)"
+                    "CREATE INDEX idx_pgms_fetched_at ON pgms(fetched_at)"
+                    "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"))
+
+(defn- init-db-aux [path]
+  (let [db {:classname DB-CLASSNAME
+            :subprotocol "derby"
+            :subname path
+            :create true}]
+    (jdbc/with-connection db
+      (create-pgms)
+      (create-comms))))
+
+(defn- pool [path]
+  (let [cpds (doto (ComboPooledDataSource.)
+               (.setDriverClass DB-CLASSNAME)
+               (.setJdbcUrl (str "jdbc:derby:" path))
+               (.setMaxIdleTimeExcessConnections (* 30 60))
+               (.setMaxIdleTime (* 3 60 60)))] 
+    {:datasource cpds}))
+
+(defn- drop-tbls []
+  (doseq [tbl [:pgms :comms]] (jdbc/drop-table tbl)))
+
+(let [called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
+  (hu/defhook :updated)
+  (defn- call-hook-updated []
+    (dosync
+     (when-not (tu/within? @called-at-hook-updated (tu/now) 3)
+       (run-hooks :updated)
+       (ref-set called-at-hook-updated (tu/now))))))
+
+(let [total (atom 0)] ;; 総番組数
+  (defn set-total [t]
+    (let [old @total]
+      (reset! total t)
+      (debug (format "set-total: %d -> %d" old t)))
+    (call-hook-updated))
+  (defn get-total [] @total))
+
+(let [db-path (let [f (File/createTempFile "nico-" nil)
+                    p (.getCanonicalPath f)]
+                (.delete f) p)
+      initialized (atom false)
+      pooled-db (delay (pool db-path))]
+  (defn init-db [] (init-db-aux db-path))
+  (defn- db [] @pooled-db)
+
+  ;; 以下はリファクタリング用に同じ物をとりあえず実装する。
+  ;; 動くようになったら徐々に不要なメソッドをなくしてメモリ効率を良くしていく
+  (defn- get-row-comm [^String comm_id]
+    (jdbc/with-query-results rs ["SELECT * FROM comms WHERE id=?" comm_id]
+      (first rs)))
+  (defn- gen-pgm [row-pgm]
+    (let [row-comm (get-row-comm (:comm_id row-pgm))]
+      (nico.pgm.Pgm.
+       (keyword (:id row-pgm))
+       (:title row-pgm)
+       (tu/timestamp-to-date (:pubdate row-pgm))
+       (:description row-pgm)
+       (:category row-pgm)
+       (:link row-pgm)
+       (:thumbnail row-comm)
+       (:owner_name row-pgm)
+       (if (= 1 (:member_only row-pgm)) true false)
+       (condp = (:type row-pgm) 0 :community 1 :channel 2 :official)
+       (:comm_name row-comm)
+       (keyword (:comm_id row-pgm))
+       (if (= 1 (:alerted row-pgm)) true false)
+       (tu/timestamp-to-date (:fetched_at row-pgm))
+       (tu/timestamp-to-date (:updated_at row-pgm)))))
+  (defn pgms []
+    (jdbc/with-connection (db)
+      (jdbc/with-query-results rs ["SELECT * FROM pgms"]
+        (let [pgms (atom {})]
+          (doseq [r rs]
+            (let [p (gen-pgm r)]
+              (swap! pgms assoc (:id p) p)))
+          @pgms))))
+  (defn count-pgms []
+    (jdbc/with-connection (db)
+      (jdbc/with-query-results rs ["SELECT COUNT(*) AS cnt FROM pgms"]
+        (:cnt (first rs)))))
+  (defn- get-pgm-aux [^String id]
+    (jdbc/with-query-results rs ["SELECT * FROM pgms WHERE pgms.id=?" id]
+      (if-let [row-pgm (first rs)]
+        (gen-pgm row-pgm)
+        nil)))
+  (defn get-pgm [^Keyword id]
+    (jdbc/with-connection (db)
+      (get-pgm-aux (name id))))
+  (defn update-alerted [^Keyword id]
+    (jdbc/with-connection (db)
+      (jdbc/transaction
+       (jdbc/update-values :pgms ["id=?" (name id)] {:alerted true}))))
+  (defn- rem-pgm-by-comm-id [^String comm_id]
+    (jdbc/delete-rows :pgms ["comm_id=?" comm_id]))
+  (defn add [^Pgm pgm]
+    (jdbc/with-connection (db)
+      (let [pid (name (:id pgm))
+            comm_id (if-let [cid (:comm_id pgm)] (name cid) nil)]
+        (when-not (get-pgm-aux pid) ; 既にあるレコードは追加しない
+          (call-hook-updated)
+          (jdbc/transaction
+           (rem-pgm-by-comm-id comm_id) ; 同じコミュニティの番組があったら削除する
+           (jdbc/insert-values :pgms
+                               [:id :title :pubdate :description :category :link :owner_name
+                                :member_only :type :comm_id :alerted :fetched_at :updated_at]
+                               [pid (s/trim-to (:title pgm) 64)
+                                (tu/date-to-timestamp (:pubdate pgm))
+                                (s/trim-to (:desc pgm) 256) (:category pgm) (:link pgm)
+                                (s/trim-to (:owner_name pgm) 64)
+                                (if (:member_only pgm) 1 0)
+                                (condp = (:type pgm) :community 0 :channel 1 :official 2)
+                                comm_id
+                                (if (:alerted pgm) 1 0)
+                                (tu/date-to-timestamp (:fetched_at pgm))
+                                (tu/date-to-timestamp (:updated_at pgm))])
+           (when comm_id
+             (if-let [row-comm (get-row-comm comm_id)]
+               (when (tu/within? (tu/timestamp-to-date (:updated_at row-comm)) (tu/now) 3600)
+                 (jdbc/update-values :comms ["id=?" comm_id]
+                                     {:comm_name (s/trim-to (:comm_name pgm) 64)
+                                      :thumbnail (:thumbnail pgm)
+                                      :updated_at (tu/sql-now)}))
+               (jdbc/insert-values :comms
+                                   [:id :comm_name :thumbnail :fetched_at :updated_at]
+                                   [comm_id (s/trim-to (:comm_name pgm) 64)
+                                    (:thumbnail pgm) (tu/sql-now) (tu/sql-now)])))))))))
+
+(comment
 (let [total (atom 0) ;; 総番組数
       id-pgms (ref {}) ;; 番組IDをキー、番組を値とするマップ
       idx-comm (ref {}) ;; コミュニティIDをキー、番組IDを値とするマップ
@@ -196,3 +371,4 @@
                (add2 pgm))
 	     (add2 pgm)))))))
   (defn add [^Pgm pgm] (.execute pool #(add1 pgm))))
+)
