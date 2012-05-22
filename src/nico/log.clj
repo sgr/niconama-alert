@@ -14,7 +14,8 @@
     (.setProperty "java.util.logging.FileHandler.count" "10")
     (.setProperty "java.util.logging.FileHandler.formatter" "utils.Log4JLikeFormatter")
     (.setProperty "java.util.logging.FileHandler.encoding" "utf-8")
-    (.setProperty ".level" "INFO")))
+    (.setProperty ".level" "INFO")
+    (.setProperty "nico.level" "INFO")))
 
 (defn load-log-props []
   (lu/load-log-props "nico" (default-log-props))
