@@ -6,6 +6,7 @@
 	[nico.ui.ext-tabbed-pane :only [ext-tabbed-pane add-tab]]
 	[nico.ui.control-panel :only [control-panel]])
   (:require [nico.prefs :as p]
+            [nico.pgm :as pgm]
 	    [nico.ui.menu :as m])
   (:import [java.awt Dimension Font]
 	   [java.awt.event WindowEvent WindowListener]
@@ -53,6 +54,7 @@
 	    (swap! (p/get-pref)
 		   assoc :window {:width w :height h :posx (.x p) :posy (.y p)} :tabs tp)
 	    (p/store-pref)
+            (pgm/shutdown)
 	    (do-swing-and-wait (.setVisible frame false) (.dispose frame))))
 	 (windowClosed [e] (System/exit 0))
 	 (windowOpened [e])

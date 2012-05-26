@@ -2,7 +2,8 @@
 (ns #^{:author "sgr"
        :doc "ニコニコ生放送の番組情報とその操作"}
   nico.pgm
-  (:use [clojure.set :only [union]]
+  (:use [clojure.java.io :only [file delete-file]]
+        [clojure.set :only [union]]
         [clojure.string :only [lower-case]]
 	[clojure.tools.logging])
   (:require [hook-utils :as hu]
@@ -105,11 +106,34 @@
                (.setMaxIdleTime 60))]
     {:datasource cpds}))
 
-(let [db-path (let [f (File/createTempFile "nico-" nil)
-                    p (.getCanonicalPath f)]
-                (.delete f) p)
-      pooled-db (delay (pool db-path))]
-  (defn init-db [] (init-db-aux db-path))
+(defn- delete-all-files [path]
+  (let [f (file path)]
+    (when (.exists f)
+      (if (.isDirectory f)
+        (l/with-debug (format "deleting all children of "  path)
+          (doseq [c (.listFiles f)] (delete-all-files c))
+          (.delete f))
+        (l/with-debug (format "deleting file: %s" path)
+          (.delete f))))))
+
+(defn- shutdown-db [path]
+  (try
+    (DriverManager/getConnection (format "jdbc:derby:%s;shutdown=true" path))
+    (catch Exception e
+      (debug (format "shutdown derby: %s" (.getMessage e)))
+      (delete-all-files path))))
+
+(let [db-path (.getCanonicalPath (File/createTempFile "nico-" nil))
+      pooled-db (atom nil)]
+  (defn init-db []
+    (delete-all-files db-path)
+    (init-db-aux db-path)
+    (reset! pooled-db (pool db-path)))
+  (defn shutdown []
+    (let [d @pooled-db]
+      (reset! pooled-db nil)
+      (.close (:datasource d))
+      (shutdown-db db-path)))
   (defn- db [] @pooled-db))
 
 (defn- drop-tbls []
@@ -219,7 +243,8 @@
                   (nil? x) y
                   (nil? y) x
                   :else nil))
-          (longer-for [k x ^Pgm y] (longer (get x k) (get y k)))
+          (longer-for [k x ^Pgm y]
+            (longer (get x k) (s/trim-to (get y k) (condp = k :title 64 :description 256))))
           (later [x y]
             (cond (and x y) (if (tu/later? x y) x y)
                   (nil? x) y
@@ -233,7 +258,6 @@
     (-> {}
         (if-assoc longer-for :title       row-pgm pgm)
         (if-assoc later-for  :pubdate     row-pgm pgm)
-        (if-assoc longer-for :description row-pgm pgm)
         (if-assoc longer-for :description row-pgm pgm)
         (assoc :updated_at (tu/sql-now)))))
 
