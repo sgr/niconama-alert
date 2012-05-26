@@ -41,7 +41,7 @@
 (defn- get-init-fn [this]
   (let [pref (:pref @(.state this))]
     (condp = (:type pref)
-	:all (fn [] [(:title pref) (fn [pgms] [(pgm/count-pgms) pgms])])
+	:all (fn [] [(:title pref) (fn [pgms] [0 {}])]); [(pgm/count-pgms) pgms])])
 	:comm (fn []
 		(if-let [as (api/get-alert-status (:email pref) (:passwd pref))]
 		  (do
