@@ -17,14 +17,17 @@
   (hu/defhook :countdown :fetching :fetched)
   (defn- fetch-rss []
     (try
-      (loop [page 1, total (pgm/get-total), cur_total total, fetched #{}]
+      (loop [page 1, total 0, cur_total total, fetched #{}]
 	(let [[cur_total cur_pgms] (rss/get-programs-from-rss page)
 	      fetched-upd (reduce conj fetched (map :id cur_pgms))
 	      cfetched (count fetched-upd)]
+          (debug (format "fetched RSS(%d) cur_total: %d" page cur_total))
 	  (when (and (< 0 cur_total) (not= (pgm/get-total) cur_total))
 	    (pgm/set-total cur_total))
+          (debug (format "adding fetched pgms of RSS(%d)" page))
 	  ;; 番組の追加と取得状況のリアルタイム更新
 	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
+          (debug (format "added fetched pgms of RSS(%d)" page))
 	  (run-hooks :fetching cfetched cur_total page)
 	  ;; 取得完了・中断・継続の判定
 	  (cond
