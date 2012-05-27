@@ -76,15 +76,15 @@
                                    (.setVisible false)
                                    (.dispose)))
               (release-plat i plat))))
-        (l/with-debug (str "waiting plats.." (:id pgm))
+        (l/with-trace (str "waiting plats.." (:id pgm))
             (.sleep TimeUnit/SECONDS 5)
             (recur pgm)))))
   (defn alert-pgm [id]
     (locking sentinel
       (when-let [pgm (pgm/get-pgm id)]
         (if-not (:alerted pgm)
-          (l/with-debug (str "alert: " id)
+          (l/with-trace (str "alert: " id)
             (.execute pool #(alert-aux pgm))
             (pgm/update-alerted id))
-          (debug (str "already alerted: " id)))))))
+          (trace (str "already alerted: " id)))))))
 
