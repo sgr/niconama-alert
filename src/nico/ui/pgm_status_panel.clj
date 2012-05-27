@@ -22,7 +22,7 @@
      :updated
      (fn []
        (do-swing
-	(.setText vpgms (format "%d / %d" (pgm/count-pgms) (pgm/get-total)))
+	(.setText vpgms (format "%d (+ %d) / %d" (pgm/count-pgms) (pgm/adding-queue-size) (pgm/get-total)))
 	(.setText vfetched (tu/format-time-long (tu/now))))))
     (doto hgrp
       (.addGroup (.. layout createParallelGroup
