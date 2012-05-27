@@ -65,9 +65,8 @@
 		   (do-swing
 		    (doto tbtn (.setEnabled false))
 		    (doto cbtn (.setEnabled true))
-		    (.setText status (format "追加: %d 番組/分\n取得中: %d 番組 (%d + %d)"
-					     fetched-rate (+ fetching-comm fetching-normal)
-					     fetching-comm fetching-normal)))))
+		    (.setText status (format "情報取得中: %d 番組\n追加: %d 番組/分"
+					     (+ fetching-comm fetching-normal) fetched-rate)))))
     (doto tbtn
       (.setPreferredSize BTN-SIZE)
       (.setToolTipText istr)
