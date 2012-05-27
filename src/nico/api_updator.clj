@@ -10,7 +10,7 @@
 	    [hook-utils :as hu]
 	    [time-utils :as tu])
   (:import [java.util.concurrent Callable CountDownLatch LinkedBlockingQueue
-				 RejectedExecutionException ThreadPoolExecutor TimeUnit]))
+            ThreadPoolExecutor TimeUnit]))
 
 (def ^{:private true} RETRY-CONNECT 3)    ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
 (def ^{:private true} RECONNECT-SEC 2)    ;; API接続が切れたときのリトライ間隔(秒)
