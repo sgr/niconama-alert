@@ -55,6 +55,7 @@
 			     :aborted 240
 			     :error 300))
 	    (run-hooks :fetched fetched total) ;; 取得状況更新
+            (pgm/clean-old)
 	    (recur @counter))
 	  (do
 	    (.sleep TimeUnit/SECONDS 1)

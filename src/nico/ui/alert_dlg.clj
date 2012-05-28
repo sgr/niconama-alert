@@ -5,6 +5,7 @@
   (:use [clojure.tools.swing-utils :only [add-action-listener do-swing-and-wait]]
 	[clojure.tools.logging])
   (:require [nico.prefs :as p]
+            [nico.pgm :as pgm]
 	    [nico.ui.util :as uu]
             [log-utils :as l]
 	    [net-utils :as n]
@@ -18,8 +19,7 @@
 	   [java.net URL]
            [java.util.concurrent TimeUnit]
 	   [javax.swing BorderFactory ImageIcon JButton JDialog JLabel JPanel JTextArea SpringLayout]
-	   [javax.swing.text.html HTMLEditorKit]
-	   [javax.imageio ImageIO]))
+	   [javax.swing.text.html HTMLEditorKit]))
 
 (def ^{:private true} OPACITY (float 0.9))
 (defn- get-shape [dlg] (RoundRectangle2D$Float. 0 0 (.getWidth dlg) (.getHeight dlg) 20 20))
@@ -27,7 +27,6 @@
 (def ^{:private true} ASIZE (Dimension. 220 130))
 (def ^{:private true} LINK-CURSOR (.getLinkCursor (HTMLEditorKit.)))
 (def ^{:private true} CLOSE-ICON (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "closebtn.png")))
-(def ^{:private true} NO-IMAGE (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
 (def ^{:private true} MONLY-BGCOLOR (Color. 165 204 255))
 (def ^{:private true} DESC-SIZE (Dimension. 115 64))
 (def ^{:private true} RETRY-LIMIT 5)
@@ -103,27 +102,14 @@
       (.drawImage img 0 0 width height nil))
     nimg))
 
-(defn- fetch-image [url]
-  (try
-    (ImageIO/read (n/url-stream url))
-    (catch Exception _ nil)))
+(defn- thumbnail [img]
+  (ImageIcon. (adjust-img img 64 64)))
 
-(defn- get-thumbnail-aux [url]
-  (loop [retry-count RETRY-LIMIT]
-    (if-let [img (fetch-image url)]
-      img
-      (if (zero? retry-count)
-        (l/with-warn (format "abort fetching image (%s) because reached retry limit: %d"
-                           url RETRY-LIMIT)
-          NO-IMAGE)
-	(do (.sleep TimeUnit/SECONDS 1)
-	    (recur (dec retry-count)))))))
-
-(defn- get-thumbnail [url]
-  (ImageIcon. (adjust-img (get-thumbnail-aux url) 64 64)))
+(defn- comm-thumbnail [comm_id]
+  (thumbnail (pgm/get-comm-thumbnail comm_id)))
 
 (defn alert-dlg [^nico.pgm.Pgm pgm extra-close-fn]
-  (let [dlg (JDialog.), thumbicn (get-thumbnail (:thumbnail pgm))]
+  (let [dlg (JDialog.), thumbicn (comm-thumbnail (:comm_id pgm))]
     (let [tpanel (JPanel.), dpanel (JPanel.)
 	  owner (su/ifstr (:owner_name pgm) "")
 	  comm_name (su/ifstr (:comm_name pgm) (:comm_id pgm))
