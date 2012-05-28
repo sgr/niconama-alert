@@ -2,11 +2,9 @@
 (ns #^{:author "sgr"
        :doc "ニコニコ生放送の番組情報とその操作"}
   nico.pgm
-  (:use [clojure.java.io :only [file delete-file]]
-        [clojure.set :only [union]]
-        [clojure.string :only [lower-case]]
-	[clojure.tools.logging])
+  (:use [clojure.tools.logging])
   (:require [hook-utils :as hu]
+            [io-utils :as io]
             [log-utils :as l]
             [net-utils :as n]
             [str-utils :as s]
@@ -14,7 +12,7 @@
             [clojure.java.jdbc :as jdbc])
   (:import [clojure.lang Keyword]
            [javax.imageio ImageIO]
-           [java.io ByteArrayOutputStream File]
+           [java.io File]
            [java.sql Connection DriverManager SQLException Timestamp]
            [java.util.concurrent Callable CountDownLatch LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
            [com.mchange.v2.c3p0 ComboPooledDataSource]))
@@ -124,27 +122,17 @@
                (.setMaxIdleTime 60))]
     {:datasource cpds}))
 
-(defn- delete-all-files [path]
-  (let [f (file path)]
-    (when (.exists f)
-      (if (.isDirectory f)
-        (l/with-debug (format "deleting all children of "  path)
-          (doseq [c (.listFiles f)] (delete-all-files c))
-          (.delete f))
-        (l/with-debug (format "deleting file: %s" path)
-          (.delete f))))))
-
 (defn- shutdown-db [path]
   (try
     (DriverManager/getConnection (format "jdbc:derby:%s;shutdown=true" path))
     (catch Exception e
       (debug (format "shutdown derby: %s" (.getMessage e)))
-      (delete-all-files path))))
+      (io/delete-all-files path))))
 
 (let [db-path (.getCanonicalPath (File/createTempFile "nico-" nil))
       pooled-db (atom nil)]
   (defn init-db []
-    (delete-all-files db-path)
+    (io/delete-all-files db-path)
     (init-db-aux db-path)
     (reset! pooled-db (pool db-path)))
   (defn shutdown []
@@ -280,22 +268,9 @@
         (if-assoc longer-for :description row-pgm pgm)
         (assoc :updated_at (tu/sql-now)))))
 
-(defn- byte-buf [len] (byte-array len (repeat len (byte 0))))
-
-(defn- input-stream-to-bytes [is]
-  (let [buf-size 1024
-        buf (byte-buf buf-size)
-        bos (ByteArrayOutputStream.)]
-    (loop [n (.read is buf 0 buf-size)]
-      (if (= -1 n)
-        (do (.flush bos)
-            (.toByteArray bos))
-        (do (.write bos buf 0 n)
-            (recur (.read is buf 0 buf-size)))))))
-
 (defn- fetch-image [url]
   (try
-    (input-stream-to-bytes (n/url-stream url))
+    (io/input-stream-to-bytes (n/url-stream url))
     (catch Exception e
       (warn (format "failed open inputstream from %s: %s" url (.getMessage e)))
       nil)))
