@@ -26,7 +26,7 @@
   (let [f (file path)]
     (when (.exists f)
       (if (.isDirectory f)
-        (l/with-debug (format "deleting all children of "  path)
+        (l/with-debug (format "deleting all children of %s"  path)
           (doseq [c (.listFiles f)] (delete-all-files c))
           (.delete f))
         (l/with-debug (format "deleting file: %s" path)
