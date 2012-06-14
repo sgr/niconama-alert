@@ -14,14 +14,14 @@
 	    [nico.api-updator :as nau])
   (:import [java.awt Color Dimension]
 	   [javax.swing BorderFactory JCheckBoxMenuItem JLabel JMenuItem
-			JPanel JScrollPane SpringLayout]
+			JPanel JScrollPane JTabbedPane SpringLayout]
 	   [javax.swing.border EtchedBorder]))
 
 (gen-class
  :name nico.ui.ProgramsPanel
  :extends javax.swing.JPanel
  :prefix "pp-"
- :constructors {[clojure.lang.IPersistentMap] []}
+ :constructors {[javax.swing.JTabbedPane clojure.lang.IPersistentMap] []}
  :state state
  :init init
  :post-init post-init
@@ -30,7 +30,7 @@
 	   [getTabPref [] clojure.lang.IPersistentMap]
 	   [setTabPref [clojure.lang.IPersistentMap] void]
 	   [updateTitle [String] void]
-	   [updatePrograms [clojure.lang.IPersistentMap] void]])
+	   [updatePrograms [] void]])
 
 (defn- get-init-title [pref]
   (condp = (:type pref) :all (:title pref) :comm "loading..." :kwd (:title pref)))
@@ -41,63 +41,38 @@
 (defn- get-init-fn [this]
   (let [pref (:pref @(.state this))]
     (condp = (:type pref)
-	:all (fn [] [(:title pref) (fn [pgms] [0 {}])]); [(pgm/count-pgms) pgms])])
+	:all (fn [] [(:title pref) nil])
 	:comm (fn []
 		(if-let [as (api/get-alert-status (:email pref) (:passwd pref))]
 		  (do
 		    (nau/add-alert-status as)
 		    (let [user-name (:user_name as) comms (apply hash-set (:comms as))]
-		      [user-name
-		       (fn [pgms]
-			 (let [npgms
-			       (select-keys
-				pgms
-				(for [[id pgm] pgms :when (contains? comms (:comm_id pgm))] id))]
-			   [(count npgms) npgms]))]))
-		  ["login failed" (fn [pgms]) [0 {}]]))
+		      [user-name (pgm/get-sql-comm-id comms)]))
+		  ["login failed" nil nil]))
 	:kwd (fn []
-	       (let [query (eval (uktd/transq (:query pref)))]
-		 [(:title pref)
-		  (fn [pgms]
-		    (letfn [(tstr [pgm] (reduce #(str %1 " " %2) (map #(% pgm) (:target pref))))
-			    (matched-keys [pgms]
-					  (for [[id pgm] pgms :when
-						(let [ts (tstr pgm)]
-						  (if (and ts (< 0 (.length ts)))
-						    (try
-						      (query (tstr pgm))
-						      (catch Exception e
-							(warn (format "parse error: %s, %s"
-								      ts (pr-str pgm)) e)
-							false))
-                                                    (l/with-warn (format "zero length str: %s"
-                                                                         (pr-str pgm))
-                                                      false)))
-						] id))]
-		      (let [npgms (select-keys pgms (matched-keys pgms))]
-			[(count npgms) npgms])))])))))
+               [(:title pref) (pgm/get-sql-kwds (:query pref) (:target pref))]))))
 
-(defn- pp-init [pref]
+(defn- pp-init [tpane pref]
   (let [title (get-init-title pref)]
-    [[] (atom {:pref pref :tbl nil :filter-fn nil
+    [[] (atom {:tpane tpane :pref pref :tbl nil :sql nil
 	       :title title :title-label (JLabel. title)})]))
 
 (defn- pp-getTitleLabel [this] (:title-label @(.state this)))
 
 (defn- invoke-init-fn [this]
-  (.start (Thread. (fn []
-		     (do-swing (.setEnabled (:tbl @(.state this)) false))
-		     (.updateTitle this (get-init-title (:pref @(.state this))))
-		     (when-let [[title filter-fn] ((get-init-fn this))]
-		       (do
-			 (swap! (.state this) assoc :title title)
-			 (swap! (.state this) assoc :filter-fn filter-fn)
-			 (if (< 0 (pgm/count-pgms))
-			   (.updatePrograms this (pgm/pgms))
-			   (.updateTitle this title))
-			 (do-swing (.setEnabled (:tbl @(.state this)) true))))))))
+  (future
+    (do-swing (.setEnabled (:tbl @(.state this)) false))
+    (.updateTitle this (get-init-title (:pref @(.state this))))
+    (when-let [[title sql] ((get-init-fn this))]
+      (debug (format "title: %s, sql: %s" title sql))
+      (swap! (.state this) assoc :title title :sql sql)
+      (when sql (.setQuery (:tpane @(.state this)) this sql))
+      (if (< 0 (pgm/count-pgms))
+        (.updatePrograms this)
+        (.updateTitle this title))
+      (do-swing (.setEnabled (:tbl @(.state this)) true)))))
 
-(defn- pp-post-init [this pref]
+(defn- pp-post-init [this tpane pref]
   (let [tbl (doto (upt/pgm-table) (.setSortable (get-sortability pref)) (.setEnabled false))
 	spane (doto (JScrollPane. tbl) (-> .getViewport (.setBackground Color/WHITE)))
 	layout (SpringLayout.)]
@@ -126,19 +101,22 @@
     (do-swing (.setText tlabel title))))
 
 (defn- pp-updatePrograms
-  [this pgms]
+  [this]
   (let [tlabel (:title-label @(.state this)) title (:title @(.state this))]
-    (if-let [filter-fn (:filter-fn @(.state this))]
-      (let [[cnt npgms] (filter-fn pgms)]
-	;; alert programs.
-	(when (-> @(.state this) :pref :alert)
-	  (future
-	   (doseq [[id npgm] npgms] (al/alert-pgm id))))
-	(do-swing
-	 (.setText tlabel (format "%s (%d)" title cnt))
-	 (.updateData (.getModel (:tbl @(.state this))) npgms)))
-      (do-swing
-       (.setText tlabel (format "%s (-)" title))))))
+    (try
+      (if (:sql @(.state this))
+        (let [npgms (.getPgms (:tpane @(.state this)) this)]
+          ;; alert programs.
+          (when (-> @(.state this) :pref :alert)
+            (future
+              (doseq [[id npgm] npgms] (al/alert-pgm id))))
+          (do-swing
+            (.setText tlabel (format "%s (%d)" title (count npgms)))
+            (.updateData (.getModel (:tbl @(.state this))) npgms)))
+        (do-swing
+          (.setText tlabel (format "%s (-)" title))))
+      (catch Exception e
+        (error e "failed update programs")))))
 
 (defn- pp-getTabMenuItems [this]
   (condp = (-> @(.state this) :pref :type)
