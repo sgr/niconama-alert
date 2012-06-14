@@ -39,7 +39,7 @@
       (let [xz (zip/xml-zip res)]
         {:user_id (dzx/xml1-> xz :user_id dzx/text)
          :user_name (dzx/xml1-> xz :user_name dzx/text)
-         :comms (map #(keyword %) (dzx/xml-> xz :communities :community_id dzx/text))
+         :comms (dzx/xml-> xz :communities :community_id dzx/text)
          :addr (dzx/xml1-> xz :ms :addr dzx/text)
          :port (Integer/parseInt (dzx/xml1-> xz :ms :port dzx/text))
          :thrd (dzx/xml1-> xz :ms :thread dzx/text)}))))

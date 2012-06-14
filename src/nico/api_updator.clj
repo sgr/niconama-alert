@@ -42,18 +42,18 @@
      (:updated_at info))
     nil))
 
-(defn- create-pgm [pid cid uid received]
+(defn- create-pgm [pid cid received]
   (let [now (tu/now) lreceived (tu/format-time-long received)]
     ;; 繁忙期は番組ページ閲覧すら重い。番組ID受信から LIMIT-ELAPSED 秒経過していたら諦める。
     (if-not (tu/within? received now LIMIT-ELAPSED)
-      (l/with-warn (format "too late to fetch: %s/%s/%s received: %s, called: %s"
-                           pid cid uid lreceived (tu/format-time-long now))
+      (l/with-warn (format "too late to fetch: %s/%s received: %s, called: %s"
+                           pid cid lreceived (tu/format-time-long now))
         :aborted)
       (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
 	(l/with-trace (format "fetched pgm: %s %s pubdate: %s, received: %s, fetched_at: %s"
                               (:id pgm) (:title pgm) (:pubdate pgm) lreceived (:fetched_at pgm))
 	  pgm)
-	(l/with-warn (format "couldn't fetching pgm: %s/%s/%s" pid cid uid)
+	(l/with-warn (format "couldn't fetching pgm: %s/%s" pid cid)
           :failed)))))
 
 (gen-class
@@ -68,7 +68,7 @@
 	   [uid [] String]
 	   [received [] java.util.Date]])
 (defn- wft-init [pid cid uid received]
-  (let [c #(create-pgm pid cid uid received)]
+  (let [c #(create-pgm pid cid received)]
     [[c] (atom {:pid pid :cid cid :uid uid :received received})]))
 (defn- wft-pid [this] (:pid @(.state this)))
 (defn- wft-cid [this] (:cid @(.state this)))
@@ -76,7 +76,7 @@
 (defn- wft-received [this] (:received @(.state this)))
 
 (let [latch (ref (CountDownLatch. 1)) ;; API取得に関するラッチ
-      alert-statuses (ref '()) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
+      alert-statuses (ref {}) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
       awaiting-status (ref :need_login) ;; API updatorの状態
       fetched (atom [])] ;; API updatorにより登録された最近1分間の番組数
   (hu/defhook :awaiting :connected :reconnecting :rate-updated)
@@ -84,7 +84,7 @@
   (defn get-fetched-rate [] (count @fetched))
   (defn add-alert-status [as]
     (dosync
-     (alter alert-statuses conj as)
+     (alter alert-statuses assoc (:user_id as) as)
      (ref-set awaiting-status :ready))
     (run-hooks :awaiting))
   (defn start-update-api [] (.countDown @latch))
@@ -110,10 +110,10 @@
             (instance? nico.pgm.Pgm result) (add-pgm result)
             (= :failed result)
             (if (> LIMIT-QUEUE (.getActiveCount this))
-              (l/with-debug (format "retry task (%s/%s/%s %s)" pid uid cid lreceived)
+              (l/with-debug (format "retry task (%s/%s/%s %s)" pid cid uid lreceived)
                 (.execute this (nico.api-updator.WrappedFutureTask. pid cid uid received)))
-              (debug (format "too many tasks (%d) to retry (%s/%s/%s %s)"
-                             (.size queue) pid uid cid lreceived)))))))))
+              (warn (format "too many tasks (%d) to retry (%s/%s/%s %s)"
+                            (.size queue) pid cid uid lreceived)))))))))
   (let [comm-q (LinkedBlockingQueue.)
 	comm-executor (create-executor NTHREADS-COMM comm-q) 
 	normal-q (LinkedBlockingQueue.)
@@ -129,7 +129,7 @@
                (when-not (tu/within? (.received t) now sec) (.remove normal-q t)))))))
     (defn- create-task [pid cid uid received]
       (let [task (nico.api-updator.WrappedFutureTask. pid cid uid received)]
-	(if (some #(contains? (set (:comms %)) (keyword cid)) @alert-statuses)
+	(if (some #(contains? (set (:comms %)) cid) (vals @alert-statuses))
 	  ;; 所属コミュニティの番組情報は専用のスレッドプールで(優先的に)取得
 	  (l/with-trace (format "%s: %s is joined community." pid cid)
             (.execute comm-executor task))
@@ -137,7 +137,7 @@
             (.execute normal-executor task)))))
     (defn- update-api-aux []
       (try
-	(api/listen (first @alert-statuses) (fn [] (run-hooks :connected)) create-task)
+	(api/listen (first (vals @alert-statuses)) (fn [] (run-hooks :connected)) create-task)
 	(catch Exception e (l/with-warn e "** disconnected" nil))))
     (defn update-api []
       (letfn [(reset [astatus]
