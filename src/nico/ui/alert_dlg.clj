@@ -5,17 +5,15 @@
   (:use [clojure.tools.swing-utils :only [add-action-listener do-swing-and-wait]]
 	[clojure.tools.logging])
   (:require [nico.prefs :as p]
-            [nico.pgm :as pgm]
 	    [nico.ui.util :as uu]
             [log-utils :as l]
 	    [net-utils :as n]
 	    [str-utils :as su]
 	    [time-utils :as tu])
-  (:import [java.awt Color Dimension FlowLayout Font GraphicsEnvironment RenderingHints
+  (:import [java.awt Color Dimension FlowLayout Font GraphicsEnvironment
 		     GridBagLayout GridBagConstraints Insets]
 	   [java.awt.event ComponentAdapter MouseListener MouseMotionListener]
 	   [java.awt.geom RoundRectangle2D$Float]
-	   [java.awt.image BufferedImage]
 	   [java.net URL]
            [java.util.concurrent TimeUnit]
 	   [javax.swing BorderFactory ImageIcon JButton JDialog JLabel JPanel JTextArea SpringLayout]
@@ -93,23 +91,8 @@
 	 (mousePressed [e] (p/open-url :alert url))
 	 (mouseClicked [e]) (mouseReleased [e]))))))
 
-(defn- adjust-img [img width height]
-  (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
-	g2d (.createGraphics nimg)]
-    (doto g2d
-      (.setRenderingHint RenderingHints/KEY_INTERPOLATION
-			 RenderingHints/VALUE_INTERPOLATION_BILINEAR)
-      (.drawImage img 0 0 width height nil))
-    nimg))
-
-(defn- thumbnail [img]
-  (ImageIcon. (adjust-img img 64 64)))
-
-(defn- comm-thumbnail [comm_id]
-  (thumbnail (pgm/get-comm-thumbnail comm_id)))
-
-(defn alert-dlg [^nico.pgm.Pgm pgm extra-close-fn]
-  (let [dlg (JDialog.), thumbicn (comm-thumbnail (:comm_id pgm))]
+(defn alert-dlg [^nico.pgm.Pgm pgm ^ImageIcon thumbicn extra-close-fn]
+  (let [dlg (JDialog.)]
     (let [tpanel (JPanel.), dpanel (JPanel.)
 	  owner (su/ifstr (:owner_name pgm) "")
 	  comm_name (su/ifstr (:comm_name pgm) (:comm_id pgm))

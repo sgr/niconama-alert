@@ -8,12 +8,29 @@
             [time-utils :as tu]
 	    [nico.ui.alert-dlg :as uad]
 	    [nico.pgm :as pgm])
-  (:import [java.awt GraphicsEnvironment]
+  (:import [java.awt GraphicsEnvironment RenderingHints]
+	   [java.awt.image BufferedImage]
+           [javax.swing ImageIcon]
            [java.util.concurrent LinkedBlockingQueue ThreadPoolExecutor TimeUnit]))
 
 (def ^{:private true} DISPLAY-TIME 20) ; アラートウィンドウの表示時間(秒)
 (def ^{:private true} KEEP-ALIVE 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
 (def ^{:private true} EXEC-INTERVAL 500) ; アラートウィンドウ表示処理の実行間隔(ミリ秒)
+
+(defn- adjust-img [img width height]
+  (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
+	g2d (.createGraphics nimg)]
+    (doto g2d
+      (.setRenderingHint RenderingHints/KEY_INTERPOLATION
+			 RenderingHints/VALUE_INTERPOLATION_BILINEAR)
+      (.drawImage img 0 0 width height nil))
+    nimg))
+
+(defn- thumbnail [img]
+  (ImageIcon. (adjust-img img 64 64)))
+
+(defn- comm-thumbnail [comm_id]
+  (thumbnail (pgm/get-comm-thumbnail comm_id)))
 
 (defn- divide-plats []
   (let [r (.getMaximumWindowBounds (GraphicsEnvironment/getLocalGraphicsEnvironment))
@@ -60,12 +77,12 @@
 	[nil nil])))
   (defn- release-plat [i plat]
     (swap! plats assoc i (assoc plat :used false)))
-  (defn- alert-aux [pgm]
+  (defn- alert-aux [^nico.pgm.Pgm pgm ^ImageIcon thumbicn]
     (let [now (tu/now)
           [i plat] (if (tu/within? @last-modified now 5) (reserve-plat-A) (reserve-plat-B))]
       (if i
         (l/with-debug (str "display alert dialog: " (:id pgm))
-          (let [adlg (uad/alert-dlg pgm #(release-plat i plat))]
+          (let [adlg (uad/alert-dlg pgm thumbicn #(release-plat i plat))]
             (reset! last-modified now)
             (future 
               (do-swing-and-wait (doto adlg
@@ -78,13 +95,13 @@
               (release-plat i plat))))
         (l/with-trace (str "waiting plats.." (:id pgm))
             (.sleep TimeUnit/SECONDS 5)
-            (recur pgm)))))
+            (recur pgm thumbicn)))))
   (defn alert-pgm [id]
     (locking sentinel
       (when-let [pgm (pgm/get-pgm id)]
         (if-not (:alerted pgm)
           (l/with-trace (str "alert: " id)
-            (.execute pool #(alert-aux pgm))
+            (.execute pool #(alert-aux pgm (comm-thumbnail (:comm_id pgm))))
             (pgm/update-alerted id))
           (trace (str "already alerted: " id)))))))
 
