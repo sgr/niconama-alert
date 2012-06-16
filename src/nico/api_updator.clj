@@ -79,14 +79,14 @@
       alert-statuses (ref {}) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
       awaiting-status (ref :need_login) ;; API updatorの状態
       fetched (atom [])] ;; API updatorにより登録された最近1分間の番組数
-  (hu/defhook :awaiting :connected :reconnecting :rate-updated)
+  (hu/defhook api :awaiting :connected :reconnecting :rate-updated)
   (defn get-awaiting-status [] @awaiting-status)
   (defn get-fetched-rate [] (count @fetched))
   (defn add-alert-status [as]
     (dosync
      (alter alert-statuses assoc (:user_id as) as)
      (ref-set awaiting-status :ready))
-    (run-hooks :awaiting))
+    (run-api-hooks :awaiting))
   (defn start-update-api [] (.countDown @latch))
   (defn- add-pgm [pgm]
     (when (some nil? (list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
@@ -137,7 +137,7 @@
             (.execute normal-executor task)))))
     (defn- update-api-aux []
       (try
-	(api/listen (first (vals @alert-statuses)) (fn [] (run-hooks :connected)) create-task)
+	(api/listen (first (vals @alert-statuses)) (fn [] (run-api-hooks :connected)) create-task)
 	(catch Exception e (l/with-warn e "** disconnected" nil))))
     (defn update-api []
       (letfn [(reset [astatus]
@@ -147,7 +147,7 @@
                    (ref-set latch (CountDownLatch. 1)))))]
 	(loop [c RETRY-CONNECT]
 	  (when (= 1 (.getCount @latch)) ;; pause中かどうか
-	    (do (run-hooks :awaiting)
+	    (do (run-api-hooks :awaiting)
 		(.await @latch)))
 	  (cond
 	   (= 0 c) (do (reset :aborted) (recur RETRY-CONNECT))
@@ -156,13 +156,13 @@
                                       c RETRY-CONNECT RECONNECT-SEC)
 		   (update-api-aux)
 		   (.sleep TimeUnit/SECONDS RECONNECT-SEC)
-		   (run-hooks :reconnecting)
+		   (run-api-hooks :reconnecting)
 		   (recur (dec c)))))))
     (defn update-rate []
       (loop [last-updated (tu/now)]
 	(when (= 1 (.getCount @latch)) (.await @latch))
 	(swap! fetched (fn [coll] (filter #(tu/within? % last-updated 60) coll)))
-	(run-hooks :rate-updated (count @fetched) (.size comm-q) (.size normal-q))
+	(run-api-hooks :rate-updated (count @fetched) (.size comm-q) (.size normal-q))
 	(when (tu/within? last-updated (tu/now) RATE-UI-UPDATE)
 	  (.sleep TimeUnit/SECONDS RATE-UI-UPDATE))
 	(recur (tu/now))))))

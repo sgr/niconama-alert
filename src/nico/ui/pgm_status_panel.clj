@@ -18,7 +18,7 @@
 	layout (GroupLayout. pspanel)
 	hgrp (.createSequentialGroup layout)
 	vgrp (.createSequentialGroup layout)]
-    (pgm/add-hook
+    (pgm/add-pgms-hook
      :updated
      (fn []
        (do-swing

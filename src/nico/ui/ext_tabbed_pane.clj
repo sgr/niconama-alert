@@ -143,7 +143,8 @@
 	 (mouseExited [e])
 	 (mousePressed [e])
 	 (mouseReleased [e]))))
-    (pgm/add-hook :updated (fn [] (.updatePgms tpane true)))))
+    (pgm/add-pgms-hook :updated (fn [] (.updatePgms tpane true))))
+  (pgm/add-db-hook :shutdown (fn [] (.closeConn this))))
   
 (defn- etp-addExtTab [this kind content]
   (doto this

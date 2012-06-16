@@ -30,43 +30,43 @@
 	layout (GroupLayout. panel)
 	hgrp (.createSequentialGroup layout)
 	vgrp (.createSequentialGroup layout)]
-    (au/add-hook :awaiting
-		 (fn [] (condp = (au/get-awaiting-status)
-			    :need_login (do-swing
-					 (doto tbtn
-					   (.setEnabled false)
-					   (.setToolTipText istr))
-					 (doto cbtn (.setEnabled false))
-					 (.setText status "有効なユーザータブが必要です"))
-			    :ready (do-swing
-				    (doto tbtn
-				      (.setEnabled true)
-				      (.setToolTipText tstr))
+    (au/add-api-hook :awaiting
+                     (fn [] (condp = (au/get-awaiting-status)
+                              :need_login (do-swing
+                                           (doto tbtn
+                                             (.setEnabled false)
+                                             (.setToolTipText istr))
+                                           (doto cbtn (.setEnabled false))
+                                           (.setText status "有効なユーザータブが必要です"))
+                              :ready (do-swing
+                                      (doto tbtn
+                                        (.setEnabled true)
+                                        (.setToolTipText tstr))
 				      (doto cbtn (.setEnabled false))
-				    (.setText status "接続できます"))
-			    :aborted (do-swing
-				      (doto tbtn
-					(.setEnabled true)
-					(.setToolTipText tstr))
-				      (doto cbtn (.setEnabled false))
-				      (.setText status "接続できませんでした")))))
-    (au/add-hook :connected
-		 (fn [] (do-swing
-			 (doto tbtn (.setEnabled false))
-			 (doto cbtn (.setEnabled true))
-			 (.setText status "接続完了"))))
-    (au/add-hook :reconnecting
-		 (fn [] (do-swing
-			 (doto tbtn (.setEnabled false))
-			 (doto cbtn (.setEnabled false))
-			 (.setText status "接続中断のため再接続中"))))
-    (au/add-hook :rate-updated
-		 (fn [fetched-rate fetching-comm fetching-normal]
-		   (do-swing
-		    (doto tbtn (.setEnabled false))
-		    (doto cbtn (.setEnabled true))
-		    (.setText status (format "情報取得中: %d 番組\n追加: %d 番組/分"
-					     (+ fetching-comm fetching-normal) fetched-rate)))))
+                                      (.setText status "接続できます"))
+                              :aborted (do-swing
+                                        (doto tbtn
+                                          (.setEnabled true)
+                                          (.setToolTipText tstr))
+                                        (doto cbtn (.setEnabled false))
+                                        (.setText status "接続できませんでした")))))
+    (au/add-api-hook :connected
+                     (fn [] (do-swing
+                             (doto tbtn (.setEnabled false))
+                             (doto cbtn (.setEnabled true))
+                             (.setText status "接続完了"))))
+    (au/add-api-hook :reconnecting
+                     (fn [] (do-swing
+                             (doto tbtn (.setEnabled false))
+                             (doto cbtn (.setEnabled false))
+                             (.setText status "接続中断のため再接続中"))))
+    (au/add-api-hook :rate-updated
+                     (fn [fetched-rate fetching-comm fetching-normal]
+                       (do-swing
+                        (doto tbtn (.setEnabled false))
+                        (doto cbtn (.setEnabled true))
+                        (.setText status (format "情報取得中: %d 番組\n追加: %d 番組/分"
+                                                 (+ fetching-comm fetching-normal) fetched-rate)))))
     (doto tbtn
       (.setPreferredSize BTN-SIZE)
       (.setToolTipText istr)

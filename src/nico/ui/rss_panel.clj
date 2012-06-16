@@ -23,14 +23,14 @@
 	layout (GroupLayout. rss-panel)
 	hgrp (.createSequentialGroup layout)
 	vgrp (.createSequentialGroup layout)]
-    (nru/add-hook
+    (nru/add-rss-hook
      :countdown
      (fn [sec max]
        (do-swing
 	(.setText status "RSS取得待機中")
 	(.setString pbar (format "あと %d秒" sec))
 	(.setMaximum pbar max) (.setValue pbar sec))))
-    (nru/add-hook
+    (nru/add-rss-hook
      :fetching
      (fn [fetched-count total page]
        (do-swing
@@ -40,7 +40,7 @@
 				 fetched-count total page))
 	(.setMaximum pbar total)
 	(.setValue pbar fetched-count)))
-    (nru/add-hook
+    (nru/add-rss-hook
      :fetched
      (fn [fetched-count total]
        (do-swing (.setEnabled rbtn true) (.setEnabled tbtn true))

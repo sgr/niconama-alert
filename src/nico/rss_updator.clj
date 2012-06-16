@@ -14,7 +14,7 @@
 ;; RSS updator
 (let [counter (atom 1)
       latch (atom (java.util.concurrent.CountDownLatch. 1))]
-  (hu/defhook :countdown :fetching :fetched)
+  (hu/defhook rss :countdown :fetching :fetched)
   (defn- fetch-rss []
     (try
       (loop [page 1, total 0, cur_total total, fetched #{}]
@@ -28,7 +28,7 @@
 	  ;; 番組の追加と取得状況のリアルタイム更新
 	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
           (debug (format "added fetched pgms of RSS(%d)" page))
-	  (run-hooks :fetching cfetched cur_total page)
+	  (run-rss-hooks :fetching cfetched cur_total page)
 	  ;; 取得完了・中断・継続の判定
 	  (cond
 	   (or (>= cfetched (pgm/get-total)) (>= cfetched cur_total)) ;; 総番組数分取得したら、取得完了
@@ -47,14 +47,14 @@
       (loop [max @counter]
 	(if (= 1 (.getCount @latch)) ;; pause中かどうか
 	  (do (.await @latch))
-	  (run-hooks :countdown @counter max))
+	  (run-rss-hooks :countdown @counter max))
 	(if (= 0 @counter) ; カウント0かどうか
 	  (let [[result fetched total] (fetch-rss)]
 	    (set-counter (condp = result
 			     :finished 180
 			     :aborted 240
 			     :error 300))
-	    (run-hooks :fetched fetched total) ;; 取得状況更新
+	    (run-rss-hooks :fetched fetched total) ;; 取得状況更新
             (pgm/clean-old)
 	    (recur @counter))
 	  (do

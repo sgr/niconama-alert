@@ -144,12 +144,14 @@
 (let [db-path (.getCanonicalPath (File/createTempFile "nico-" nil))
       ro-conns (atom [])
       pooled-db (atom nil)]
+  (hu/defhook db :shutdown)
   (defn init-db []
     (System/setProperty "derby.stream.error.method" "nico.pgm.DerbyUtil.disabledLogStream")
     (io/delete-all-files db-path)
     (init-db-aux db-path)
     (reset! pooled-db (pool db-path)))
   (defn shutdown []
+    (run-db-hooks :shutdown)
     (let [d @pooled-db]
       (reset! pooled-db nil)
       (doseq [ro-conn @ro-conns] (.close ro-conn))
@@ -170,11 +172,11 @@
     (get (first rs) k)))
 
 (let [called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
-  (hu/defhook :updated)
+  (hu/defhook pgms :updated)
   (defn- call-hook-updated []
     (dosync
      (when-not (tu/within? @called-at-hook-updated (tu/now) INTERVAL-UPDATE)
-       (run-hooks :updated)
+       (run-pgms-hooks :updated)
        (ref-set called-at-hook-updated (tu/now))))))
 
 (let [old-total (atom -1)] ; DBへの問い合わせを抑制するため
