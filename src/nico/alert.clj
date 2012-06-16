@@ -100,8 +100,9 @@
     (locking sentinel
       (when-let [pgm (pgm/get-pgm id)]
         (if-not (:alerted pgm)
-          (l/with-trace (str "alert: " id)
-            (.execute pool #(alert-aux pgm (comm-thumbnail (:comm_id pgm))))
+          (let [thumbnail (comm-thumbnail (:comm_id pgm))]
+            (trace (str "alert: " id))
+            (.execute pool #(alert-aux pgm thumbnail))
             (pgm/update-alerted id))
           (trace (str "already alerted: " id)))))))
 
