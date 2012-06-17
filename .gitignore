@@ -4,3 +4,6 @@ lib
 classes
 *log
 .lein-deps-sum
+*~
+#*.clj#
+
