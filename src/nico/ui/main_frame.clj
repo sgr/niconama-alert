@@ -3,10 +3,10 @@
        :doc "main frame"}
   nico.ui.main-frame
   (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
-	[nico.ui.ext-tabbed-pane :only [ext-tabbed-pane add-tab]]
 	[nico.ui.control-panel :only [control-panel]])
   (:require [nico.prefs :as p]
             [nico.pgm :as pgm]
+            [nico.ui.ext-tabbed-pane :as etp]
 	    [nico.ui.menu :as m])
   (:import [java.awt Dimension Font]
 	   [java.awt.event WindowEvent WindowListener]
@@ -25,13 +25,13 @@
   (let [appicn (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "dempakun.png"))
 	pref @(p/get-pref)
 	frame (JFrame. "NicoNama Alert (J)")
-	tabbed-pane (ext-tabbed-pane)
+	tabbed-pane (nico.ui.ExtTabbedPane.)
 	mbar (m/menu-bar frame tabbed-pane)
 	tm (ToolTipManager/sharedInstance)
 	cpane (.getContentPane frame)
 	cpanel (control-panel)
 	layout (SpringLayout.)]
-    (doseq [tab-pref (:tabs pref)] (add-tab tabbed-pane tab-pref))
+    (doseq [tab-pref (:tabs pref)] (etp/add-tab tabbed-pane tab-pref))
     (doto layout
       (.putConstraint SpringLayout/NORTH mbar 0 SpringLayout/NORTH cpane)
       (.putConstraint SpringLayout/WEST mbar 0 SpringLayout/WEST cpane)

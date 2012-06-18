@@ -21,24 +21,20 @@
  :name nico.ui.ExtTabbedPane
  :extends javax.swing.JTabbedPane
  :prefix "etp-"
- :constructors {[javax.swing.Icon javax.swing.Icon javax.swing.Icon] []}
+ :constructors {[] []}
  :state state
  :init init
  :post-init post-init
  :methods [[addExtTab [clojure.lang.Keyword java.awt.Component] void]
            [setQuery [nico.ui.ProgramsPanel String] void]
            [remQuery [nico.ui.ProgramsPanel] void]
-           [closeConn [] void]
+           [closeStatements [] void]
            [getPgms [nico.ui.ProgramsPanel] clojure.lang.IPersistentMap]
 	   [updatePgms [boolean] void]
 	   [getTabMenuItems [int] clojure.lang.IPersistentVector]
 	   [getTabPrefs [] clojure.lang.IPersistentVector]])
 
-(defn ext-tabbed-pane []
-  (let [cloader (.getClassLoader (class (fn [])))]
-    (nico.ui.ExtTabbedPane. COMM-TAB-ICON KWD-TAB-ICON CLOSE-BTN-ICON)))
-
-(defn- etp-init [commicn kwdicn closeicn]
+(defn- etp-init []
   [[] (atom {:last-updated nil :conn (delay (pgm/get-ro-conn)) :pstmts {}})])
 
 (defn- etp-setQuery [this tab sql]
@@ -55,10 +51,9 @@
       (let [pstmts (:pstmts @(.state this))]
         (swap! (.state this) assoc :pstmts (dissoc pstmts id-tab))))))
 
-(defn- etp-closeConn [this]
+(defn- etp-closeStatements [this]
   (doseq [pstmt (vals (:pstmts @(.state this)))] (.close pstmt))
-  (swap! (.state this) assoc :pstmts {})
-  (when-let [conn @(:conn @(.state this))] (.close conn)))
+  (swap! (.state this) assoc :pstmts {}))
 
 (defn- etp-getPgms [this tab]
   (if-let [pstmt (get-in @(.state this) [:pstmts (.hashCode tab)])]
@@ -74,7 +69,7 @@
       (.removeTabAt tabbed-pane (.indexOfComponent tabbed-pane content))
       (.remQuery tabbed-pane content)))) ; preparedStatementを閉じる
 
-(defn- etp-tab-panel [this kind content]
+(defn- etp-tab-component [this kind content]
   (if (= kind :all)
     (let [tab (JPanel. (BorderLayout.))
 	  ltitle (.getTitleLabel content)]
@@ -114,7 +109,7 @@
 		       (doto this
 			 (.remove idx)
 			 (.insertTab nil nil content nil nidx)
-			 (.setTabComponentAt nidx (etp-tab-panel this type content))
+			 (.setTabComponentAt nidx (etp-tab-component this type content))
 			 (.setSelectedIndex nidx)))))]
 	    (when (> (dec (.getTabCount this)) idx)
 	      (swap! items conj
@@ -126,7 +121,7 @@
 		  (doto (JMenuItem. "削除")
 		    (add-action-listener (confirm-rem-tab-fn this content))))))))))
 
-(defn- etp-post-init [this commicn kwdicn closeicn]
+(defn- etp-post-init [this]
   (let [tpane this]
     (doto tpane
       (.addMouseListener
@@ -144,12 +139,12 @@
 	 (mousePressed [e])
 	 (mouseReleased [e]))))
     (pgm/add-pgms-hook :updated (fn [] (.updatePgms tpane true))))
-  (pgm/add-db-hook :shutdown (fn [] (.closeConn this))))
+  (pgm/add-db-hook :shutdown (fn [] (.closeStatements this))))
   
 (defn- etp-addExtTab [this kind content]
   (doto this
     (.addTab nil content)
-    (.setTabComponentAt (.indexOfComponent this content) (etp-tab-panel this kind content))))
+    (.setTabComponentAt (.indexOfComponent this content) (etp-tab-component this kind content))))
 
 (defn- etp-update-pgms [this]
   (doseq [idx (range (.getTabCount this))] (.updatePrograms (.getComponentAt this idx))))
@@ -166,5 +161,6 @@
   (vec (map #(.getTabPref (.getComponentAt this %)) (range (.getTabCount this)))))
 
 (defn add-tab [tpane tpref]
-  (do-swing-and-wait (.addExtTab tpane (:type tpref) (nico.ui.ProgramsPanel. tpane tpref))))
+  (when-not (= :all (:type tpref))
+    (do-swing-and-wait (.addExtTab tpane (:type tpref) (nico.ui.ProgramsPanel. tpane tpref)))))
 
