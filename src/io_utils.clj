@@ -2,7 +2,8 @@
 (ns #^{:author "sgr"
        :doc "IO Utility."}
   io-utils
-  (:use [clojure.java.io :only [file delete-file]])
+  (:use [clojure.java.io :only [file delete-file]]
+        [clojure.tools.logging])
   (:require [log-utils :as l])
   (:import [java.io ByteArrayOutputStream File]))
 
@@ -28,6 +29,5 @@
       (if (.isDirectory f)
         (l/with-debug (format "deleting all children of %s"  path)
           (doseq [c (.listFiles f)] (delete-all-files c))
-          (.delete f))
-        (l/with-debug (format "deleting file: %s" path)
-          (.delete f))))))
+          (debug (format "deleting file: %s -> %s" path (.delete f))))
+        (debug (format "deleting file: %s -> %s" path (.delete f)))))))
