@@ -2,10 +2,10 @@
 (ns #^{:author "sgr"
        :doc "menu bar."}
   nico.ui.menu
-  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener make-action make-menubar]]
-	[nico.ui.ext-tabbed-pane :only [add-tab]])
+  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener make-action make-menubar]])
   (:require [nico.prefs :as p]
 	    [nico.ui.about-dlg :as uad]
+            [nico.ui.ext-tabbed-pane]
 	    [nico.ui.key-val-dlg :as ukvd]
 	    [nico.ui.kwd-tab-dlg :as uktd]
 	    [nico.ui.browser-dlg :as ubd])
@@ -53,14 +53,14 @@
                         :handler (fn [e] (let [tpref (p/gen-initial-user-tpref)
                                                dlg (ukvd/user-password-dialog
                                                     frame "ユーザー情報の入力" tpref
-                                                    (fn [ntpref] (add-tab tpane ntpref)))]
+                                                    (fn [ntpref] (.addTab tpane ntpref)))]
                                            (do-swing (.setVisible dlg true))))})}
              {:action (make-action
                        {:name "キーワードタブの追加... (K)" :mnemonic KeyEvent/VK_K
                         :handler (fn [e] (let [tpref (p/gen-initial-keyword-tpref)
                                                dlg (uktd/keyword-tab-dialog
                                                     frame "番組検索条件の入力" tpref
-                                                    (fn [ntpref] (add-tab tpane ntpref)))]
+                                                    (fn [ntpref] (.addTab tpane ntpref)))]
                                            (do-swing (.setVisible dlg true))))})}]}
     {:name "ヘルプ (H)"
      :items [{:action (make-action

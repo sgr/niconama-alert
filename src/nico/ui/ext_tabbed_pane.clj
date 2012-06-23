@@ -2,20 +2,19 @@
 (ns #^{:author "sgr"
        :doc "タブに閉じるボタンと種別アイコンがついたJTabbedPane"}
   nico.ui.ext-tabbed-pane
-  (:use [clojure.tools.swing-utils :only [do-swing-and-wait add-action-listener]])
+  (:use [clojure.tools.swing-utils :only [do-swing do-swing-and-wait add-action-listener]])
   (:require [clojure.java.jdbc :as jdbc]
             [time-utils :as tu]
+	    [nico.alert :as al]
+            [nico.api :as api]
+	    [nico.api-updator :as nau]
 	    [nico.pgm :as pgm]
-	    [nico.ui.pgm-panel])
-  (:import [java.awt BorderLayout Dimension]
-	   [java.awt.event MouseListener]
-           [java.sql PreparedStatement]
-	   [javax.swing BorderFactory ImageIcon JButton JLabel JMenuItem
-			JOptionPane JPanel JPopupMenu SwingUtilities]))
-
-(def ^{:private true} COMM-TAB-ICON  (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "usrtab.png")))
-(def ^{:private true} KWD-TAB-ICON   (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "kwdtab.png")))
-(def ^{:private true} CLOSE-BTN-ICON (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "closebtn.png")))
+	    [nico.ui.key-val-dlg :as ukvd]
+	    [nico.ui.kwd-tab-dlg :as uktd]
+	    [nico.ui.pgm-panel]
+            [nico.ui.tab-component])
+  (:import [java.awt.event MouseListener]
+	   [javax.swing JCheckBoxMenuItem JMenuItem JOptionPane JPopupMenu SwingUtilities]))
 
 (gen-class
  :name nico.ui.ExtTabbedPane
@@ -25,91 +24,140 @@
  :state state
  :init init
  :post-init post-init
- :methods [[addExtTab [clojure.lang.Keyword java.awt.Component] void]
-           [setQuery [nico.ui.ProgramsPanel String] void]
-           [remQuery [nico.ui.ProgramsPanel] void]
+ :exposes-methods {addTab addTabSuper}
+ :methods [[addTab [clojure.lang.IPersistentMap] void]
+           [addTabs [clojure.lang.IPersistentVector] void]
            [closeStatements [] void]
-           [getPgms [nico.ui.ProgramsPanel] clojure.lang.IPersistentMap]
 	   [updatePgms [boolean] void]
 	   [getTabMenuItems [int] clojure.lang.IPersistentVector]
 	   [getTabPrefs [] clojure.lang.IPersistentVector]])
 
 (defn- etp-init []
-  [[] (atom {:last-updated nil :conn (delay (pgm/get-ro-conn)) :pstmts {}})])
+  [[] (atom {:tab-prefs {}
+             :tab-titles {}
+             :last-updated nil
+             :conn (delay (pgm/get-ro-conn))
+             :pstmts {}})])
 
-(defn- etp-setQuery [this tab sql]
-  (let [id-tab (.hashCode tab) conn @(:conn @(.state this))]
-    (when-let [old-pstmt (get-in @(.state this) [:pstmts id-tab])] (.close old-pstmt))
+(defn- set-tab-statement [tpane tab sql]
+  (let [id-tab (.hashCode tab) conn @(:conn @(.state tpane))]
+    (when-let [old-pstmt (get-in @(.state tpane) [:pstmts id-tab])] (.close old-pstmt))
     (when conn
       (let [pstmt (jdbc/prepare-statement conn sql :concurrency :read-only)]
-        (swap! (.state this) assoc-in [:pstmts id-tab] pstmt)))))
-
-(defn- etp-remQuery [this tab]
-  (let [id-tab (.hashCode tab)]
-    (when-let [pstmt (get-in @(.state this) [:pstmts id-tab])]
-      (.close pstmt)
-      (let [pstmts (:pstmts @(.state this))]
-        (swap! (.state this) assoc :pstmts (dissoc pstmts id-tab))))))
+        (swap! (.state tpane) assoc-in [:pstmts id-tab] pstmt)))))
 
 (defn- etp-closeStatements [this]
   (doseq [pstmt (vals (:pstmts @(.state this)))] (.close pstmt))
   (swap! (.state this) assoc :pstmts {}))
 
-(defn- etp-getPgms [this tab]
-  (if-let [pstmt (get-in @(.state this) [:pstmts (.hashCode tab)])]
-    (pgm/search-pgms-by-pstmt pstmt)
-    {}))
-
-(defn- confirm-rem-tab-fn [tabbed-pane content]
+(defn- confirm-rem-tab-fn [tpane tab]
   (fn [e]
     (when (= JOptionPane/OK_OPTION
 	     (JOptionPane/showConfirmDialog
-	      tabbed-pane "タブを削除しますか？" "削除確認"
+	      tpane "タブを削除しますか？" "削除確認"
 	      JOptionPane/OK_CANCEL_OPTION JOptionPane/WARNING_MESSAGE))
-      (.removeTabAt tabbed-pane (.indexOfComponent tabbed-pane content))
-      (.remQuery tabbed-pane content)))) ; preparedStatementを閉じる
+      (.removeTabAt tpane (.indexOfTabComponent tpane tab))
+      (let [tprefs (:tab-prefs @(.state tpane))
+            id-tab (.hashCode tab)]
+        (swap! (.state tpane) assoc :tab-prefs (dissoc tprefs id-tab))
+        (when-let [pstmt (get-in @(.state tpane) [:pstmts id-tab])]
+          (.close pstmt)
+          (let [pstmts (:pstmts @(.state tpane))]
+            (swap! (.state tpane) assoc :pstmts (dissoc pstmts id-tab))))))))
 
-(defn- etp-tab-component [this kind content]
-  (if (= kind :all)
-    (let [tab (JPanel. (BorderLayout.))
-	  ltitle (.getTitleLabel content)]
-      (doto ltitle (.setBorder (BorderFactory/createEmptyBorder 0 4 0 4)))
-      (doto tab
-	(.setOpaque false)
-	(.add ltitle BorderLayout/CENTER)
-	(.setBorder (BorderFactory/createEmptyBorder 2 0 0 0))))
-    (let [ticn (condp = kind :comm COMM-TAB-ICON :kwd KWD-TAB-ICON)
-	  cicn CLOSE-BTN-ICON
-	  lticn (JLabel. ticn)
-	  tab (JPanel. (BorderLayout.))
-	  ltitle (.getTitleLabel content)
-	  cbtn (JButton. cicn)]
-      (doto ltitle (.setBorder (BorderFactory/createEmptyBorder 0 4 0 10)))
-      (doto lticn
-	(.setPreferredSize (Dimension. (.getIconWidth ticn) (.getIconHeight ticn))))
-      (doto cbtn
-	(add-action-listener (confirm-rem-tab-fn this content))
-	(.setPreferredSize (Dimension. (.getIconWidth cicn) (.getIconHeight cicn))))
-      (doto tab
-	(.setOpaque false)
-	(.add lticn BorderLayout/WEST)
-	(.add ltitle BorderLayout/CENTER)
-	(.add cbtn BorderLayout/EAST)
-	(.setBorder (BorderFactory/createEmptyBorder 3 0 2 0))))))
+(defn- login [pref]
+  (if-let [as (api/get-alert-status (:email pref) (:passwd pref))]
+    (do (nau/add-alert-status as)
+        (let [user-name (:user_name as) comms (apply hash-set (:comms as))]
+        [user-name (pgm/get-sql-comm-id comms)]))
+    ["login failed" nil]))
+
+(defn- update-tab-title [tpane tab title]
+  (swap! (.state tpane) update-in [:tab-titles (.hashCode tab)] (fn [_] title)))
+
+(defn- update-tab-pref [tpane tab pref]
+  (swap! (.state tpane) update-in [:tab-prefs (.hashCode tab)] (fn [_] pref))
+  (let [idx (.indexOfTabComponent tpane tab)
+        content (.getComponentAt tpane idx)]
+    (condp = (:type pref)
+      :comm (do (.setTitle tab "loading...")
+                (update-tab-title tpane tab "not logged in")
+                (future
+                  (let [[title sql] (login pref)]
+                    (.setTitle tab title)
+                    (update-tab-title tpane tab title)
+                    (set-tab-statement tpane tab sql))))
+      :kwd  (do (.setTitle tab (:title pref))
+                (update-tab-title tpane tab (:title pref))
+                (let [sql (pgm/get-sql-kwds (:query pref) (:target pref))]
+                  (set-tab-statement tpane tab sql))))))
+
+(defn- etp-addTab [this pref]
+  (when-not (= :all (:type pref))
+    (let [tab     (nico.ui.TabComponent. (:type pref))
+          content (nico.ui.ProgramsPanel.)
+          id-tab  (.hashCode tab)]
+      (swap! (.state this) assoc-in [:tab-prefs id-tab] pref)
+      (.addCloseButtonListener tab (confirm-rem-tab-fn this tab))
+      (do-swing-and-wait
+        (.addTabSuper this nil content))
+      (do-swing-and-wait
+        (.setTabComponentAt this (.indexOfComponent this content) tab))
+      (update-tab-pref this tab pref))))
+
+(defn- etp-addTabs [this prefs]
+  (doseq [pref prefs] (.addTab this pref)))
+
+(defn- tabmenu-items-aux [tpane tab]
+  (let [pref (get-in @(.state tpane) [:tab-prefs (.hashCode tab)])]
+    (condp = (:type pref)
+      :all nil
+      :comm (let [aitem (JCheckBoxMenuItem. "アラート" (:alert pref))
+                  ritem (JMenuItem. "再ログイン")
+                  eitem (JMenuItem. "編集")]
+              (doto ritem
+                (add-action-listener (fn [e] (update-tab-pref tpane tab pref))))
+              (doto eitem
+                (add-action-listener
+                 (fn [e] (let [dlg (ukvd/user-password-dialog
+                                    (.getTopLevelAncestor tpane) "ユーザー情報の編集" pref
+                                    (fn [npref] (update-tab-pref tpane tab npref)))]
+                           (do-swing (.setVisible dlg true))))))
+              (doto aitem
+                (add-action-listener
+                 (fn [e] (let [val (.isSelected aitem)]
+                           (update-tab-pref tpane tab (assoc pref :alert val))))))
+              [aitem ritem eitem])
+      :kwd (let [aitem (JCheckBoxMenuItem. "アラート" (:alert pref))
+                 eitem (JMenuItem. "編集")]
+             (doto eitem
+               (add-action-listener
+                (fn [e] (let [dlg (uktd/keyword-tab-dialog
+                                   (.getTopLevelAncestor tpane) "番組検索設定の編集" pref
+                                   (fn [npref] (update-tab-pref tpane tab npref)))]
+                          (do-swing (.setVisible dlg true))))))
+             (doto aitem
+               (add-action-listener
+                (fn [e] (let [val (.isSelected aitem)]
+                          (update-tab-pref tpane tab (assoc pref :alert val))))))
+             [aitem eitem]))))
 
 (defn- etp-getTabMenuItems [this idx]
   (when-not (= -1 idx)
-    (let [content (.getComponentAt this idx)]
-      (when-let [itms (.getTabMenuItems content)]
+    (let [tab     (.getTabComponentAt this idx)
+          content (.getComponentAt this idx)
+          id-tab  (.hashCode tab)
+          pref    (get-in @(.state this) [:tab-prefs id-tab])]
+      (when-let [itms (tabmenu-items-aux this tab)]
 	(let [items (atom itms)]
 	  (letfn [(swap-fn
 		   [idx nidx]
 		   (fn [e]
-		     (let [type (:type (.getTabPref content))]
+		     (let [type (:type pref)]
 		       (doto this
 			 (.remove idx)
 			 (.insertTab nil nil content nil nidx)
-			 (.setTabComponentAt nidx (etp-tab-component this type content))
+			 (.setTabComponentAt nidx tab)
 			 (.setSelectedIndex nidx)))))]
 	    (when (> (dec (.getTabCount this)) idx)
 	      (swap! items conj
@@ -119,7 +167,7 @@
 		     (doto (JMenuItem. "左へ") (add-action-listener (swap-fn idx (dec idx))))))
 	    (conj @items
 		  (doto (JMenuItem. "削除")
-		    (add-action-listener (confirm-rem-tab-fn this content))))))))))
+		    (add-action-listener (confirm-rem-tab-fn this tab))))))))))
 
 (defn- etp-post-init [this]
   (let [tpane this]
@@ -140,27 +188,29 @@
 	 (mouseReleased [e]))))
     (pgm/add-pgms-hook :updated (fn [] (.updatePgms tpane true))))
   (pgm/add-db-hook :shutdown (fn [] (.closeStatements this))))
-  
-(defn- etp-addExtTab [this kind content]
-  (doto this
-    (.addTab nil content)
-    (.setTabComponentAt (.indexOfComponent this content) (etp-tab-component this kind content))))
-
-(defn- etp-update-pgms [this]
-  (doseq [idx (range (.getTabCount this))] (.updatePrograms (.getComponentAt this idx))))
 
 (defn- etp-updatePgms [this enforce]
   (let [last-updated (:last-updated @(.state this))]
-    (when (or enforce
-	      (nil? last-updated)
-	      (not (tu/within? last-updated (tu/now) 3)))
-      (do (etp-update-pgms this)
-	  (swap! (.state this) assoc :last-updated (tu/now))))))
+    (when (and (< 0 (pgm/count-pgms))
+               (or enforce
+                   (nil? last-updated)
+                   (not (tu/within? last-updated (tu/now) 3))))
+      (doseq [idx (range 0 (.getTabCount this))]
+        (let [id-tab (.hashCode (.getTabComponentAt this idx))
+              tab (.getTabComponentAt this idx)
+              content (.getComponentAt this idx)
+              title (get-in @(.state this) [:tab-titles id-tab])
+              pstmt (get-in @(.state this) [:pstmts id-tab])]
+          (if (and pstmt (not (.isClosed pstmt)))
+            (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
+              (when (get-in @(.state this) [:tab-prefs id-tab :alert])
+                (future
+                  (doseq [[id npgm] npgms] (al/alert-pgm id))))
+              (.setPgms content npgms)
+              (.setTitle tab (format "%s (%d)" title (count npgms))))
+            (.setTitle tab (format "%s (-)" title)))))
+      (swap! (.state this) assoc :last-updated (tu/now)))))
 
 (defn- etp-getTabPrefs [this]
-  (vec (map #(.getTabPref (.getComponentAt this %)) (range (.getTabCount this)))))
-
-(defn add-tab [tpane tpref]
-  (when-not (= :all (:type tpref))
-    (do-swing-and-wait (.addExtTab tpane (:type tpref) (nico.ui.ProgramsPanel. tpane tpref)))))
-
+  (let [tprefs (:tab-prefs @(.state this))]
+    (vec (map #(get tprefs (.hashCode (.getTabComponentAt this %))) (range 0 (.getTabCount this))))))

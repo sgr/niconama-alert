@@ -31,7 +31,7 @@
 	cpane (.getContentPane frame)
 	cpanel (control-panel)
 	layout (SpringLayout.)]
-    (doseq [tab-pref (:tabs pref)] (etp/add-tab tabbed-pane tab-pref))
+    (.addTabs tabbed-pane (:tabs pref))
     (doto layout
       (.putConstraint SpringLayout/NORTH mbar 0 SpringLayout/NORTH cpane)
       (.putConstraint SpringLayout/WEST mbar 0 SpringLayout/WEST cpane)

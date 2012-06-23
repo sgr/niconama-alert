@@ -41,7 +41,7 @@
 	   [getUrl [int] String]
 	   [getProgramId [int] clojure.lang.Keyword]
 	   [getProgramTitle [int] String]
-	   [updateData [clojure.lang.IPersistentMap] void]
+	   [setPgms [clojure.lang.IPersistentMap] void]
 	   [getPgm [int] nico.pgm.Pgm]])
 
 ;; ProgramsTableは、ProgramsTableModelを表示するJTable。
@@ -131,7 +131,7 @@
 (defn- ptm-init [pgms]
   [[] (atom (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))])
 
-(defn- ptm-updateData [this pgms]
+(defn- ptm-setPgms [this pgms]
   (reset! (.state this) (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))
   (.fireTableDataChanged this))
 
