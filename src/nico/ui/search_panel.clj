@@ -63,6 +63,7 @@
          (let [pgms (pgm/search-pgms-by-keywords (.getQuery query-panel) (.getTargets target-panel))]
            (.setPgms (.getModel tbl) pgms))
          (.setEnabled btn-search true)))
+      (.setDefaultCapable true)
       (.setEnabled false))
     (doto btn-tab
       (add-action-listener
@@ -125,7 +126,9 @@
                            (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight ADDTAB-DLG-SIZE)) 2))))
              (.setMinimumSize   ADDTAB-DLG-SIZE)
              (.setPreferredSize ADDTAB-DLG-SIZE)
+             (.setResizable false)
              (.setVisible true)))))
+      (.setDefaultCapable false)
       (.setEnabled false))
     (doto hgrp
       (.addGroup (.. layout createSequentialGroup
@@ -154,7 +157,7 @@
       (.setLayout layout)
       (.add query-panel)
       (.add target-panel)
-      (.add btn-search)
       (.add btn-tab)
+      (.add btn-search)
       (.add spane))))
 
