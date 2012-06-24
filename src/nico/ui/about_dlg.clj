@@ -18,12 +18,15 @@
 (def ^{:private true} POWERED-BY
   (s/join \newline
           ["Clojure 1.4.0 Copyright (c) Rich Hickey. All rights reserved."
-           "clojure.data.zip 0.0.1 Copyright (c) Rich Hickey and contributors. All rights reserved."
+           "clojure.data.zip 0.1.1 Copyright (c) Rich Hickey and contributors. All rights reserved."
+           "clojure.java.jdbc 0.2.3 Copyright (c) Stephen Gilardi, Sean Corfield, 2011-2012. All rights reserved."
            "clojure.math.numeric-tower 0.0.1"
            "clojure.tools.logging 0.2.3 Copyright (c) 2009 Alex Taggart"
-           "clj-http 0.4.0"
+           "clj-http 0.4.3 authored by mmcgrana and dakrone"
            "swing-utils 0.2.0 Copyright (c) Stephen C. Gilardi and Meikel Brandmeyer. All rights reserved."
-           "Enlive 1.0.0 Copyright (c) Christophe Grand, 2009. All rights reserved."
+           "Enlive 1.0.1 Copyright (c) Christophe Grand, 2012. All rights reserved."
+           "c3p0 0.9.1.2 Copyright (c) 2012 Machinery For Change, Inc."
+           "Apache Derby 10.8.2.2 Copyright 2004-2011 The Apache Software Foundation"
            "... and great dependencies"]))
 
 (defn- about-panel []
