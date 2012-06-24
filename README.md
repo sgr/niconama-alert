@@ -13,7 +13,7 @@ JRE (Java SE Runtime Environment) 上で動作します。
 JREをインストールし、次のコマンドラインで起動します。
 環境によってはjarファイルをダブルクリックするだけで起動することも可能です。
 
-    $ java -jar nicoalert-1.1.0-standalone.jar
+    $ java -jar nicoalert-<VERSION>-standalone.jar
 
 ## Installation
 
