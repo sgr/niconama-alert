@@ -11,7 +11,7 @@
 	   [javax.swing.border TitledBorder]))
 
 (def ^{:private true} BTN-SIZE (Dimension. 80 30))
-(def ^{:private true} STATUS-SIZE (Dimension. 175 30))
+(def ^{:private true} STATUS-SIZE (Dimension. 140 30))
 (def ^{:private true} THRESHOLD-SEC 600)
 
 (defn api-panel []
