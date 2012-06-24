@@ -8,9 +8,11 @@
 	    [str-utils :as s]
 	    [time-utils :as tu]
 	    [clojure.string :as cs])
-  (:import [java.util Calendar Date GregorianCalendar Locale TimeZone]))
+  (:import [java.util Calendar Date GregorianCalendar Locale TimeZone]
+           [java.util.concurrent TimeUnit]))
 
 (def ^{:private true} BASE-URL "http://live.nicovideo.jp/watch/")
+(def ^{:private true} INTERVAL-RETRY 5)
 
 (defn- fetch-pgm-info1
   [pid]
@@ -80,7 +82,14 @@
 (defn fetch-pgm-info
   "ニコ生の番組ページから番組情報を取得する。"
   [pid]
-  (try
-    (fetch-pgm-info1 pid)
-    (catch Exception _ nil)))
-
+  (letfn [(fetch-pgm-info-aux [pid]
+            (try
+              (fetch-pgm-info1 pid)
+              (catch Exception e
+                (warn e (format "failed fetching pgm info: %s" pid))
+                nil)))]
+    (if-let [info (fetch-pgm-info-aux pid)]
+      info
+      (do (.sleep TimeUnit/SECONDS INTERVAL-RETRY)
+          (debug (format "retrying fetching pgm indo: %s" pid))
+          (recur pid)))))

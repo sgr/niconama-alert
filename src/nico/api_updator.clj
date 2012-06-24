@@ -115,26 +115,14 @@
               (warn (format "too many tasks (%d) to retry (%s/%s/%s %s)"
                             (.size queue) pid cid uid lreceived)))))))))
   (let [comm-q (LinkedBlockingQueue.)
-	comm-executor (create-executor NTHREADS-COMM comm-q) 
-	normal-q (LinkedBlockingQueue.)
-	normal-executor (create-executor NTHREADS-NORMAL normal-q)]
-    (defn clear-normal-q
-      ([]
-	 (l/with-trace (format "clear normal queue (%d -> 0)" (.size normal-q))
-           (.clear normal-q)))
-      ([sec]
-         (let [c (.size normal-q), now (tu/now)]
-           (l/with-trace (format "clear normal queue (%d -> %d)" c (.size normal-q))
-             (doseq [t (iterator-seq (.iterator normal-q))]
-               (when-not (tu/within? (.received t) now sec) (.remove normal-q t)))))))
+	comm-executor (create-executor NTHREADS-COMM comm-q)]
     (defn- create-task [pid cid uid received]
       (let [task (nico.api-updator.WrappedFutureTask. pid cid uid received)]
 	(if (some #(contains? (set (:comms %)) cid) (vals @alert-statuses))
 	  ;; 所属コミュニティの番組情報は専用のスレッドプールで(優先的に)取得
 	  (l/with-trace (format "%s: %s is joined community." pid cid)
             (.execute comm-executor task))
-	  (l/with-trace (format "%s: %s isn't your community." pid cid)
-            (.execute normal-executor task)))))
+	  (trace (format "%s: %s isn't your community." pid cid)))))
     (defn- update-api-aux []
       (try
 	(api/listen (first (vals @alert-statuses)) (fn [] (run-api-hooks :connected)) create-task)
@@ -162,7 +150,7 @@
       (loop [last-updated (tu/now)]
 	(when (= 1 (.getCount @latch)) (.await @latch))
 	(swap! fetched (fn [coll] (filter #(tu/within? % last-updated 60) coll)))
-	(run-api-hooks :rate-updated (count @fetched) (.size comm-q) (.size normal-q))
+	(run-api-hooks :rate-updated (count @fetched) (.size comm-q))
 	(when (tu/within? last-updated (tu/now) RATE-UI-UPDATE)
 	  (.sleep TimeUnit/SECONDS RATE-UI-UPDATE))
 	(recur (tu/now))))))
