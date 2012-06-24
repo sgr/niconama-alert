@@ -12,6 +12,7 @@
 	    [nico.ui.key-val-dlg :as ukvd]
 	    [nico.ui.kwd-tab-dlg :as uktd]
 	    [nico.ui.pgm-panel]
+	    [nico.ui.search-panel]
             [nico.ui.tab-component])
   (:import [java.awt.event MouseListener]
 	   [javax.swing JCheckBoxMenuItem JMenuItem JOptionPane JPopupMenu SwingUtilities]))
@@ -93,7 +94,7 @@
                   (set-tab-statement tpane tab sql))))))
 
 (defn- etp-addTab [this pref]
-  (when-not (= :all (:type pref))
+  (when (or (= :kwd (:type pref)) (= :comm (:type pref)))
     (let [tab     (nico.ui.TabComponent. (:type pref))
           content (nico.ui.ProgramsPanel.)
           id-tab  (.hashCode tab)]
@@ -111,7 +112,6 @@
 (defn- tabmenu-items-aux [tpane tab]
   (let [pref (get-in @(.state tpane) [:tab-prefs (.hashCode tab)])]
     (condp = (:type pref)
-      :all nil
       :comm (let [aitem (JCheckBoxMenuItem. "アラート" (:alert pref))
                   ritem (JMenuItem. "再ログイン")
                   eitem (JMenuItem. "編集")]
@@ -140,10 +140,11 @@
                (add-action-listener
                 (fn [e] (let [val (.isSelected aitem)]
                           (update-tab-pref tpane tab (assoc pref :alert val))))))
-             [aitem eitem]))))
+             [aitem eitem])
+      nil)))
 
 (defn- etp-getTabMenuItems [this idx]
-  (when-not (= -1 idx)
+  (when-not (= 0 idx)
     (let [tab     (.getTabComponentAt this idx)
           content (.getComponentAt this idx)
           id-tab  (.hashCode tab)
@@ -170,8 +171,11 @@
 		    (add-action-listener (confirm-rem-tab-fn this tab))))))))))
 
 (defn- etp-post-init [this]
-  (let [tpane this]
+  (let [tpane this
+        spanel (nico.ui.SearchPanel.)]
+    (.setAddTabListener spanel (fn [ntpref] (.addTab tpane ntpref)))
     (doto tpane
+      (.addTabSuper "検索" spanel)
       (.addMouseListener
        (proxy [MouseListener] []
 	 (mouseClicked
@@ -195,7 +199,7 @@
                (or enforce
                    (nil? last-updated)
                    (not (tu/within? last-updated (tu/now) 3))))
-      (doseq [idx (range 0 (.getTabCount this))]
+      (doseq [idx (range 1 (.getTabCount this))]
         (let [id-tab (.hashCode (.getTabComponentAt this idx))
               tab (.getTabComponentAt this idx)
               content (.getComponentAt this idx)
@@ -213,4 +217,4 @@
 
 (defn- etp-getTabPrefs [this]
   (let [tprefs (:tab-prefs @(.state this))]
-    (vec (map #(get tprefs (.hashCode (.getTabComponentAt this %))) (range 0 (.getTabCount this))))))
+    (vec (map #(get tprefs (.hashCode (.getTabComponentAt this %))) (range 1 (.getTabCount this))))))
