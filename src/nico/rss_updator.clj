@@ -51,9 +51,9 @@
 	(if (= 0 @counter) ; カウント0かどうか
 	  (let [[result fetched total] (fetch-rss)]
 	    (set-counter (condp = result
-			     :finished 180
+			     :finished 120
 			     :aborted 240
-			     :error 300))
+			     :error 180))
 	    (run-rss-hooks :fetched fetched total) ;; 取得状況更新
             (pgm/clean-old)
 	    (recur @counter))

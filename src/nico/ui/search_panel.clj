@@ -14,9 +14,9 @@
 	   [javax.swing.event DocumentListener]
 	   [javax.swing.text PlainDocument]))
 
-(def ^{:private true} QUERY-PANEL-SIZE (Dimension. 480 110))
+(def ^{:private true} QUERY-PANEL-SIZE (Dimension. 450 110))
 (def ^{:private true} TARGET-PANEL-SIZE (Dimension. 400 30))
-(def ^{:private true} ADDTAB-DLG-SIZE (Dimension. 400 120))
+(def ^{:private true} ADDTAB-DLG-SIZE (Dimension. 400 110))
 
 (gen-class
  :name nico.ui.SearchPanel

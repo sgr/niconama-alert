@@ -8,8 +8,8 @@
   (:import [java.awt Desktop GraphicsEnvironment]
 	   [java.net URI URL]))
 
-(def ^{:private true} DEFAULT-FRAME-WIDTH 950)
-(def ^{:private true} DEFAULT-FRAME-HEIGHT 500)
+(def ^{:private true} DEFAULT-FRAME-WIDTH 895)
+(def ^{:private true} DEFAULT-FRAME-HEIGHT 560)
 
 (defn- gen-initial-pref []
   (let [e (GraphicsEnvironment/getLocalGraphicsEnvironment)
