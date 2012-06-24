@@ -14,7 +14,6 @@
 
 (def ^{:private true} DLG-SIZE (Dimension. 450 340))
 (def ^{:private true} TITLE-PANEL-SIZE (Dimension. 440 40))
-(def ^{:private true} QUERY-PANEL-SIZE (Dimension. 440 130))
 (def ^{:private true} BTN-PANEL-SIZE (Dimension. 440 30))
 
 (defn keyword-tab-dialog
