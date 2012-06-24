@@ -243,7 +243,7 @@
           (if-let [r (first rs)]
             (if (tu/within? (tu/timestamp-to-date (:updated_at r)) (tu/now) INTERVAL-UPDATE-THUMBNAIL)
               (let [blob (:img r)]
-                (if (and (nil? blob) (< 0 (.length blob)))
+                (if (and blob (< 0 (.length blob)))
                   (let [bs (.getBinaryStream (:img r))]
                     (try (ImageIO/read bs)
                          (finally (.close bs))))
