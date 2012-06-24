@@ -3,7 +3,7 @@
        :doc "target panel"}
   nico.ui.target-panel
   (:use [clojure.tools.swing-utils :only [add-action-listener]])
-  (:import [java.awt Color FlowLayout]
+  (:import [java.awt FlowLayout]
 	   [javax.swing BorderFactory JCheckBox JPanel]))
 
 (gen-class
@@ -37,10 +37,8 @@
                                  (.isSelected cb-category)
                                  (.isSelected cb-comm-name))]
                 (if (false? selected)
-                  (do (swap! (.state this) assoc :ok false)
-                      (.setBorder inner-panel (BorderFactory/createLineBorder Color/RED)))
-                  (do (swap! (.state this) assoc :ok true)
-                      (.setBorder inner-panel target-border)))))
+                  (swap! (.state this) assoc :ok false)
+                  (swap! (.state this) assoc :ok true))))
             (add-listener [f]
               (doseq [c [cb-title cb-desc cb-owner cb-category cb-comm-name]]
                 (doto c (add-action-listener (fn [_] (check) (f))))))

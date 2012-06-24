@@ -34,22 +34,27 @@
 (defn- qp-post-init [this query]
   (let [query-area (JTextArea.), query-doc (PlainDocument.)
 	query-border (.getBorder query-area)]
-    (letfn [(set-ok [b]
+    (letfn [(set-border [b]
               (if b
-                (do (swap! (.state this) assoc :ok true)
-                    (.setBorder query-area query-border))
-                (do (swap! (.state this) assoc :ok false)
-                    (.setBorder query-area (BorderFactory/createLineBorder Color/RED)))))
+                (.setBorder query-area query-border)
+                (.setBorder query-area (BorderFactory/createLineBorder Color/RED))))
+            (set-ok [b]
+              (if b
+                (swap! (.state this) assoc :ok true)
+                (swap! (.state this) assoc :ok false)))
 	    (check []
               (if (< 0 (.getLength query-doc))
                 (try
                   (let [tq (qu/to-where-clause (read-query) [:title])]
-                    (info (format "query: %s" tq))
+                    (debug (format "query: %s" tq))
+                    (set-border true)
                     (set-ok true))
                   (catch Exception e
                     (warn (.getMessage e))
+                    (set-border false)
                     (set-ok false)))
-                (set-ok false)))
+                (do (set-border true)
+                    (set-ok false))))
             (add-listener [f]
               (.addDocumentListener query-doc (proxy [DocumentListener] []
                                                 (changedUpdate [_] (check) (f))

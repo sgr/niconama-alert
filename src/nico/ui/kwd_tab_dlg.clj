@@ -7,7 +7,7 @@
   (:require [nico.ui.query-panel :as uq]
             [nico.ui.target-panel :as ut]
             [nico.ui.util :as uu])
-  (:import [java.awt Color FlowLayout Dimension]
+  (:import [java.awt FlowLayout Dimension]
 	   [javax.swing BorderFactory SpringLayout JDialog JLabel JPanel JTextField]
 	   [javax.swing.event DocumentListener]
 	   [javax.swing.text PlainDocument]))
@@ -26,11 +26,7 @@
 	btn-panel (JPanel.), btn-ok (uu/btn "OK")
 	p (.getLocationOnScreen parent)]
     (letfn [(read-title [] (.getText title-doc 0 (.getLength title-doc)))
-	    (check []
-              (if (= 0 (.getLength title-doc))
-                (.setBorder title-field (BorderFactory/createLineBorder Color/RED))
-                (.setBorder title-field title-border)))
-            (check-all []
+            (check []
               (if (or (= 0 (.getLength title-doc))
                       (not (.isOK query-panel))
                       (not (.isOK target-panel)))
@@ -38,11 +34,11 @@
                 (.setEnabled btn-ok true)))]
       (doto title-doc
 	(.addDocumentListener (proxy [DocumentListener] []
-				(changedUpdate [_] (check) (check-all))
-				(insertUpdate [_] (check) (check-all))
-				(removeUpdate [_] (check) (check-all)))))
-      (.addListener query-panel check-all)
-      (.addListener target-panel check-all)
+				(changedUpdate [_] (check))
+				(insertUpdate [_] (check))
+				(removeUpdate [_] (check)))))
+      (.addListener query-panel check)
+      (.addListener target-panel check)
       (let [title-label (JLabel. "タブタイトル"), layout (SpringLayout.)]
 	(doto title-field (.setDocument title-doc))
 	(when-let [t (:title pref)] (.setText title-field t))

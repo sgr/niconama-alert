@@ -4,7 +4,7 @@
   nico.ui.key-val-dlg
   (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.ui.util :as uu])
-  (:import [java.awt BorderLayout Color Dimension]
+  (:import [java.awt BorderLayout Dimension]
 	   [javax.swing BorderFactory GroupLayout SpringLayout
 			JButton JDialog JLabel JPanel JPasswordField JTextField]
 	   [javax.swing.event DocumentListener]
@@ -22,14 +22,8 @@
 	kv-panel (JPanel.), btn-panel (JPanel.), btn-ok (uu/btn "OK")
 	p (.getLocationOnScreen parent)]
     (letfn [(check []
-		   (if (= 0 (.getLength doc-key))
-		     (.setBorder tkey (BorderFactory/createLineBorder Color/RED))
-		     (.setBorder tkey tkey-border))
-		   (if (= 0 (.getLength doc-val))
-		     (.setBorder tval (BorderFactory/createLineBorder Color/RED))
-		     (.setBorder tval tkey-border))
-		   (if (or (= 0 (.getLength doc-key)) (= 0 (.getLength doc-val)))
-			(.setEnabled btn-ok false) (.setEnabled btn-ok true)))]
+              (if (or (= 0 (.getLength doc-key)) (= 0 (.getLength doc-val)))
+                (.setEnabled btn-ok false) (.setEnabled btn-ok true)))]
       (doto doc-key
 	(.addDocumentListener (proxy [DocumentListener] []
 				(changedUpdate [_] (check))
