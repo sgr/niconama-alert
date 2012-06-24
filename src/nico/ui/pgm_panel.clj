@@ -15,8 +15,7 @@
  :state state
  :init init
  :post-init post-init
- :methods [[setTableEnabled [boolean] void]
-           [setPgms [clojure.lang.IPersistentMap] void]])
+ :methods [[setPgms [clojure.lang.IPersistentMap] void]])
 
 (defn- pp-init []
   [[] (atom {:tbl nil})])
@@ -24,15 +23,9 @@
 (defn- pp-setPgms [this pgms]
   (do-swing (.setPgms (.getModel (:tbl @(.state this))) pgms)))
 
-(defn- pp-setTableEnabled [this b]
-  (do-swing (.setEnabled (:tbl @(.state this)) b)))
-
 (defn- pp-post-init [this]
-  (let [tbl (doto (upt/pgm-table)
-              (.setSortable true)
-              (.setEnabled false))
-	spane (doto (JScrollPane. tbl)
-                (-> .getViewport (.setBackground Color/WHITE)))
+  (let [tbl (doto (upt/pgm-table) (.setSortable true))
+	spane (doto (JScrollPane. tbl) (-> .getViewport (.setBackground Color/WHITE)))
 	layout (SpringLayout.)]
     (swap! (.state this) assoc :tbl tbl)
     (doto layout
