@@ -58,12 +58,21 @@
    [:id (varchar LEN_COMM_ID) "PRIMARY KEY"]
    [:comm_name (varchar LEN_COMM_NAME)]
    [:thumbnail (varchar LEN_COMM_THUMBNAIL)]
-   [:thumbnail_img "blob(100K)"]
    [:fetched_at :timestamp]
    [:updated_at :timestamp])
   (jdbc/do-commands "CREATE INDEX idx_comms_id ON comms(id)"
                     "CREATE INDEX idx_comms_name ON comms(comm_name)"
                     "CREATE INDEX idx_comms_updated_at ON comms(updated_at)"))
+
+(defn- create-imgs []
+  (jdbc/create-table
+   :imgs
+   [:id (varchar LEN_COMM_ID) "PRIMARY KEY"]
+   [:img "blob(100K)"]
+   [:fetched_at :timestamp]
+   [:updated_at :timestamp])
+  (jdbc/do-commands "CREATE INDEX idx_imgs_id ON imgs(id)"
+                    "CREATE INDEX idx_imgs_updated_at ON imgs(updated_at)"))
 
 (def ^{:private true} LEN_PGM_ID          10)
 (def ^{:private true} LEN_PGM_TITLE       64)
@@ -113,7 +122,8 @@
       (create-pmeta)
       (jdbc/insert-values :pmeta [:total :last_cleaned_at] [0 (tu/sql-now)])
       (create-pgms)
-      (create-comms))))
+      (create-comms)
+      (create-imgs))))
 
 (defn- pool [path]
   (let [cpds (doto (ComboPooledDataSource.)
@@ -164,9 +174,6 @@
       (swap! ro-conns conj ro-conn)
       ro-conn)))
 
-(defn- drop-tbls []
-  (doseq [tbl [:pmeta :pgms :comms]] (jdbc/drop-table tbl)))
-
 (defn- get-pmeta [^Keyword k]
   (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT * FROM pmeta WHERE id=?" 1]
     (get (first rs) k)))
@@ -201,48 +208,16 @@
         (first rs)))
     nil))
 
-(comment
-(let [conn (delay (get-ro-conn))
-      pstmt (delay (jdbc/prepare-statement
-                    @conn
-                    "SELECT thumbnail_img FROM comms WHERE id=?"
-                    :concurrency :read-only))
-      sentinel (Object.)]
-  (defn get-comm-thumbnail [^Keyword comm_id]
-    (if-not (.isClosed @conn)
-      (locking sentinel
-        (doto @pstmt
-          (.clearParameters)
-          (.setString 1 (name comm_id)))
-        (let [rs (.executeQuery @pstmt)
-              rseq (jdbc/resultset-seq rs)]
-          (try
-            (if-let [r (first rseq)]
-              (let [blob (:thumbnail_img r)]
-                (if (or (nil? blob) (= 0 (.length blob)))
-                  NO-IMAGE
-                  (let [bs (.getBinaryStream (:thumbnail_img r))]
-                    (try
-                      (ImageIO/read bs)
-                      (finally (.close bs))))))
-              NO-IMAGE)
-            (catch Exception e
-              (error e (format "failed retrieve stored community thumbnail: " (name comm_id)))
-              NO-IMAGE)
-            (finally (.close rs)))))
-      NO-IMAGE)))
-)
-
 (defn get-comm-thumbnail [^Keyword comm_id]
   (if-let [db (db)]
     (jdbc/with-connection db
       (jdbc/with-query-results rs [{:concurrency :read-only}
-                                   "SELECT thumbnail_img FROM comms WHERE id=?" (name comm_id)]
+                                   "SELECT img FROM imgs WHERE id=?" (name comm_id)]
         (if-let [r (first rs)]
-          (let [blob (:thumbnail_img r)]
+          (let [blob (:img r)]
             (if (or (nil? blob) (= 0 (.length blob)))
               NO-IMAGE
-              (let [bs (.getBinaryStream (:thumbnail_img r))]
+              (let [bs (.getBinaryStream (:img r))]
                 (try
                   (ImageIO/read bs)
                   (finally (.close bs))))))
@@ -373,15 +348,20 @@
         (when (tu/within? (tu/timestamp-to-date (:updated_at row-comm)) (tu/now) (* 24 3600))
           (jdbc/update-values :comms ["id=?" comm_id]
                               {:comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
-                               :thumbnail_img (fetch-image (:thumbnail pgm))
                                :thumbnail (:thumbnail pgm)
+                               :updated_at now})
+          (jdbc/update-values :imgs ["id=?" comm_id]
+                              {:img (fetch-image (:thumbnail pgm))
                                :updated_at now}))
         (when comm_id
           (jdbc/insert-record :comms
                               {:id comm_id
                                :comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
-                               :thumbnail_img (fetch-image (:thumbnail pgm))
                                :thumbnail (:thumbnail pgm)
+                               :fetched_at now :updated_at now})
+          (jdbc/insert-record :imgs
+                              {:id comm_id
+                               :img (fetch-image (:thumbnail pgm))
                                :fetched_at now :updated_at now})))
       (catch Exception e (error e "failed updating or inserting comm info")))))
 
