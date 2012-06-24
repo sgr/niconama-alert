@@ -22,7 +22,7 @@
 	rbtn (JButton. ricn), tbtn (JButton. sicn)
 	layout (GroupLayout. rss-panel)
 	hgrp (.createSequentialGroup layout)
-	vgrp (.createSequentialGroup layout)]
+	vgrp (.createParallelGroup layout)]
     (nru/add-rss-hook
      :countdown
      (fn [sec max]
@@ -72,17 +72,14 @@
       (.addGroup (.. layout createParallelGroup
 		     (addComponent status)
 		     (addComponent pbar)))
-      (.addGroup (.. layout createParallelGroup
-		     (addComponent tbtn)))
-      (.addGroup (.. layout createParallelGroup
-		     (addComponent rbtn))))
+      (.addComponent tbtn)
+      (.addComponent rbtn))
     (doto vgrp
-      (.addGroup (.. layout createParallelGroup
-		     (addGroup (.. layout createSequentialGroup
-				   (addComponent status)
-				   (addComponent pbar)))
-		     (addComponent rbtn)
-		     (addComponent tbtn))))
+      (.addGroup (.. layout createSequentialGroup
+                     (addComponent status)
+                     (addComponent pbar)))
+      (.addComponent rbtn)
+      (.addComponent tbtn))
     (doto layout
       (.setHorizontalGroup hgrp)
       (.setVerticalGroup vgrp)
