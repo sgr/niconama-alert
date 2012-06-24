@@ -67,5 +67,6 @@
       (check)
       (doto this
 	(.setBorder (BorderFactory/createTitledBorder "検索条件"))
+	(.setMinimumSize QUERY-PANEL-SIZE)
 	(.setPreferredSize QUERY-PANEL-SIZE)
 	(uu/do-add-expand (JScrollPane. query-area) 5)))))
