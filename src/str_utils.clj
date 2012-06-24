@@ -5,6 +5,12 @@
   (:require [clojure.string :as s])
   (:import [java.io ByteArrayInputStream]))
 
+(defn longer [^String x ^String y]
+  (cond (and x y) (if (> (.length x) (.length y)) x y)
+        (nil? x) y
+        (nil? y) x
+        :else nil))
+
 (defn trim-to [^String s ^Integer max]
   (if (and s (< max (.length s))) (.substring s 0 max) s))
 
