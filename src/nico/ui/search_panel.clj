@@ -78,7 +78,10 @@
                p (.getLocationOnScreen parent)
                ok-fn (:listener @(.state this))]
            (letfn [(read-title [] (.getText tdoc 0 (.getLength tdoc)))
-                   (check [] #(< 0 (.getLength tdoc)))]
+                   (check []
+                     (if (< 0 (.getLength tdoc))
+                       (.setEnabled btn-ok true)
+                       (.setEnabled btn-ok false)))]
              (doto tdoc
                (.addDocumentListener
                 (proxy [DocumentListener] []
@@ -95,7 +98,8 @@
                             :query (.getQuery query-panel)
                             :target (.getTargets target-panel)
                             :alert true})
-                    (.dispose dlg))))))
+                    (.dispose dlg))))
+               (.setEnabled false)))
            (.setDocument tfield tdoc)
            (doto btn-cancel
              (add-action-listener
