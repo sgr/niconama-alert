@@ -4,6 +4,7 @@
   nico.ui.pgm-status-panel
   (:use [clojure.tools.swing-utils :only [do-swing]])
   (:require [nico.pgm :as pgm]
+            [nico.rss-updator :as nr]
 	    [time-utils :as tu])
   (:import [java.awt Dimension]
 	   [javax.swing GroupLayout ImageIcon JPanel JLabel]
@@ -18,14 +19,17 @@
 	layout (GroupLayout. pspanel)
 	hgrp (.createSequentialGroup layout)
 	vgrp (.createSequentialGroup layout)]
-    (pgm/add-pgms-hook
-     :updated
-     (fn []
-       (do-swing
-	(.setText vpgms (if (< 0 (pgm/adding-queue-size))
-                          (format "%d (+ %d) / %d" (pgm/count-pgms) (pgm/adding-queue-size) (pgm/get-total))
-                          (format "%d / %d" (pgm/count-pgms) (pgm/get-total))))
-	(.setText vfetched (tu/format-time-long (tu/now))))))
+    (letfn [(update-status []
+              (do-swing
+                (.setText vpgms (if (< 0 (pgm/adding-queue-size))
+                                  (format "%d (+ %d) / %d"
+                                          (pgm/count-pgms)
+                                          (pgm/adding-queue-size)
+                                          (pgm/get-total))
+                                  (format "%d / %d" (pgm/count-pgms) (pgm/get-total))))
+                (.setText vfetched (tu/format-time-long (pgm/last-updated)))))]
+      (nr/add-rss-hook :countdown (fn [count max] (update-status)))
+      (pgm/add-pgms-hook :updated update-status))
     (doto hgrp
       (.addGroup (.. layout createParallelGroup
 		     (addComponent lpgms) (addComponent lfetched)))

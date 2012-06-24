@@ -15,7 +15,7 @@
            [javax.imageio ImageIO]
            [java.io ByteArrayInputStream File OutputStream]
            [java.sql Connection DriverManager SQLException Timestamp]
-           [java.util.concurrent Callable CountDownLatch LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
+           [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
            [com.mchange.v2.c3p0 ComboPooledDataSource]))
 
 (def ^{:private true} NTHREADS 10) ;; 番組追加ワーカースレッド数
@@ -345,110 +345,98 @@
    :fetched_at (tu/date-to-timestamp (:fetched_at pgm))
    :updated_at (tu/date-to-timestamp (:updated_at pgm))})
 
-(defn- add2-aux [^Pgm pgm]
-  (let [comm_id (if-let [cid (:comm_id pgm)] (name cid) nil)
-        row-comm (if comm_id (get-row-comm comm_id) nil)
-        now (tu/sql-now)]
-    (trace (format "add pgm: %s" (name (:id pgm))))
-    ;; 番組情報を追加する
-    (try
-        (let [row (pgm-to-row pgm)]
-          (jdbc/insert-record :pgms row))
-        (catch Exception e (error e (format "failed to insert pgm: %s" (prn-str pgm)))))
-    ;; コミュニティ情報を更新または追加する
-    (try
-      (if row-comm
-        (jdbc/update-values :comms ["id=?" comm_id]
-                            {:comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
-                             :thumbnail (:thumbnail pgm)
-                             :updated_at now})
-        (when comm_id
-          (jdbc/insert-record :comms
-                              {:id comm_id
-                               :comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
-                               :thumbnail (:thumbnail pgm)
-                               :fetched_at now :updated_at now})))
-      (catch Exception e (error e "failed updating or inserting comm info")))))
 
-(defn- add2 [^Pgm pgm]
-  (let [pid (name (:id pgm))
-        row-pgm (get-pgm-aux pid)
-        comm_id (if-let [cid (:comm_id pgm)] (name cid) nil)
-        row-comm-pgm (if comm_id (get-row-pgm-by-comm-id comm_id) nil)]
-    (if row-pgm
-      (jdbc/transaction ; 番組情報が既にある場合は更新する
-       (let [diff-pgm (merge-pgm row-pgm pgm)]
-         (trace (format "update pgm (%s) with %s" pid (pr-str diff-pgm)))
-         (jdbc/update-values :pgms ["id=?" pid] diff-pgm)))
-      (if row-comm-pgm ; 同じコミュニティの番組があったらどちらが古いかを確認する
-        (if (tu/later? (:pubdate pgm) (tu/timestamp-to-date (:pubdate row-comm-pgm)))
-          (jdbc/transaction ; 自分のほうが新しければ古いのを削除してから追加する
-           (rem-pgm-by-id (:id row-comm-pgm))
-           (add2-aux pgm))
-          nil) ; 自分のほうが古ければ追加は不要
-        (jdbc/transaction (add2-aux pgm))))))
-
-(defn- add1 [^Pgm pgm]
-  (when-let [db (db)]
-    (try
-      (jdbc/with-connection db
-        (add2 pgm))
-      (catch Exception e
-        (error e (format "failed adding program (%s) %s" (name (:id pgm)) (:title pgm)))))
-    (call-hook-updated)))
-
-(defn- clean-old-aux-old
-  "古い番組情報を削除する。derbyではサブクエリーが少々ややこしくなる上に、これは非常に遅い。"
-  [num]
-  (jdbc/transaction
-   (jdbc/delete-rows
-    :pgms
-    ["id IN (SELECT id FROM (SELECT ROW_NUMBER() OVER() AS r, pgms.id FROM pgms ORDER BY updated_at) AS tmp WHERE r <= ?)" num])
-   (jdbc/update-values :pmeta ["id=?" 1] {:last_cleaned_at (tu/sql-now)})))
-
-(defn- clean-old-aux
-  "古い番組情報を削除する。derbyではサブクエリーが遅いので、自前で処理。こちらの方が速い。"
-  [num]
-  (let [ids (jdbc/with-query-results rs [{:concurrency :read-only :max-rows num }
-                                         "SELECT id FROM pgms ORDER BY updated_at"]
-              (let [ids (atom [])]
-                (doseq [r rs]
-                  (let [id (str \' (:id r) \')]
-                    (swap! ids conj id)))
-                @ids))
-        where-clause (str "id IN (" (apply str (interpose "," ids)) ")")]
-    (debug (format "cleaning old programs with WHERE-CLAUSE: '%s'" where-clause))
-    (jdbc/transaction
-     (jdbc/delete-rows :pgms [where-clause])
-     (jdbc/update-values :pmeta ["id=?" 1] {:last_cleaned_at (tu/sql-now)}))))
-
-(defn- clean-old1 []
-  (when-let [db (db)]
-    (try
-      (jdbc/with-connection db
-        (when-not (tu/within? (tu/timestamp-to-date (get-pmeta :last_cleaned_at)) (tu/now) INTERVAL-CLEAN)
-          (let [total (get-pmeta :total)
-                cnt (count-pgms-aux)
-                threshold (int (* SCALE total))] ;; 総番組数のscale倍までは許容
-            (when (and (< 0 total) (< threshold cnt))
-              ;; 更新時刻の古い順に多すぎる番組を削除する。
-              (debug (format "cleaning old: %d -> %d" cnt threshold))
-              (clean-old-aux (- cnt threshold))
-              (debug (format "cleaned old: %d -> %d" cnt (count-pgms-aux)))))))
-      (catch Exception e
-        (error e (format "failed cleaning old programs: %s" (.getMessage e)))))
-    (call-hook-updated)))
-
-(let [latch (ref (CountDownLatch. 1))
-      q (LinkedBlockingQueue.)
+(let [q (LinkedBlockingQueue.)
+      last-updated (atom (tu/now))
       pool (proxy [ThreadPoolExecutor] [1 NTHREADS KEEP-ALIVE TimeUnit/SECONDS q]
              (afterExecute
                [r e]
+               (reset! last-updated (tu/now))
                (trace (format "added pgm (%d / %d)" (.getActiveCount this) (.size q)))))]
-  (defn start-update-api [] (.countDown @latch))
   (defn adding-queue-size [] (.size q))
-  (defn add [^Pgm pgm] (.execute pool #(add1 pgm)))
-  (defn clean-old [] (.execute pool #(clean-old1))))
+  (defn last-updated [] @last-updated)
+  (letfn [(clean-old2 [num]
+            ;; 古い番組情報を削除する。derbyではサブクエリーが遅いので、自前で処理した方が速い。
+            (let [ids (jdbc/with-query-results rs [{:concurrency :read-only :max-rows num }
+                                                   "SELECT id FROM pgms ORDER BY updated_at"]
+                        (let [ids (atom [])]
+                          (doseq [r rs]
+                            (let [id (str \' (:id r) \')]
+                              (swap! ids conj id)))
+                          @ids))
+                  where-clause (str "id IN (" (apply str (interpose "," ids)) ")")]
+              (debug (format "cleaning old programs with WHERE-CLAUSE: '%s'" where-clause))
+              (jdbc/transaction
+               (jdbc/delete-rows :pgms [where-clause])
+               (jdbc/update-values :pmeta ["id=?" 1] {:last_cleaned_at (tu/sql-now)}))))
+          (clean-old1 []
+            (when-let [db (db)]
+              (try
+                (jdbc/with-connection db
+                  (when-not (tu/within? (tu/timestamp-to-date (get-pmeta :last_cleaned_at)) (tu/now) INTERVAL-CLEAN)
+                    (let [total (get-pmeta :total)
+                          cnt (count-pgms-aux)
+                          threshold (int (* SCALE total))] ;; 総番組数のscale倍までは許容
+                      (when (and (< 0 total) (< threshold cnt))
+                        ;; 更新時刻の古い順に多すぎる番組を削除する。
+                        (debug (format "cleaning old: %d -> %d" cnt threshold))
+                        (clean-old2 (- cnt threshold))
+                        (debug (format "cleaned old: %d -> %d" cnt (count-pgms-aux)))))))
+                (catch Exception e
+                  (error e (format "failed cleaning old programs: %s" (.getMessage e)))))
+              (call-hook-updated)))]
+    (defn clean-old [] (.execute pool #(clean-old1))))
+
+  (letfn [(add3 [^Pgm pgm]
+            (let [comm_id (if-let [cid (:comm_id pgm)] (name cid) nil)
+                  row-comm (if comm_id (get-row-comm comm_id) nil)
+                  now (tu/sql-now)]
+              (trace (format "add pgm: %s" (name (:id pgm))))
+              ;; 番組情報を追加する
+              (try
+                (let [row (pgm-to-row pgm)]
+                  (jdbc/insert-record :pgms row))
+                (catch Exception e (error e (format "failed to insert pgm: %s" (prn-str pgm)))))
+              ;; コミュニティ情報を更新または追加する
+              (try
+                (if row-comm
+                  (jdbc/update-values :comms ["id=?" comm_id]
+                                      {:comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
+                                       :thumbnail (:thumbnail pgm)
+                                       :updated_at now})
+                  (when comm_id
+                    (jdbc/insert-record :comms
+                                        {:id comm_id
+                                         :comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
+                                         :thumbnail (:thumbnail pgm)
+                                         :fetched_at now :updated_at now})))
+                (catch Exception e (error e "failed updating or inserting comm info")))))
+          (add2 [^Pgm pgm]
+            (let [pid (name (:id pgm))
+                  row-pgm (get-pgm-aux pid)
+                  comm_id (if-let [cid (:comm_id pgm)] (name cid) nil)
+                  row-comm-pgm (if comm_id (get-row-pgm-by-comm-id comm_id) nil)]
+              (if row-pgm
+                (jdbc/transaction ; 番組情報が既にある場合は更新する
+                 (let [diff-pgm (merge-pgm row-pgm pgm)]
+                   (trace (format "update pgm (%s) with %s" pid (pr-str diff-pgm)))
+                   (jdbc/update-values :pgms ["id=?" pid] diff-pgm)))
+                (if row-comm-pgm ; 同じコミュニティの番組があったらどちらが古いかを確認する
+                  (if (tu/later? (:pubdate pgm) (tu/timestamp-to-date (:pubdate row-comm-pgm)))
+                    (jdbc/transaction ; 自分のほうが新しければ古いのを削除してから追加する
+                     (rem-pgm-by-id (:id row-comm-pgm))
+                     (add3 pgm))
+                    nil) ; 自分のほうが古ければ追加は不要
+                  (jdbc/transaction (add3 pgm))))))
+          (add1 [^Pgm pgm]
+            (when-let [db (db)]
+              (try
+                (jdbc/with-connection db
+                  (add2 pgm))
+                (catch Exception e
+                  (error e (format "failed adding program (%s) %s" (name (:id pgm)) (:title pgm)))))
+              (call-hook-updated)))]
+    (defn add [^Pgm pgm] (.execute pool #(add1 pgm)))))
 
 (defn- rs-to-pgms [rs]
   (let [pgms (atom {})]
