@@ -13,7 +13,7 @@
             [clojure.java.jdbc :as jdbc])
   (:import [clojure.lang Keyword]
            [javax.imageio ImageIO]
-           [java.io File OutputStream]
+           [java.io ByteArrayInputStream File OutputStream]
            [java.sql Connection DriverManager SQLException Timestamp]
            [java.util.concurrent Callable CountDownLatch LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
            [com.mchange.v2.c3p0 ComboPooledDataSource]))
@@ -24,6 +24,7 @@
 (def ^{:private true} SCALE 1.1) ;; 番組最大保持数
 (def ^{:private true} INTERVAL-CLEAN 180) ;; 古い番組情報を削除する間隔
 (def ^{:private true} INTERVAL-UPDATE 3) ;; 更新フック呼び出し間隔
+(def ^{:private true} INTERVAL-UPDATE-THUMBNAIL (* 24 3600)) ; サムネイル更新間隔
 
 (def ^{:private true} NO-IMAGE (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
 
@@ -197,8 +198,6 @@
           (reset! old-total total)))
       (call-hook-updated))))
 
-;; 以下はリファクタリング用に同じ物をとりあえず実装する。
-;; 動くようになったら徐々に不要なメソッドをなくしてメモリ効率を良くしていく
 (defn- get-row-comm [^String comm_id]
   (if-let [db (db)]
     (jdbc/with-connection db
@@ -208,21 +207,50 @@
         (first rs)))
     nil))
 
+
 (defn get-comm-thumbnail [^Keyword comm_id]
-  (if-let [db (db)]
-    (jdbc/with-connection db
-      (jdbc/with-query-results rs [{:concurrency :read-only}
-                                   "SELECT img FROM imgs WHERE id=?" (name comm_id)]
-        (if-let [r (first rs)]
-          (let [blob (:img r)]
-            (if (or (nil? blob) (= 0 (.length blob)))
-              NO-IMAGE
-              (let [bs (.getBinaryStream (:img r))]
-                (try
-                  (ImageIO/read bs)
-                  (finally (.close bs))))))
-          NO-IMAGE)))
-    NO-IMAGE))
+  (letfn [(store-thumbnail [comm_id img update]
+            (when-let [db (db)]
+              (jdbc/with-connection db
+                (let [now (tu/sql-now)]
+                  (if update
+                    (jdbc/update-values
+                     :imgs ["=id?" comm_id] {:img img :updated_at now})
+                    (jdbc/insert-record
+                     :imgs {:id comm_id :img img :fetched_at now :updated_at now}))))))
+          (fetch-image-aux [url]
+            (try
+              (let [is (n/url-stream url)]
+                (try (io/input-stream-to-bytes is)
+                     (finally (when is (.close is)))))
+              (catch Exception e
+                (warn (format "failed open inputstream from %s: %s" url (.getMessage e)))
+                nil)))
+          (fetch-image [comm_id update]
+            (if-let [row-comm (get-row-comm comm_id)]
+              (let [url (:thumbnail row-comm)
+                    img (fetch-image-aux url)
+                    bis (ByteArrayInputStream. img)]
+                (future (store-thumbnail comm_id img update))
+                (try (ImageIO/read bis)
+                     (catch Exception e (error e (format "failed reading image: %s" url)) NO-IMAGE)
+                     (finally (.close bis))))
+              NO-IMAGE))]
+    (if-let [db (db)]
+      (jdbc/with-connection db
+        (jdbc/with-query-results rs [{:concurrency :read-only}
+                                     "SELECT img,updated_at FROM imgs WHERE id=?" (name comm_id)]
+          (if-let [r (first rs)]
+            (if (tu/within? (tu/timestamp-to-date (:updated_at r)) (tu/now) INTERVAL-UPDATE-THUMBNAIL)
+              (let [blob (:img r)]
+                (if (and (nil? blob) (< 0 (.length blob)))
+                  (let [bs (.getBinaryStream (:img r))]
+                    (try (ImageIO/read bs)
+                         (finally (.close bs))))
+                  NO-IMAGE))
+              (fetch-image (name comm_id) true))
+            (fetch-image (name comm_id) false))))
+      NO-IMAGE)))
 
 (defn- row-to-pgm [row-pgm]
   (let [row-comm (get-row-comm (:comm_id row-pgm))]
@@ -283,14 +311,9 @@
     (first rs)))
 
 (defn- merge-pgm [row-pgm ^Pgm pgm]
-  (letfn [(longer [^String x ^String y]
-            (cond (and x y) (if (> (.length x) (.length y)) x y)
-                  (nil? x) y
-                  (nil? y) x
-                  :else nil))
-          (longer-for [k x ^Pgm y]
-            (longer (get x k)
-                    (s/trim-to (get y k) (condp = k :title LEN_PGM_TITLE :description LEN_PGM_DESCRIPTION))))
+  (letfn [(longer-for [k x ^Pgm y]
+            (s/longer (get x k)
+                      (s/trim-to (get y k) (condp = k :title LEN_PGM_TITLE :description LEN_PGM_DESCRIPTION))))
           (later [x y]
             (cond (and x y) (if (tu/later? x y) x y)
                   (nil? x) y
@@ -306,16 +329,6 @@
         (if-assoc later-for  :pubdate     row-pgm pgm)
         (if-assoc longer-for :description row-pgm pgm)
         (assoc :updated_at (tu/sql-now)))))
-
-(defn- fetch-image [url]
-  (try
-    (let [is (n/url-stream url)]
-      (try
-        (io/input-stream-to-bytes is)
-        (finally (when is (.close is)))))
-    (catch Exception e
-      (warn (format "failed open inputstream from %s: %s" url (.getMessage e)))
-      nil)))
 
 (defn- pgm-to-row [^Pgm pgm]
   {:id (name (:id pgm))
@@ -345,23 +358,15 @@
     ;; コミュニティ情報を更新または追加する
     (try
       (if row-comm
-        (when (tu/within? (tu/timestamp-to-date (:updated_at row-comm)) (tu/now) (* 24 3600))
-          (jdbc/update-values :comms ["id=?" comm_id]
-                              {:comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
-                               :thumbnail (:thumbnail pgm)
-                               :updated_at now})
-          (jdbc/update-values :imgs ["id=?" comm_id]
-                              {:img (fetch-image (:thumbnail pgm))
-                               :updated_at now}))
+        (jdbc/update-values :comms ["id=?" comm_id]
+                            {:comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
+                             :thumbnail (:thumbnail pgm)
+                             :updated_at now})
         (when comm_id
           (jdbc/insert-record :comms
                               {:id comm_id
                                :comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
                                :thumbnail (:thumbnail pgm)
-                               :fetched_at now :updated_at now})
-          (jdbc/insert-record :imgs
-                              {:id comm_id
-                               :img (fetch-image (:thumbnail pgm))
                                :fetched_at now :updated_at now})))
       (catch Exception e (error e "failed updating or inserting comm info")))))
 

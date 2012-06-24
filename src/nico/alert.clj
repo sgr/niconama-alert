@@ -17,20 +17,16 @@
 (def ^{:private true} KEEP-ALIVE 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
 (def ^{:private true} EXEC-INTERVAL 500) ; アラートウィンドウ表示処理の実行間隔(ミリ秒)
 
-(defn- adjust-img [img width height]
-  (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
-	g2d (.createGraphics nimg)]
-    (doto g2d
-      (.setRenderingHint RenderingHints/KEY_INTERPOLATION
-			 RenderingHints/VALUE_INTERPOLATION_BILINEAR)
-      (.drawImage img 0 0 width height nil))
-    nimg))
-
-(defn- thumbnail [img]
-  (ImageIcon. (adjust-img img 64 64)))
-
 (defn- comm-thumbnail [comm_id]
-  (thumbnail (pgm/get-comm-thumbnail comm_id)))
+  (letfn [(adjust-img [img width height]
+            (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
+                  g2d (.createGraphics nimg)]
+              (doto g2d
+                (.setRenderingHint RenderingHints/KEY_INTERPOLATION
+                                   RenderingHints/VALUE_INTERPOLATION_BILINEAR)
+                (.drawImage img 0 0 width height nil))
+              nimg))]
+    (ImageIcon. (adjust-img (pgm/get-comm-thumbnail comm_id) 64 64))))
 
 (defn- divide-plats []
   (let [r (.getMaximumWindowBounds (GraphicsEnvironment/getLocalGraphicsEnvironment))
