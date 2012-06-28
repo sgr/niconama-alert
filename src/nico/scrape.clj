@@ -4,6 +4,7 @@
     nico.scrape
   (:use [clojure.tools.logging])
   (:require [net.cgrand.enlive-html :as html]
+            [log-utils :as l]
 	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu]
@@ -13,6 +14,7 @@
 
 (def ^{:private true} BASE-URL "http://live.nicovideo.jp/watch/")
 (def ^{:private true} INTERVAL-RETRY 5)
+(def ^{:private true} LIMIT-RETRY 5)
 
 (defn- fetch-pgm-info1
   [pid]
@@ -23,14 +25,17 @@
 	title (s/cleanup (first (html/select infobox [:h2 :> html/text-node])))
 	desc (cs/join " " (for [n (html/select infobox [:div.bgm :> :div :> html/text-node])]
 			    (s/cleanup n)))
-	pubdate (let [[sday sopen sstart]
+	pubdate (let [[sday sopen sstart] ; 開始日 開場時刻 開演時刻
 		      (html/select infobox
 				   [:div.kaijo :> :strong :> html/text-node])]
 		  (let [[yyyy MM dd] (for [x (rest (re-find #"(\d{4})/(\d{2})/(\d{2})" sday))]
 				       (Integer/parseInt x))
-			[ohh omm] (for [x (.split sopen ":")] (Integer/parseInt x))
-			[shh smm] (for [x (.split sstart ":")] (Integer/parseInt x))
-			c (doto (GregorianCalendar. yyyy (dec MM) dd shh smm)
+			[ohh omm] (if sopen (for [x (.split sopen ":")] (Integer/parseInt x)) [nil nil])
+			[shh smm] (if sstart (for [x (.split sstart ":")] (Integer/parseInt x)) [nil nil])
+                        ;; 終了後の番組ページを開く場合は開演時刻しか表示されないため、チェック。
+			c (doto (if (and shh smm)
+                                  (GregorianCalendar. yyyy (dec MM) dd shh smm)
+                                  (GregorianCalendar. yyyy (dec MM) dd ohh omm))
 			    (.setTimeZone (TimeZone/getTimeZone "Asia/Tokyo")))]
 		    (do
 		      ;; 開場23:5x、開演00:0xの場合に対応
@@ -88,8 +93,12 @@
               (catch Exception e
                 (warn e (format "failed fetching pgm info: %s" pid))
                 nil)))]
-    (if-let [info (fetch-pgm-info-aux pid)]
-      info
-      (do (.sleep TimeUnit/SECONDS INTERVAL-RETRY)
-          (debug (format "retrying fetching pgm indo: %s" pid))
-          (recur pid)))))
+    (loop [cnt 0]
+      (if (< cnt LIMIT-RETRY)
+        (if-let [info (fetch-pgm-info-aux pid)]
+          info
+          (l/with-warn (format "retrying fetching pgm indo: %s" pid)
+            (.sleep TimeUnit/SECONDS INTERVAL-RETRY)
+            (recur (inc cnt))))
+        (l/with-warn (format "reached retry limit. aborted fetching pgm info: %s" pid)
+          nil)))))
