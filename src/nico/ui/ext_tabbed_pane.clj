@@ -9,6 +9,7 @@
             [nico.api :as api]
 	    [nico.api-updator :as nau]
 	    [nico.pgm :as pgm]
+            [nico.rss-updator :as nr]
 	    [nico.ui.key-val-dlg :as ukvd]
 	    [nico.ui.kwd-tab-dlg :as uktd]
 	    [nico.ui.pgm-panel]
@@ -192,6 +193,7 @@
 	 (mousePressed [e])
 	 (mouseReleased [e]))))
     (pgm/add-pgms-hook :updated (fn [] (.updatePgms tpane))))
+  (nr/add-rss-hook :countdown (fn [count max] (.repaintTable (.getSelectedComponent this))))
   (pgm/add-db-hook :shutdown (fn [] (.closeStatements this))))
 
 (defn- etp-updatePgms [this]

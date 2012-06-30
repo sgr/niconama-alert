@@ -15,7 +15,8 @@
  :state state
  :init init
  :post-init post-init
- :methods [[setPgms [clojure.lang.IPersistentMap] void]])
+ :methods [[repaintTable [] void]
+           [setPgms [clojure.lang.IPersistentMap] void]])
 
 (defn- pp-init []
   [[] (atom {:tbl nil})])
@@ -36,3 +37,8 @@
     (doto this
       (.setLayout layout)
       (.add spane))))
+
+(defn- pp-repaintTable [this]
+  (doto (:tbl @(.state this))
+    (.revalidate)
+    (.repaint)))

@@ -26,7 +26,8 @@
  :state state
  :init init
  :post-init post-init
- :methods [[setAddTabListener [clojure.lang.IFn] void]])
+ :methods [[repaintTable [] void]
+           [setAddTabListener [clojure.lang.IFn] void]])
 
 (defn- sp-init [] [[] (atom {:listener (fn [pref])})])
 
@@ -48,6 +49,10 @@
                          (.setEnabled btn-tab    true))
                      (do (.setEnabled btn-search false)
                          (.setEnabled btn-tab    false)))]
+    (defn- sp-repaintTable [this]
+      (doto tbl
+        (.revalidate)
+        (.repaint)))
     (doto query-panel
       (.addListener      check-all)
       (.setMinimumSize   QUERY-PANEL-SIZE)
