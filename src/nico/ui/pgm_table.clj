@@ -10,11 +10,11 @@
 	    [time-utils :as tu])
   (:import [java.awt Color Font]
 	   [java.awt.event MouseListener]
+           [java.awt.font TextAttribute]
 	   [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
 	   [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]))
 
 (def ^{:private true} DESC-COL 64)
-(def ^{:private true} FONT-BOLD (Font. Font/DIALOG Font/BOLD 12))
 
 ;; PgmCellRendererは、番組表のセルレンダラー。
 ;; 新着の番組をボールド、コミュ限の番組を青字で表示する。
@@ -25,7 +25,8 @@
  :prefix "pr-"
  :constructors {[] []}
  :state state
- :init init)
+ :init init
+ :post-init post-init)
 
 ;; ProgramsTableModelは、pgmsを開始時刻でソートしたものを表示するTableModel。
 ;; 拡張メソッドgetUrlにより、番組URLを返す。
@@ -56,23 +57,28 @@
  :init init
  :methods [[setSortable [boolean] void]])
 
-(defn- pr-init [] [[] nil])
+(defn- pr-init [] [[] (atom {})])
+(defn- pr-post-init [this]
+  (let [attrs (doto (.getAttributes (.getFont this))
+                (.put TextAttribute/WEIGHT TextAttribute/WEIGHT_BOLD))]
+    (swap! (.state this) assoc :bold-font (Font. attrs))))
 (defn- pr-getTableCellRendererComponent [this tbl val selected focus row col]
   (.gtcrc this tbl val selected focus row col)
   (when-let [pmdl (let [mdl (.getModel tbl)]
 		    (if (= nico.ui.ProgramsTableModel (class mdl)) mdl nil))]
     (let [mr (.convertRowIndexToModel tbl row) pgm (.getPgm pmdl mr)]
-      (when (tu/within? (:fetched_at pgm) (tu/now) 60) (.setFont this FONT-BOLD))
+      (when (tu/within? (:fetched_at pgm) (tu/now) 60)
+        (.setFont this (:bold-font @(.state this))))
       (when (:member_only pgm) (.setForeground this Color/BLUE))))
   this)
 
 (def ^{:private true} PGM-COLUMNS
-     (list
-      {:key :title, :colName "タイトル", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
-      {:key :comm_name, :colName "コミュ名", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
-      {:key :pubdate, :colName "開始", :width 50,
-       :renderer (doto (nico.ui.PgmCellRenderer.) (.setHorizontalAlignment JLabel/CENTER))}
-      {:key :owner_name, :colName "放送主", :width 60, :renderer (nico.ui.PgmCellRenderer.)}))
+  (list
+   {:key :title, :colName "タイトル", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
+   {:key :comm_name, :colName "コミュ名", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
+   {:key :pubdate, :colName "開始", :width 50,
+    :renderer (doto (nico.ui.PgmCellRenderer.) (.setHorizontalAlignment JLabel/CENTER))}
+   {:key :owner_name, :colName "放送主", :width 60, :renderer (nico.ui.PgmCellRenderer.)}))
 
 (defn- pgm-colnum
   "PGM-COLUMNS の中から、指定されたキーのカラム番号を得る"
