@@ -134,30 +134,20 @@
                (.setMaxIdleTime 60))]
     {:datasource cpds}))
 
-(defn- shutdown-db [path]
-  (try
-;;    (DriverManager/getConnection (format "jdbc:derby:%s;shutdown=true" path))
-    (catch Exception e
-      (debug (format "shutdown derby: %s" (.getMessage e)))
-      (io/delete-all-files path))))
+(defn- delete-db-files [path]
+  (let [db-file           (str path ".h2.db")
+        db-trace-file     (str path ".trace.db")
+        db-trace-old-file (str path ".trace.db.old")
+        db-lobs-file      (str path ".lobs.db")
+        db-lock-file      (str path ".lock.db")]
+    (doseq [f [db-file db-trace-file db-trace-old-file db-lobs-file db-lock-file]]
+      (io/delete-all-files f))))
 
-;; derby.logを出力させないためのダミーロガー
-(gen-class
- :name nico.pgm.DerbyUtil
- :prefix "npd-"
- :methods [#^{:static true} [disabledLogStream [] java.io.OutputStream]])
-(defn- npd-disabledLogStream []
-  (proxy [OutputStream] []
-    (close [] )
-    (flush [] )
-    (write [& args] )))
-
-(let [db-path (.getCanonicalPath (File/createTempFile "nico-" nil))
+(let [db-path (io/temp-file-name "nico-")
       ro-conns (atom [])
       pooled-db (atom nil)]
   (hu/defhook db :shutdown)
   (defn init-db []
-    (System/setProperty "derby.stream.error.method" "nico.pgm.DerbyUtil.disabledLogStream")
     (io/delete-all-files db-path)
     (init-db-aux db-path)
     (reset! pooled-db (pool db-path)))
@@ -166,8 +156,13 @@
     (let [d @pooled-db]
       (reset! pooled-db nil)
       (doseq [ro-conn @ro-conns] (.close ro-conn))
+      (doto (:datasource d)
+        (.setMinPoolSize 0)
+        (.setInitialPoolSize 0)
+        (.setMaxIdleTime 1))
+      (.sleep TimeUnit/SECONDS 3)
       (.close (:datasource d))
-      (shutdown-db db-path)))
+      (delete-db-files db-path)))
   (defn- db [] @pooled-db)
   (defn get-ro-conn []
     (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:h2:file:%s" db-path))

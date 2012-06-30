@@ -20,6 +20,11 @@
         (do (.write bos buf 0 n)
             (recur (.read is buf 0 buf-size)))))))
 
+(defn temp-file-name [prefix]
+  (let [f (File/createTempFile prefix nil)]
+    (.delete f)
+    (.getCanonicalPath f)))
+
 (defn delete-all-files
   "If the path describes a file, it will be deleted only.
    If the path describes a directory, both itself and containing files will be deleted recursively."
