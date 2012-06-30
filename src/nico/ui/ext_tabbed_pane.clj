@@ -29,7 +29,7 @@
  :methods [[addTab [clojure.lang.IPersistentMap] void]
            [addTabs [clojure.lang.IPersistentVector] void]
            [closeStatements [] void]
-	   [updatePgms [boolean] void]
+	   [updatePgms [] void]
 	   [getTabMenuItems [int] clojure.lang.IPersistentVector]
 	   [getTabPrefs [] clojure.lang.IPersistentVector]])
 
@@ -82,11 +82,10 @@
     (condp = (:type pref)
       :comm (do (.setTitle tab "loading...")
                 (update-tab-title tpane tab "not logged in")
-                (future
-                  (let [[title sql] (login pref)]
-                    (.setTitle tab title)
-                    (update-tab-title tpane tab title)
-                    (set-tab-statement tpane tab sql))))
+                (let [[title sql] (login pref)]
+                  (.setTitle tab title)
+                  (update-tab-title tpane tab title)
+                  (set-tab-statement tpane tab sql)))
       :kwd  (do (.setTitle tab (:title pref))
                 (update-tab-title tpane tab (:title pref))
                 (let [sql (pgm/get-sql-kwds (:query pref) (:target pref))]
@@ -115,7 +114,10 @@
                   ritem (JMenuItem. "再ログイン")
                   eitem (JMenuItem. "編集")]
               (doto ritem
-                (add-action-listener (fn [e] (update-tab-pref tpane tab pref))))
+                (add-action-listener
+                 (fn [e]
+                   (update-tab-pref tpane tab pref)
+                   (.updatePgms tpane))))
               (doto eitem
                 (add-action-listener
                  (fn [e] (let [dlg (ukvd/user-password-dialog
@@ -189,12 +191,12 @@
 	 (mouseExited [e])
 	 (mousePressed [e])
 	 (mouseReleased [e]))))
-    (pgm/add-pgms-hook :updated (fn [] (.updatePgms tpane true))))
+    (pgm/add-pgms-hook :updated (fn [] (.updatePgms tpane))))
   (pgm/add-db-hook :shutdown (fn [] (.closeStatements this))))
 
-(defn- etp-updatePgms [this enforce]
+(defn- etp-updatePgms [this]
   (locking this
-    (when (or (< 0 (pgm/count-pgms)) enforce)
+    (when (< 0 (pgm/count-pgms))
       (doseq [idx (range 1 (.getTabCount this))]
         (let [id-tab (.hashCode (.getTabComponentAt this idx))
               tab (.getTabComponentAt this idx)
