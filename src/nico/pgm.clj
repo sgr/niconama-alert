@@ -18,7 +18,7 @@
            [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
            [com.mchange.v2.c3p0 ComboPooledDataSource]))
 
-(def ^{:private true} NTHREADS 10) ;; 番組追加ワーカースレッド数
+(def ^{:private true} NTHREADS 3) ;; 番組追加ワーカースレッド数
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
 
 (def ^{:private true} SCALE 1.1) ;; 番組最大保持数
@@ -246,7 +246,7 @@
                 (if (and blob (< 0 (.length blob)))
                   (let [bs (.getBinaryStream (:img r))]
                     (try (ImageIO/read bs)
-                         (finally (.close bs))))
+                         (finally (.close bs) (.free blob))))
                   NO-IMAGE))
               (fetch-image (name comm_id) true))
             (fetch-image (name comm_id) false))))
@@ -352,7 +352,11 @@
              (afterExecute
                [r e]
                (reset! last-updated (tu/now))
-               (trace (format "added pgm (%d / %d)" (.getActiveCount this) (.size q)))))]
+               (trace (format "added pgm (%d / %d)" (.getActiveCount this) (.size q)))
+               (when (= 0 (.size q))
+                 (future
+                   (.sleep TimeUnit/SECONDS INTERVAL-UPDATE)
+                   (call-hook-updated)))))]
   (defn adding-queue-size [] (.size q))
   (defn last-updated [] @last-updated)
   (letfn [(clean-old2 [num]

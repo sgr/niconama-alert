@@ -36,7 +36,6 @@
 (defn- etp-init []
   [[] (atom {:tab-prefs {}
              :tab-titles {}
-             :last-updated nil
              :conn (delay (pgm/get-ro-conn))
              :pstmts {}})])
 
@@ -195,26 +194,21 @@
 
 (defn- etp-updatePgms [this enforce]
   (locking this
-    (let [last-updated (:last-updated @(.state this))]
-      (when (and (< 0 (pgm/count-pgms))
-                 (or enforce
-                     (nil? last-updated)
-                     (not (tu/within? last-updated (tu/now) 3))))
-        (doseq [idx (range 1 (.getTabCount this))]
-          (let [id-tab (.hashCode (.getTabComponentAt this idx))
-                tab (.getTabComponentAt this idx)
-                content (.getComponentAt this idx)
-                title (get-in @(.state this) [:tab-titles id-tab])
-                pstmt (get-in @(.state this) [:pstmts id-tab])]
-            (if (and pstmt (not (.isClosed pstmt)))
-              (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
-                (when (get-in @(.state this) [:tab-prefs id-tab :alert])
-                  (future
-                    (doseq [[id npgm] npgms] (al/alert-pgm id))))
-                (.setPgms content npgms)
-                (.setTitle tab (format "%s (%d)" title (count npgms))))
-              (.setTitle tab (format "%s (-)" title)))))
-        (swap! (.state this) assoc :last-updated (tu/now))))))
+    (when (or (< 0 (pgm/count-pgms)) enforce)
+      (doseq [idx (range 1 (.getTabCount this))]
+        (let [id-tab (.hashCode (.getTabComponentAt this idx))
+              tab (.getTabComponentAt this idx)
+              content (.getComponentAt this idx)
+              title (get-in @(.state this) [:tab-titles id-tab])
+              pstmt (get-in @(.state this) [:pstmts id-tab])]
+          (if (and pstmt (not (.isClosed pstmt)))
+            (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
+              (when (get-in @(.state this) [:tab-prefs id-tab :alert])
+                (future
+                  (doseq [[id npgm] npgms] (al/alert-pgm id))))
+              (.setPgms content npgms)
+              (.setTitle tab (format "%s (%d)" title (count npgms))))
+            (.setTitle tab (format "%s (-)" title))))))))
 
 (defn- etp-getTabPrefs [this]
   (let [tprefs (:tab-prefs @(.state this))]
