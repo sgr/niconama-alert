@@ -20,6 +20,7 @@
 (def ^{:private true} LIMIT-ELAPSED 1200) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
 (def ^{:private true} LIMIT-QUEUE 1000)    ;; スレッドプールにリトライ登録可能な数の目安
 (def ^{:private true} RATE-UI-UPDATE 5)   ;; UIの更新間隔(秒)
+(def ^{:private true} INTERVAL-SCRAPE 5)   ;; 番組情報再取得インターバル
 
 (defn- create-pgm-from-scrapedinfo
   [pid cid]
@@ -113,7 +114,8 @@
               (l/with-debug (format "retry task (%s/%s/%s %s)" pid cid uid lreceived)
                 (.execute this (nico.api-updator.WrappedFutureTask. pid cid uid received)))
               (warn (format "too many tasks (%d) to retry (%s/%s/%s %s)"
-                            (.size queue) pid cid uid lreceived)))))))))
+                            (.size queue) pid cid uid lreceived)))))
+         (.sleep TimeUnit/SECONDS INTERVAL-SCRAPE)))))
   (let [comm-q (LinkedBlockingQueue.)
 	comm-executor (create-executor NTHREADS-COMM comm-q)]
     (defn- create-task [pid cid uid received]
