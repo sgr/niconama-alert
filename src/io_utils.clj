@@ -29,5 +29,7 @@
       (if (.isDirectory f)
         (l/with-debug (format "deleting all children of %s"  path)
           (doseq [c (.listFiles f)] (delete-all-files c))
-          (debug (format "deleting file: %s -> %s" path (.delete f))))
-        (debug (format "deleting file: %s -> %s" path (.delete f)))))))
+          (let [result (.delete f)]
+            (debug (format "deleting directory: %s -> %s" path result))))
+        (let [result (.delete f)]
+          (debug (format "deleting file: %s -> %s" path result)))))))
