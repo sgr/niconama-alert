@@ -21,14 +21,14 @@
 (def ^{:private true} NTHREADS 10) ;; 番組追加ワーカースレッド数
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
 
-(def ^{:private true} SCALE 1.1) ;; 番組最大保持数
+(def ^{:private true} SCALE 1.14) ;; 番組最大保持数
 (def ^{:private true} INTERVAL-CLEAN 180) ;; 古い番組情報を削除する間隔
 (def ^{:private true} INTERVAL-UPDATE 3) ;; 更新フック呼び出し間隔
 (def ^{:private true} INTERVAL-UPDATE-THUMBNAIL (* 24 3600)) ; サムネイル更新間隔
 
 (def ^{:private true} NO-IMAGE (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
 
-(def ^{:private true} DB-CLASSNAME "org.apache.derby.jdbc.EmbeddedDriver")
+(def ^{:private true} DB-CLASSNAME "org.h2.Driver")
 
 (defrecord Pgm
   [id		;; 番組ID
@@ -116,8 +116,8 @@
 
 (defn- init-db-aux [path]
   (let [db {:classname DB-CLASSNAME
-            :subprotocol "derby"
-            :subname path
+            :subprotocol "h2"
+            :subname (str "file:" path)
             :create true}]
     (jdbc/with-connection db
       (create-pmeta)
@@ -129,14 +129,14 @@
 (defn- pool [path]
   (let [cpds (doto (ComboPooledDataSource.)
                (.setDriverClass DB-CLASSNAME)
-               (.setJdbcUrl (str "jdbc:derby:" path))
+               (.setJdbcUrl (str "jdbc:h2:file:" path))
                (.setMaxIdleTimeExcessConnections (* 2 60))
                (.setMaxIdleTime 60))]
     {:datasource cpds}))
 
 (defn- shutdown-db [path]
   (try
-    (DriverManager/getConnection (format "jdbc:derby:%s;shutdown=true" path))
+;;    (DriverManager/getConnection (format "jdbc:derby:%s;shutdown=true" path))
     (catch Exception e
       (debug (format "shutdown derby: %s" (.getMessage e)))
       (io/delete-all-files path))))
@@ -170,7 +170,7 @@
       (shutdown-db db-path)))
   (defn- db [] @pooled-db)
   (defn get-ro-conn []
-    (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:derby:%s" db-path))
+    (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:h2:file:%s" db-path))
                     (.setReadOnly true))]
       (swap! ro-conns conj ro-conn)
       ro-conn)))
@@ -246,7 +246,7 @@
                 (if (and blob (< 0 (.length blob)))
                   (let [bs (.getBinaryStream (:img r))]
                     (try (ImageIO/read bs)
-                         (finally (.close bs))))
+                         (finally (.close bs) (.free blob))))
                   NO-IMAGE))
               (fetch-image (name comm_id) true))
             (fetch-image (name comm_id) false))))

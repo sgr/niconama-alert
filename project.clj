@@ -9,7 +9,8 @@
                  [swing-utils "0.2.0"]
 		 [enlive "1.0.1"]
                  [c3p0/c3p0 "0.9.1.2"]
-                 [org.apache.derby/derby "10.9.1.0"]]
+                 [com.h2database/h2 "[1.3,)"]]
+;;                 [org.apache.derby/derby "10.9.1.0"]]
   :dev-dependencies [[swank-clojure "1.4.2"]]
   :omit-source true
   :resources-path "resource"
