@@ -26,7 +26,7 @@
            "swing-utils 0.2.0 Copyright (c) Stephen C. Gilardi and Meikel Brandmeyer. All rights reserved."
            "Enlive 1.0.1 Copyright (c) Christophe Grand, 2012. All rights reserved."
            "c3p0 0.9.1.2 Copyright (c) 2012 Machinery For Change, Inc."
-           "Apache Derby 10.9.1.0 Copyright 2004-2012 The Apache Software Foundation"
+           "H2 Database Engine 1.3"
            "... and great dependencies"]))
 
 (defn- about-panel []
