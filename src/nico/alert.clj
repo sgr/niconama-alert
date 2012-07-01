@@ -77,7 +77,7 @@
     (let [now (tu/now)
           [i plat] (if (tu/within? @last-modified now 5) (reserve-plat-A) (reserve-plat-B))]
       (if i
-        (l/with-debug (str "display alert dialog: " (:id pgm))
+        (l/with-trace (str "display alert dialog: " (:id pgm))
           (let [adlg (uad/alert-dlg pgm thumbicn #(release-plat i plat))]
             (reset! last-modified now)
             (future 

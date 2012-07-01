@@ -33,7 +33,7 @@
 (defn- get-nico-rss [page]
   (loop [c RETRY]
     (if-let [rss (get-nico-rss-aux page)]
-      (l/with-debug (format "fetched RSS #%d tried %d times." page (- RETRY c))
+      (l/with-trace (format "fetched RSS #%d tried %d times." page (- RETRY c))
         rss)
       (if (= 0 c)
         (l/with-error (format "aborted fetching RSS #%d: reached limit." page)
