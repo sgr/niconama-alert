@@ -45,7 +45,6 @@
 
 (let [plats (atom (divide-plats))	;; アラートダイアログの表示領域
       pool (periodic-executor (LinkedBlockingQueue.))
-      sentinel (Object.)
       last-modified (atom (tu/now))]
   (defn- reserve-plat-aux [i]
     (if-not (:used (nth @plats i))
@@ -73,7 +72,7 @@
 	[nil nil])))
   (defn- release-plat [i plat]
     (swap! plats assoc i (assoc plat :used false)))
-  (defn- alert-aux [^nico.pgm.Pgm pgm ^ImageIcon thumbicn]
+  (defn- display-alert [^nico.pgm.Pgm pgm ^ImageIcon thumbicn]
     (let [now (tu/now)
           [i plat] (if (tu/within? @last-modified now 5) (reserve-plat-A) (reserve-plat-B))]
       (if i
@@ -93,12 +92,9 @@
             (.sleep TimeUnit/SECONDS 5)
             (recur pgm thumbicn)))))
   (defn alert-pgm [id]
-    (locking sentinel
-      (when-let [pgm (pgm/get-pgm id)]
-        (if-not (:alerted pgm)
-          (let [thumbnail (comm-thumbnail (:comm_id pgm))]
-            (trace (str "alert: " id))
-            (.execute pool #(alert-aux pgm thumbnail))
-            (pgm/update-alerted id))
-          (trace (str "already alerted: " id)))))))
+    (if-let [pgm (pgm/not-alerted id)]
+      (let [thumbnail (comm-thumbnail (:comm_id pgm))]
+        (trace (str "alert: " id))
+        (.execute pool #(display-alert pgm thumbnail)))
+      (trace (str "already alerted: " id)))))
 

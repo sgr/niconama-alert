@@ -286,11 +286,25 @@
       (if-let [row-pgm (get-pgm-aux (name id))] (row-to-pgm row-pgm) nil))
     nil))
 
-(defn update-alerted [^Keyword id]
-  (when-let [db (db)]
-    (jdbc/with-connection db
-      (jdbc/transaction
-       (jdbc/update-values :pgms ["id=?" (name id)] {:alerted true})))))
+(defn not-alerted
+  "まだアラートを出してない番組なら番組情報を返す。アラート済みならnilを返す。"
+  [^Keyword id]
+  (letfn [(update-alerted-aux [^String id]
+            (try
+              (jdbc/transaction
+               (let [result (jdbc/update-values :pgms ["id=? AND alerted=0" (name id)] {:alerted 1})]
+                 (if (= 1 (first result)) true false)))
+              (catch Exception e
+                (debug e (format "failed updating for " id))
+                false)))]
+    (if-let [db (db)]
+      (jdbc/with-connection db
+        (if (update-alerted-aux (name id))
+          (if-let [row-pgm (get-pgm-aux (name id))]
+            (row-to-pgm row-pgm)
+            (error (format "failed get-pgm: %s" (name id))))
+          nil))
+      nil)))
 
 (defn get-total []
   (if-let [db (db)]

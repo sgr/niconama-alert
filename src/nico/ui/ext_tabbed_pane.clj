@@ -209,7 +209,7 @@
             (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
               (when (get-in @(.state this) [:tab-prefs id-tab :alert])
                 (future
-                  (doseq [[id npgm] npgms] (al/alert-pgm id))))
+                  (doseq [[id npgm] npgms] (when-not (:alerted npgm) (al/alert-pgm id)))))
               (.setPgms content npgms)
               (.setTitle tab (format "%s (%d)" title (count npgms))))
             (.setTitle tab (format "%s (-)" title))))))))
