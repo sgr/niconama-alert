@@ -47,7 +47,7 @@
       (loop [max @counter]
 	(if (= 1 (.getCount @latch)) ;; pause中かどうか
 	  (do (.await @latch))
-	  (when (= 0 (rem @counter 3)) (run-rss-hooks :countdown @counter max)))
+	  (run-rss-hooks :countdown @counter max))
 	(if (= 0 @counter) ; カウント0かどうか
 	  (let [[result fetched total] (fetch-rss)]
 	    (set-counter (condp = result

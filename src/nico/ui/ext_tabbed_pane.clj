@@ -193,7 +193,8 @@
 	 (mousePressed [e])
 	 (mouseReleased [e]))))
     (pgm/add-pgms-hook :updated (fn [] (.updatePgms tpane))))
-  (nr/add-rss-hook :countdown (fn [count max] (.repaintTable (.getSelectedComponent this))))
+  (nr/add-rss-hook :countdown (fn [count max]
+                                (when (= 0 (rem count 3)) (.repaintTable (.getSelectedComponent this)))))
   (pgm/add-db-hook :shutdown (fn [] (.closeStatements this))))
 
 (defn- etp-updatePgms [this]
