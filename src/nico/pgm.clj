@@ -112,6 +112,7 @@
    :pmeta
    [:id :integer "GENERATED ALWAYS AS IDENTITY"]
    [:total :integer] ; 総番組数
+   [:called_at_hook_updated :timestamp] ; updatedフック呼び出し時刻
    [:last_cleaned_at :timestamp]))      ; 番組情報の最終クリーンアップ時刻
 
 (defn- init-db-aux [path]
@@ -121,7 +122,7 @@
             :create true}]
     (jdbc/with-connection db
       (create-pmeta)
-      (jdbc/insert-values :pmeta [:total :last_cleaned_at] [0 (tu/sql-now)])
+      (jdbc/insert-values :pmeta [:total :called_at_hook_updated :last_cleaned_at] [0 (tu/sql-now) (tu/sql-now)])
       (create-pgms)
       (create-comms)
       (create-imgs))))
@@ -174,13 +175,17 @@
   (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT * FROM pmeta WHERE id=?" 1]
     (get (first rs) k)))
 
-(let [called-at-hook-updated (ref (tu/now))] ;; フックを呼び出した最終時刻
-  (hu/defhook pgms :updated)
-  (defn- call-hook-updated []
-    (dosync
-     (when-not (tu/within? @called-at-hook-updated (tu/now) INTERVAL-UPDATE)
-       (run-pgms-hooks :updated)
-       (ref-set called-at-hook-updated (tu/now))))))
+(hu/defhook pgms :updated)
+(defn- call-hook-updated []
+  (when-let [db (db)]
+    (jdbc/with-connection db
+      (jdbc/transaction
+       (let [now (tu/sql-now)
+             result (jdbc/update-values :pmeta
+                                        ["id=1 AND DATEDIFF('SECOND',called_at_hook_updated,?) > ?"
+                                         now INTERVAL-UPDATE]
+                                        {:called_at_hook_updated now})]
+         (when (= 1 (first result)) (run-pgms-hooks :updated)))))))
 
 (let [old-total (atom -1)] ; DBへの問い合わせを抑制するため
   (defn set-total [total]
