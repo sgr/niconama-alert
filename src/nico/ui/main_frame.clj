@@ -51,11 +51,12 @@
 	  [e]
 	  (let [w (.getWidth frame), h (.getHeight frame)
 		p (.getLocationOnScreen frame), tp (.getTabPrefs tabbed-pane)]
+            (do-swing-and-wait (.setVisible frame false))
 	    (swap! (p/get-pref)
 		   assoc :window {:width w :height h :posx (.x p) :posy (.y p)} :tabs tp)
 	    (p/store-pref)
             (pgm/shutdown)
-	    (do-swing-and-wait (.setVisible frame false) (.dispose frame))))
+	    (do-swing-and-wait (.dispose frame))))
 	 (windowClosed [e] (System/exit 0))
 	 (windowOpened [e])
 	 (windowIconified [e])
