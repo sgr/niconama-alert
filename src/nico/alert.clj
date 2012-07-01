@@ -24,7 +24,8 @@
               (doto g2d
                 (.setRenderingHint RenderingHints/KEY_INTERPOLATION
                                    RenderingHints/VALUE_INTERPOLATION_BILINEAR)
-                (.drawImage img 0 0 width height nil))
+                (.drawImage img 0 0 width height nil)
+                (.dispose))
               nimg))]
     (ImageIcon. (adjust-img (pgm/get-comm-thumbnail comm_id) 64 64))))
 
@@ -87,6 +88,7 @@
               (do-swing-and-wait (doto adlg
                                    (.setVisible false)
                                    (.dispose)))
+              (.flush (.getImage thumbicn))
               (release-plat i plat))))
         (l/with-trace (str "waiting plats.." (:id pgm))
             (.sleep TimeUnit/SECONDS 5)
