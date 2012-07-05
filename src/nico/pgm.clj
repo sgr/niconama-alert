@@ -12,16 +12,18 @@
 	    [time-utils :as tu]
             [clojure.java.jdbc :as jdbc])
   (:import [clojure.lang Keyword]
-           [javax.imageio ImageIO]
+           [com.mchange.v2.c3p0 ComboPooledDataSource]
            [java.io ByteArrayInputStream File OutputStream]
+           [java.lang.management ManagementFactory]
            [java.sql Connection DriverManager SQLException Timestamp]
+           [java.util Calendar]
            [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
-           [com.mchange.v2.c3p0 ComboPooledDataSource]))
+           [javax.imageio ImageIO]))
 
 (def ^{:private true} NTHREADS 3) ;; 番組追加ワーカースレッド数
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
 
-(def ^{:private true} SCALE 1.14) ;; 番組最大保持数
+(def ^{:private true} SCALE 1.05) ;; 番組最大保持数
 (def ^{:private true} INTERVAL-CLEAN 180) ;; 古い番組情報を削除する間隔
 (def ^{:private true} INTERVAL-UPDATE 3) ;; 更新フック呼び出し間隔
 (def ^{:private true} INTERVAL-UPDATE-THUMBNAIL (* 24 3600)) ; サムネイル更新間隔
@@ -92,10 +94,10 @@
    [:category (varchar LEN_PGM_CATEGORY)]
    [:link (varchar LEN_PGM_LINK)]
    [:owner_name (varchar LEN_PGM_OWNER_NAME)]
-   [:member_only :smallint] ;; 1: true 0: false
+   [:member_only :boolean]
    [:type :smallint] ;; 0: community 1: channel 2: official
    [:comm_id (varchar LEN_COMM_ID)]
-   [:alerted :smallint] ;; 1: true 0: false
+   [:alerted :boolean]
    [:fetched_at :timestamp]
    [:updated_at :timestamp])
   (jdbc/do-commands "CREATE INDEX idx_pgms_id ON pgms(id)"
@@ -107,32 +109,25 @@
                     "CREATE INDEX idx_pgms_comm_id ON pgms(comm_id)"
                     "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"))
 
-(defn- create-pmeta []
-  (jdbc/create-table
-   :pmeta
-   [:id :integer "GENERATED ALWAYS AS IDENTITY"]
-   [:total :integer] ; 総番組数
-   [:called_at_hook_updated :timestamp] ; updatedフック呼び出し時刻
-   [:last_cleaned_at :timestamp]))      ; 番組情報の最終クリーンアップ時刻
-
-(defn- init-db-aux [path]
-  (let [db {:classname DB-CLASSNAME
-            :subprotocol "h2"
-            :subname (str "file:" path)
-            :create true}]
-    (jdbc/with-connection db
-      (create-pmeta)
-      (jdbc/insert-values :pmeta [:total :called_at_hook_updated :last_cleaned_at] [0 (tu/sql-now) (tu/sql-now)])
+(let [db {:classname DB-CLASSNAME
+          :subprotocol "h2"}]
+  (defn- create-db [path]
+    (jdbc/with-connection (assoc db :subname (format "file:%s;IGNORECASE=TRUE" path) :create true)
       (create-pgms)
       (create-comms)
-      (create-imgs))))
+      (create-imgs)))
+  (defn- shutdown-db [path]
+    (jdbc/with-connection (assoc db :subname (format "file:%s;IGNORECASE=TRUE" path))
+      (jdbc/do-commands "SHUTDOWN IMMEDIATELY"))))
 
 (defn- pool [path]
   (let [cpds (doto (ComboPooledDataSource.)
                (.setDriverClass DB-CLASSNAME)
-               (.setJdbcUrl (str "jdbc:h2:file:" path))
+               (.setJdbcUrl (format "jdbc:h2:file:%s;IGNORECASE=TRUE" path))
+               (.setMinPoolSize 0)
+               (.setInitialPoolSize 0)
                (.setMaxIdleTimeExcessConnections (* 2 60))
-               (.setMaxIdleTime 60))]
+               (.setMaxIdleTime 10))]
     {:datasource cpds}))
 
 (defn- delete-db-files [path]
@@ -150,7 +145,7 @@
   (hu/defhook db :shutdown)
   (defn init-db []
     (io/delete-all-files db-path)
-    (init-db-aux db-path)
+    (create-db db-path)
     (reset! pooled-db (pool db-path)))
   (defn shutdown []
     (run-db-hooks :shutdown)
@@ -161,42 +156,50 @@
         (.setMinPoolSize 0)
         (.setInitialPoolSize 0)
         (.setMaxIdleTime 1))
-      (.sleep TimeUnit/SECONDS 3)
+      (.sleep TimeUnit/SECONDS 5)
       (.close (:datasource d))
+;;      (shutdown-db db-path)
       (delete-db-files db-path)))
   (defn- db [] @pooled-db)
   (defn get-ro-conn []
-    (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:h2:file:%s" db-path))
+    (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:h2:file:%s;IGNORECASE=TRUE" db-path))
                     (.setReadOnly true))]
       (swap! ro-conns conj ro-conn)
       ro-conn)))
 
-(defn- get-pmeta [^Keyword k]
-  (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT * FROM pmeta WHERE id=?" 1]
-    (get (first rs) k)))
+(let [called_at (atom (tu/now))]
+  (hu/defhook pgms :updated)
+  (defn- call-hook-updated []
+    (let [now (tu/now)]
+      (when-not (tu/within? @called_at now INTERVAL-UPDATE)
+        (run-pgms-hooks :updated)
+        (reset! called_at now)))))
 
-(hu/defhook pgms :updated)
-(defn- call-hook-updated []
-  (when-let [db (db)]
+(defn- memory-usage []
+  (let [mbean (ManagementFactory/getMemoryMXBean)
+        husage (.getHeapMemoryUsage mbean)]
+    husage))
+(add-pgms-hook :updated #(let [u (memory-usage)]
+                           (debug (format "JVM memory usage: init(%d), used(%d), committed(%d), max(%d)"
+                                          (.getInit u) (.getUsed u) (.getCommitted u) (.getMax u)))))
+
+(defn- memory-h2 []
+  (if-let [db (db)]
     (jdbc/with-connection db
-      (jdbc/transaction
-       (let [now (tu/sql-now)
-             result (jdbc/update-values :pmeta
-                                        ["id=1 AND DATEDIFF('SECOND',called_at_hook_updated,?) > ?"
-                                         now INTERVAL-UPDATE]
-                                        {:called_at_hook_updated now})]
-         (when (= 1 (first result)) (run-pgms-hooks :updated)))))))
+      (jdbc/with-query-results rs [{:concurrency :read-only}
+                                   "SELECT MEMORY_FREE() AS free_kb, MEMORY_USED() AS used_kb"]
+        (first rs)))
+    {:free_kb nil, :used_kb nil}))
+(add-pgms-hook :updated #(let [{:keys [free_kb used_kb]} (memory-h2)]
+                           (debug (format "H2 memory usage: free_kb(%d), used_kb(%d), max(%d)"
+                                          free_kb used_kb (+ free_kb used_kb)))))
 
-(let [old-total (atom -1)] ; DBへの問い合わせを抑制するため
-  (defn set-total [total]
-    (when (not= @old-total total)
-      (when-let [db (db)]
-        (jdbc/with-connection db
-          (trace (format "set-total: %d -> %d" @old-total total))
-          (jdbc/transaction
-           (jdbc/update-values :pmeta ["id=?" 1] {:total total}))
-          (reset! old-total total)))
-      (call-hook-updated))))
+(let [total (atom -1)]
+  (defn set-total [ntotal]
+    (when-not (= @total ntotal)
+      (call-hook-updated)
+      (reset! total ntotal)))
+  (defn get-total [] @total))
 
 (defn- get-row-comm [^String comm_id]
   (if-let [db (db)]
@@ -206,7 +209,6 @@
             "SELECT id,comm_name,thumbnail,fetched_at,updated_at FROM comms WHERE id=?" comm_id]
         (first rs)))
     nil))
-
 
 (defn get-comm-thumbnail [^Keyword comm_id]
   (letfn [(store-thumbnail [comm_id img update]
@@ -263,11 +265,11 @@
      (:link row-pgm)
      (:thumbnail row-comm)
      (:owner_name row-pgm)
-     (if (= 1 (:member_only row-pgm)) true false)
+     (:member_only row-pgm)
      (condp = (:type row-pgm) 0 :community 1 :channel 2 :official)
      (:comm_name row-comm)
      (keyword (:comm_id row-pgm))
-     (if (= 1 (:alerted row-pgm)) true false)
+     (:alerted row-pgm)
      (tu/timestamp-to-date (:fetched_at row-pgm))
      (tu/timestamp-to-date (:updated_at row-pgm)))))
 
@@ -297,7 +299,7 @@
   (letfn [(update-alerted-aux [^String id]
             (try
               (jdbc/transaction
-               (let [result (jdbc/update-values :pgms ["id=? AND alerted=0" (name id)] {:alerted 1})]
+               (let [result (jdbc/update-values :pgms ["id=? AND alerted=FALSE" (name id)] {:alerted true})]
                  (if (= 1 (first result)) true false)))
               (catch Exception e
                 (debug e (format "failed updating for " id))
@@ -310,12 +312,6 @@
             (error (format "failed get-pgm: %s" (name id))))
           nil))
       nil)))
-
-(defn get-total []
-  (if-let [db (db)]
-    (jdbc/with-connection db
-      (get-pmeta :total))
-    -1))
 
 (defn- rem-pgm-by-id [^String pid]
   (jdbc/delete-rows :pgms ["id=?" pid]))
@@ -352,16 +348,17 @@
    :category (:category pgm)
    :link (:link pgm)
    :owner_name (s/trim-to (:owner_name pgm) LEN_PGM_OWNER_NAME)
-   :member_only (if (:member_only pgm) 1 0)
+   :member_only (:member_only pgm)
    :type (condp = (:type pgm) :community 0 :channel 1 :official 2)
    :comm_id (if-let [cid (:comm_id pgm)] (name cid) nil)
-   :alerted (if (:alerted pgm) 1 0)
+   :alerted (:alerted pgm)
    :fetched_at (tu/date-to-timestamp (:fetched_at pgm))
    :updated_at (tu/date-to-timestamp (:updated_at pgm))})
 
 
 (let [q (LinkedBlockingQueue.)
       last-updated (atom (tu/now))
+      last-cleaned (atom (tu/now))
       pool (proxy [ThreadPoolExecutor] [1 NTHREADS KEEP-ALIVE TimeUnit/SECONDS q]
              (afterExecute
                [r e]
@@ -374,25 +371,17 @@
   (defn adding-queue-size [] (.size q))
   (defn last-updated [] @last-updated)
   (letfn [(clean-old2 [num]
-            ;; 古い番組情報を削除する。derbyではサブクエリーが遅いので、自前で処理した方が速い。
-            (let [ids (jdbc/with-query-results rs [{:concurrency :read-only :max-rows num }
-                                                   "SELECT id FROM pgms ORDER BY updated_at"]
-                        (let [ids (atom [])]
-                          (doseq [r rs]
-                            (let [id (str \' (:id r) \')]
-                              (swap! ids conj id)))
-                          @ids))
-                  where-clause (str "id IN (" (apply str (interpose "," ids)) ")")]
-              (debug (format "cleaning old programs with WHERE-CLAUSE: '%s'" where-clause))
+            (let [start (Timestamp. (.getTimeInMillis (doto (Calendar/getInstance) (.add Calendar/MINUTE -30))))]
               (jdbc/transaction
-               (jdbc/delete-rows :pgms [where-clause])
-               (jdbc/update-values :pmeta ["id=?" 1] {:last_cleaned_at (tu/sql-now)}))))
+               (jdbc/delete-rows :pgms ["id IN (SELECT TOP ? id FROM pgms WHERE pubdate < ? ORDER BY updated_at)"
+                                        num start]))
+              (reset! last-cleaned (tu/now))))
           (clean-old1 []
             (when-let [db (db)]
               (try
                 (jdbc/with-connection db
-                  (when-not (tu/within? (tu/timestamp-to-date (get-pmeta :last_cleaned_at)) (tu/now) INTERVAL-CLEAN)
-                    (let [total (get-pmeta :total)
+                  (when-not (tu/within? @last-cleaned (tu/now) INTERVAL-CLEAN)
+                    (let [total (get-total)
                           cnt (count-pgms-aux)
                           threshold (int (* SCALE total))] ;; 総番組数のscale倍までは許容
                       (when (and (< 0 total) (< threshold cnt))
