@@ -4,6 +4,7 @@
   nico.ui.ext-tabbed-pane
   (:use [clojure.tools.swing-utils :only [do-swing do-swing-and-wait add-action-listener]])
   (:require [clojure.java.jdbc :as jdbc]
+            [concurrent-utils :as c]
             [time-utils :as tu]
 	    [nico.alert :as al]
             [nico.api :as api]
@@ -16,7 +17,8 @@
 	    [nico.ui.search-panel]
             [nico.ui.tab-component])
   (:import [java.awt.event MouseListener]
-	   [javax.swing JCheckBoxMenuItem JMenuItem JOptionPane JPopupMenu SwingUtilities]))
+	   [javax.swing JCheckBoxMenuItem JMenuItem JOptionPane JPopupMenu SwingUtilities]
+           [java.util.concurrent TimeUnit]))
 
 (gen-class
  :name nico.ui.ExtTabbedPane
@@ -172,9 +174,29 @@
 		  (doto (JMenuItem. "削除")
 		    (add-action-listener (confirm-rem-tab-fn this tab))))))))))
 
+(defn- etp-updatePgms [this]
+  (when (< 0 (pgm/count-pgms))
+    (doseq [idx (range 1 (.getTabCount this))]
+      (let [id-tab (.hashCode (.getTabComponentAt this idx))
+            tab (.getTabComponentAt this idx)
+            content (.getComponentAt this idx)
+            title (get-in @(.state this) [:tab-titles id-tab])
+            pstmt (get-in @(.state this) [:pstmts id-tab])]
+        (if (and pstmt (not (.isClosed pstmt)))
+          (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
+            (when (get-in @(.state this) [:tab-prefs id-tab :alert])
+              (future
+                (doseq [[id npgm] npgms] (when-not (:alerted npgm) (al/alert-pgm id)))))
+            (.setPgms content npgms)
+            (.setTitle tab (format "%s (%d)" title (count npgms))))
+          (.setTitle tab (format "%s (-)" title)))))))
+
+(defn- etp-getTabPrefs [this]
+  (let [tprefs (:tab-prefs @(.state this))]
+    (vec (map #(get tprefs (.hashCode (.getTabComponentAt this %))) (range 1 (.getTabCount this))))))
+
 (defn- etp-post-init [this]
-  (let [tpane this
-        spanel (nico.ui.SearchPanel.)]
+  (let [tpane this spanel (nico.ui.SearchPanel.)]
     (.setAddTabListener spanel (fn [ntpref] (.addTab tpane ntpref)))
     (doto tpane
       (.addTabSuper "検索" spanel)
@@ -191,30 +213,11 @@
 	 (mouseEntered [e])
 	 (mouseExited [e])
 	 (mousePressed [e])
-	 (mouseReleased [e]))))
-    (pgm/add-pgms-hook :updated (fn [] (.updatePgms tpane))))
+	 (mouseReleased [e])))))
+  (let [[queue pool] (c/periodic-executor 1 TimeUnit/SECONDS 3)]
+    (swap! (.state this) assoc :queue queue :pool pool))
+  (pgm/add-pgms-hook :updated (fn [] (.execute (:pool @(.state this)) #(.updatePgms this))))
   (nr/add-rss-hook :countdown (fn [count max]
                                 (when (= 0 (rem count 3)) (.repaintTable (.getSelectedComponent this)))))
   (pgm/add-db-hook :shutdown (fn [] (.closeStatements this))))
 
-(defn- etp-updatePgms [this]
-  (locking this
-    (when (< 0 (pgm/count-pgms))
-      (doseq [idx (range 1 (.getTabCount this))]
-        (let [id-tab (.hashCode (.getTabComponentAt this idx))
-              tab (.getTabComponentAt this idx)
-              content (.getComponentAt this idx)
-              title (get-in @(.state this) [:tab-titles id-tab])
-              pstmt (get-in @(.state this) [:pstmts id-tab])]
-          (if (and pstmt (not (.isClosed pstmt)))
-            (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
-              (when (get-in @(.state this) [:tab-prefs id-tab :alert])
-                (future
-                  (doseq [[id npgm] npgms] (when-not (:alerted npgm) (al/alert-pgm id)))))
-              (.setPgms content npgms)
-              (.setTitle tab (format "%s (%d)" title (count npgms))))
-            (.setTitle tab (format "%s (-)" title))))))))
-
-(defn- etp-getTabPrefs [this]
-  (let [tprefs (:tab-prefs @(.state this))]
-    (vec (map #(get tprefs (.hashCode (.getTabComponentAt this %))) (range 1 (.getTabCount this))))))

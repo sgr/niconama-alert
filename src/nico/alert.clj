@@ -4,18 +4,19 @@
   nico.alert
   (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
 	[clojure.tools.logging])
-  (:require [log-utils :as l]
+  (:require [concurrent-utils :as c]
+            [log-utils :as l]
             [time-utils :as tu]
 	    [nico.ui.alert-dlg :as uad]
 	    [nico.pgm :as pgm])
   (:import [java.awt GraphicsEnvironment RenderingHints]
 	   [java.awt.image BufferedImage]
            [javax.swing ImageIcon]
-           [java.util.concurrent LinkedBlockingQueue ThreadPoolExecutor TimeUnit]))
+           [java.util.concurrent TimeUnit]))
 
 (def ^{:private true} DISPLAY-TIME 20) ; アラートウィンドウの表示時間(秒)
 (def ^{:private true} KEEP-ALIVE 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
-(def ^{:private true} EXEC-INTERVAL 500) ; アラートウィンドウ表示処理の実行間隔(ミリ秒)
+(def ^{:private true} INTERVAL-DISPLAY 500) ; アラートウィンドウ表示処理の実行間隔(ミリ秒)
 
 (defn- comm-thumbnail [comm_id]
   (letfn [(adjust-img [img width height]
@@ -37,15 +38,8 @@
 		 {:used false, :x (- rw (* x aw)), :y (- rh (* y ah))})
 	      (for [x (range 1 (inc w)) y (range 1 (inc h))] [x y])))))
 
-(defn- periodic-executor [queue]
-  (proxy [ThreadPoolExecutor] [0 1 KEEP-ALIVE TimeUnit/SECONDS queue]
-    (beforeExecute
-      [t r]
-      (.sleep TimeUnit/MILLISECONDS EXEC-INTERVAL)
-      (proxy-super beforeExecute t r))))
-
 (let [plats (atom (divide-plats))	;; アラートダイアログの表示領域
-      pool (periodic-executor (LinkedBlockingQueue.))
+      [queue pool] (c/periodic-executor 1 TimeUnit/MILLISECONDS INTERVAL-DISPLAY)
       last-modified (atom (tu/now))]
   (defn- reserve-plat-aux [i]
     (if-not (:used (nth @plats i))
