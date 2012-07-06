@@ -130,6 +130,12 @@
                (.setMaxIdleTime 10))]
     {:datasource cpds}))
 
+(defmacro ^{:private true} with-conn-pool [pool-fn error-value & body]
+  `(if-let [db# (~pool-fn)]
+     (jdbc/with-connection db#
+       ~@body)
+     ~error-value))
+
 (defn- delete-db-files [path]
   (let [db-file           (str path ".h2.db")
         db-trace-file     (str path ".trace.db")
@@ -183,17 +189,6 @@
                            (debug (format "JVM memory usage: init(%d), used(%d), committed(%d), max(%d)"
                                           (.getInit u) (.getUsed u) (.getCommitted u) (.getMax u)))))
 
-(defn- memory-h2 []
-  (if-let [db (db)]
-    (jdbc/with-connection db
-      (jdbc/with-query-results rs [{:concurrency :read-only}
-                                   "SELECT MEMORY_FREE() AS free_kb, MEMORY_USED() AS used_kb"]
-        (first rs)))
-    {:free_kb nil, :used_kb nil}))
-(add-pgms-hook :updated #(let [{:keys [free_kb used_kb]} (memory-h2)]
-                           (debug (format "H2 memory usage: free_kb(%d), used_kb(%d), max(%d)"
-                                          free_kb used_kb (+ free_kb used_kb)))))
-
 (let [total (atom -1)]
   (defn set-total [ntotal]
     (when-not (= @total ntotal)
@@ -202,24 +197,22 @@
   (defn get-total [] @total))
 
 (defn- get-row-comm [^String comm_id]
-  (if-let [db (db)]
-    (jdbc/with-connection db
-      (jdbc/with-query-results
-        rs [{:concurrency :read-only}
-            "SELECT id,comm_name,thumbnail,fetched_at,updated_at FROM comms WHERE id=?" comm_id]
-        (first rs)))
-    nil))
+  (with-conn-pool db nil
+    (jdbc/with-query-results
+      rs [{:concurrency :read-only}
+          "SELECT id,comm_name,thumbnail,fetched_at,updated_at FROM comms WHERE id=?" comm_id]
+      (first rs))))
 
 (defn get-comm-thumbnail [^Keyword comm_id]
   (letfn [(store-thumbnail [comm_id img update]
-            (when-let [db (db)]
-              (jdbc/with-connection db
-                (let [now (tu/sql-now)]
-                  (if update
-                    (jdbc/update-values
-                     :imgs ["=id?" comm_id] {:img img :updated_at now})
-                    (jdbc/insert-record
-                     :imgs {:id comm_id :img img :fetched_at now :updated_at now}))))))
+            (with-conn-pool db nil
+              (jdbc/transaction
+               (let [now (tu/sql-now)]
+                 (if update
+                   (jdbc/update-values
+                    :imgs ["=id?" comm_id] {:img img :updated_at now})
+                   (jdbc/insert-record
+                    :imgs {:id comm_id :img img :fetched_at now :updated_at now}))))))
           (fetch-image-aux [url]
             (try
               (let [is (n/url-stream url)]
@@ -238,21 +231,19 @@
                      (catch Exception e (error e (format "failed reading image: %s" url)) NO-IMAGE)
                      (finally (.close bis))))
               NO-IMAGE))]
-    (if-let [db (db)]
-      (jdbc/with-connection db
-        (jdbc/with-query-results rs [{:concurrency :read-only}
-                                     "SELECT img,updated_at FROM imgs WHERE id=?" (name comm_id)]
-          (if-let [r (first rs)]
-            (if (tu/within? (tu/timestamp-to-date (:updated_at r)) (tu/now) INTERVAL-UPDATE-THUMBNAIL)
-              (let [blob (:img r)]
-                (if (and blob (< 0 (.length blob)))
-                  (let [bs (.getBinaryStream (:img r))]
-                    (try (ImageIO/read bs)
-                         (finally (.close bs) (.free blob))))
-                  NO-IMAGE))
-              (fetch-image (name comm_id) true))
-            (fetch-image (name comm_id) false))))
-      NO-IMAGE)))
+    (with-conn-pool db NO-IMAGE
+      (jdbc/with-query-results rs [{:concurrency :read-only}
+                                   "SELECT img,updated_at FROM imgs WHERE id=?" (name comm_id)]
+        (if-let [r (first rs)]
+          (if (tu/within? (tu/timestamp-to-date (:updated_at r)) (tu/now) INTERVAL-UPDATE-THUMBNAIL)
+            (let [blob (:img r)]
+              (if (and blob (< 0 (.length blob)))
+                (let [bs (.getBinaryStream (:img r))]
+                  (try (ImageIO/read bs)
+                       (finally (.close bs) (.free blob))))
+                NO-IMAGE))
+            (fetch-image (name comm_id) true))
+          (fetch-image (name comm_id) false))))))
 
 (defn- row-to-pgm [row-pgm]
   (let [row-comm (get-row-comm (:comm_id row-pgm))]
@@ -277,21 +268,15 @@
   (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT COUNT(*) AS cnt FROM pgms"]
     (:cnt (first rs))))
 
-(defn count-pgms []
-  (if-let [db (db)]
-    (jdbc/with-connection db
-      (count-pgms-aux))
-    -1))
+(defn count-pgms [] (with-conn-pool db -1 (count-pgms-aux)))
 
 (defn- get-pgm-aux [^String id]
   (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT * FROM pgms WHERE pgms.id=?" id]
     (first rs)))
 
 (defn get-pgm [^Keyword id]
-  (if-let [db (db)]
-    (jdbc/with-connection db
-      (if-let [row-pgm (get-pgm-aux (name id))] (row-to-pgm row-pgm) nil))
-    nil))
+  (with-conn-pool db nil
+    (if-let [row-pgm (get-pgm-aux (name id))] (row-to-pgm row-pgm) nil)))
 
 (defn not-alerted
   "まだアラートを出してない番組なら番組情報を返す。アラート済みならnilを返す。"
@@ -304,14 +289,12 @@
               (catch Exception e
                 (debug e (format "failed updating for " id))
                 false)))]
-    (if-let [db (db)]
-      (jdbc/with-connection db
-        (if (update-alerted-aux (name id))
-          (if-let [row-pgm (get-pgm-aux (name id))]
-            (row-to-pgm row-pgm)
-            (error (format "failed get-pgm: %s" (name id))))
-          nil))
-      nil)))
+    (with-conn-pool db nil
+      (if (update-alerted-aux (name id))
+        (if-let [row-pgm (get-pgm-aux (name id))]
+          (row-to-pgm row-pgm)
+          (error (format "failed get-pgm: %s" (name id))))
+        nil))))
 
 (defn- rem-pgm-by-id [^String pid]
   (jdbc/delete-rows :pgms ["id=?" pid]))
@@ -377,21 +360,20 @@
                                         num start]))
               (reset! last-cleaned (tu/now))))
           (clean-old1 []
-            (when-let [db (db)]
-              (try
-                (jdbc/with-connection db
-                  (when-not (tu/within? @last-cleaned (tu/now) INTERVAL-CLEAN)
-                    (let [total (get-total)
-                          cnt (count-pgms-aux)
-                          threshold (int (* SCALE total))] ;; 総番組数のscale倍までは許容
-                      (when (and (< 0 total) (< threshold cnt))
-                        ;; 更新時刻の古い順に多すぎる番組を削除する。
-                        (debug (format "cleaning old: %d -> %d" cnt threshold))
-                        (clean-old2 (- cnt threshold))
-                        (debug (format "cleaned old: %d -> %d" cnt (count-pgms-aux)))))))
-                (catch Exception e
-                  (error e (format "failed cleaning old programs: %s" (.getMessage e)))))
-              (call-hook-updated)))]
+            (try
+              (with-conn-pool db nil
+                (when-not (tu/within? @last-cleaned (tu/now) INTERVAL-CLEAN)
+                  (let [total (get-total)
+                        cnt (count-pgms-aux)
+                        threshold (int (* SCALE total))] ;; 総番組数のscale倍までは許容
+                    (when (and (< 0 total) (< threshold cnt))
+                      ;; 更新時刻の古い順に多すぎる番組を削除する。
+                      (debug (format "cleaning old: %d -> %d" cnt threshold))
+                      (clean-old2 (- cnt threshold))
+                      (debug (format "cleaned old: %d -> %d" cnt (count-pgms-aux)))))
+                  (call-hook-updated)))
+              (catch Exception e
+                (error e (format "failed cleaning old programs: %s" (.getMessage e))))))]
     (defn clean-old [] (.execute pool #(clean-old1))))
 
   (letfn [(add3 [^Pgm pgm]
@@ -399,13 +381,11 @@
                   row-comm (if comm_id (get-row-comm comm_id) nil)
                   now (tu/sql-now)]
               (trace (format "add pgm: %s" (name (:id pgm))))
-              ;; 番組情報を追加する
-              (try
+              (try ; 番組情報を追加する
                 (let [row (pgm-to-row pgm)]
                   (jdbc/insert-record :pgms row))
                 (catch Exception e (error e (format "failed to insert pgm: %s" (prn-str pgm)))))
-              ;; コミュニティ情報を更新または追加する
-              (try
+              (try ; コミュニティ情報を更新または追加する
                 (if row-comm
                   (jdbc/update-values :comms ["id=?" comm_id]
                                       {:comm_name (s/trim-to (:comm_name pgm) LEN_COMM_NAME)
@@ -436,13 +416,12 @@
                     nil) ; 自分のほうが古ければ追加は不要
                   (jdbc/transaction (add3 pgm))))))
           (add1 [^Pgm pgm]
-            (when-let [db (db)]
-              (try
-                (jdbc/with-connection db
-                  (add2 pgm))
-                (catch Exception e
-                  (error e (format "failed adding program (%s) %s" (name (:id pgm)) (:title pgm)))))
-              (call-hook-updated)))]
+            (try
+              (with-conn-pool db nil
+                (add2 pgm)
+                (call-hook-updated))
+              (catch Exception e
+                (error e (format "failed adding program (%s) %s" (name (:id pgm)) (:title pgm))))))]
     (defn add [^Pgm pgm] (.execute pool #(add1 pgm)))))
 
 (defn- rs-to-pgms [rs]
@@ -466,11 +445,9 @@
     (str "SELECT * FROM pgms JOIN comms ON pgms.comm_id=comms.id WHERE " where-clause)))
 
 (defn- search-pgms-by-sql [sql]
-  (if-let [db (db)]
-    (jdbc/with-connection db
-      (jdbc/with-query-results rs [{:concurrency :read-only} sql]
-        (rs-to-pgms rs)))
-    nil))
+  (with-conn-pool db nil
+    (jdbc/with-query-results rs [{:concurrency :read-only} sql]
+      (rs-to-pgms rs))))
 
 (defn search-pgms-by-comm-id [comm_ids]
   (search-pgms-by-sql (get-sql-comm-id comm_ids)))
