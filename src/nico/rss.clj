@@ -11,6 +11,7 @@
 	    [clojure.data.zip.xml :as dzx]
 	    [clj-http.client :as client]
 	    [nico.pgm :as pgm]
+            [nico.api-updator :as api]
             [log-utils :as l]
 	    [net-utils :as n]
 	    [str-utils :as s]
@@ -26,7 +27,13 @@
   (try
     (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/recent/rss?p=%s" page)
                                           n/HTTP-OPTS)]
-      (-> raw-res :body s/cleanup s/utf8stream xml/parse))
+      (let [rss (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
+        (when (some #(let [title (-> % :content first :content first)]
+                       (if (nil? title) (do (warn title) true) false))
+                  (for [x (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
+                        :when (= :item (:tag (first x)))] (first x)))
+          (warn (format "contains NIL TITLE: %s" (pr-str raw-res))))
+        rss))
     (catch Exception e
       (error e (format "failed fetching RSS #%d" page)) nil)))
 
@@ -88,9 +95,12 @@
   [(get-programs-count rss)
    (for [item (for [x (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
 		    :when (= :item (:tag (first x)))] (first x))]
-     (let [pgm (create-pgm item (tu/now))]
+     (let [now (tu/now)
+           pgm (create-pgm item now)]
        (when (some nil? (list (:id pgm) (:title pgm) (:pubdate pgm)))
-	 (warn (format "Some nil properties found in: %s" (pr-str pgm))))
+         (warn (format "Some nil properties found in: %s" (pr-str item)))
+         (when-not (pgm/get-pgm (:id pgm))
+           (api/request-fetch (name (:id pgm)) (name (:comm_id pgm)) now)))
        pgm))])
 
 (defn get-programs-from-rss [page]

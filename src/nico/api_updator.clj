@@ -96,12 +96,6 @@
     (pgm/add pgm))
   (defn- create-executor [nthreads queue]
     (proxy [ThreadPoolExecutor] [0 nthreads KEEP-ALIVE TimeUnit/SECONDS queue]
-      (beforeExecute
-       [t r]
-       (when (= 1 (.getCount @latch))
-	 (do (debug "disconnected. awaiting reconnect...")
-	     (.await @latch)
-	     (debug "reconnected. fetching program information..."))))
       (afterExecute
        [r e]
        (when (and (nil? e) (instance? nico.api-updator.WrappedFutureTask r))
@@ -125,6 +119,12 @@
 	  (l/with-trace (format "%s: %s is joined community." pid cid)
             (.execute comm-executor task))
 	  (trace (format "%s: %s isn't your community." pid cid)))))
+    (defn request-fetch
+      "RSSでタイトルが空の場合('<'を含んだ場合になるようだ)など、
+       どうしてもスクレイピングで番組情報を取得したい場合に用いる。"
+      [pid cid received]
+      (debug (format "request fetching %s %s %s" pid cid received))
+      (.execute comm-executor (nico.api-updator.WrappedFutureTask. pid cid nil received)))
     (defn- update-api-aux []
       (try
 	(api/listen (first (vals @alert-statuses)) (fn [] (run-api-hooks :connected)) create-task)
