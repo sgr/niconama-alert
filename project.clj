@@ -1,4 +1,4 @@
-(defproject nicoalert "1.5.0-rc2"
+(defproject nicoalert "1.5.0-rc3"
   :description "Niconama Alert J"
   :dependencies [[org.clojure/clojure "1.4.0"]
                  [org.clojure/data.zip "0.1.1"]
