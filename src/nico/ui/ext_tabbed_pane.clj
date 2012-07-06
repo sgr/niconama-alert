@@ -29,10 +29,7 @@
  :init init
  :post-init post-init
  :exposes-methods {addTab addTabSuper}
- :methods [[addTab [clojure.lang.IPersistentMap] void]
-           [addTabs [clojure.lang.IPersistentVector] void]
-           [closeStatements [] void]
-	   [updatePgms [] void]
+ :methods [[addTabs [clojure.lang.IPersistentVector] void]
 	   [getTabMenuItems [int] clojure.lang.IPersistentVector]
 	   [getTabPrefs [] clojure.lang.IPersistentVector]])
 
@@ -41,17 +38,6 @@
              :tab-titles {}
              :conn (delay (pgm/get-ro-conn))
              :pstmts {}})])
-
-(defn- set-tab-statement [tpane tab sql]
-  (let [id-tab (.hashCode tab) conn @(:conn @(.state tpane))]
-    (when-let [old-pstmt (get-in @(.state tpane) [:pstmts id-tab])] (.close old-pstmt))
-    (when conn
-      (let [pstmt (jdbc/prepare-statement conn sql :concurrency :read-only)]
-        (swap! (.state tpane) assoc-in [:pstmts id-tab] pstmt)))))
-
-(defn- etp-closeStatements [this]
-  (doseq [pstmt (vals (:pstmts @(.state this)))] (.close pstmt))
-  (swap! (.state this) assoc :pstmts {}))
 
 (defn- confirm-rem-tab-fn [tpane tab]
   (fn [e]
@@ -75,6 +61,33 @@
         [user-name (pgm/get-sql-comm-id comms)]))
     ["login failed" nil]))
 
+(defn- update-tab [tpane idx]
+  (let [id-tab (.hashCode (.getTabComponentAt tpane idx))
+        tab (.getTabComponentAt tpane idx)
+        content (.getComponentAt tpane idx)
+        title (get-in @(.state tpane) [:tab-titles id-tab])
+        pstmt (get-in @(.state tpane) [:pstmts id-tab])]
+    (if (and pstmt (not (.isClosed pstmt)))
+      (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
+        (when (get-in @(.state tpane) [:tab-prefs id-tab :alert])
+          (future
+            (doseq [[id npgm] npgms] (when-not (:alerted npgm) (al/alert-pgm id)))))
+        (.setPgms content npgms)
+        (.setTitle tab (format "%s (%d)" title (count npgms))))
+      (.setTitle tab (format "%s (-)" title)))))
+
+(defn- update-tabs [tpane]
+  (when (< 0 (pgm/count-pgms))
+    (doseq [idx (range 1 (.getTabCount tpane))]
+      (update-tab tpane idx))))
+
+(defn- set-tab-statement [tpane tab sql]
+  (let [id-tab (.hashCode tab) conn @(:conn @(.state tpane))]
+    (when-let [old-pstmt (get-in @(.state tpane) [:pstmts id-tab])] (.close old-pstmt))
+    (when conn
+      (let [pstmt (jdbc/prepare-statement conn sql :concurrency :read-only)]
+        (swap! (.state tpane) assoc-in [:pstmts id-tab] pstmt)))))
+
 (defn- update-tab-title [tpane tab title]
   (swap! (.state tpane) update-in [:tab-titles (.hashCode tab)] (fn [_] title)))
 
@@ -92,23 +105,24 @@
       :kwd  (do (.setTitle tab (:title pref))
                 (update-tab-title tpane tab (:title pref))
                 (let [sql (pgm/get-sql-kwds (:query pref) (:target pref))]
-                  (set-tab-statement tpane tab sql))))))
+                  (set-tab-statement tpane tab sql))))
+    (.execute (:pool @(.state tpane)) #(update-tab tpane idx))))
 
-(defn- etp-addTab [this pref]
+(defn- add-tab [tpane pref]
   (when (or (= :kwd (:type pref)) (= :comm (:type pref)))
     (let [tab     (nico.ui.TabComponent. (:type pref))
           content (nico.ui.ProgramsPanel.)
           id-tab  (.hashCode tab)]
-      (swap! (.state this) assoc-in [:tab-prefs id-tab] pref)
-      (.addCloseButtonListener tab (confirm-rem-tab-fn this tab))
+      (swap! (.state tpane) assoc-in [:tab-prefs id-tab] pref)
+      (.addCloseButtonListener tab (confirm-rem-tab-fn tpane tab))
       (do-swing-and-wait
-        (.addTabSuper this nil content))
+        (.addTabSuper tpane nil content))
       (do-swing-and-wait
-        (.setTabComponentAt this (.indexOfComponent this content) tab))
-      (update-tab-pref this tab pref))))
+        (.setTabComponentAt tpane (.indexOfComponent tpane content) tab))
+      (update-tab-pref tpane tab pref))))
 
 (defn- etp-addTabs [this prefs]
-  (doseq [pref prefs] (.addTab this pref)))
+  (doseq [pref prefs] (add-tab this pref)))
 
 (defn- tabmenu-items-aux [tpane tab]
   (let [pref (get-in @(.state tpane) [:tab-prefs (.hashCode tab)])]
@@ -119,8 +133,7 @@
               (doto ritem
                 (add-action-listener
                  (fn [e]
-                   (update-tab-pref tpane tab pref)
-                   (.updatePgms tpane))))
+                   (update-tab-pref tpane tab pref))))
               (doto eitem
                 (add-action-listener
                  (fn [e] (let [dlg (ukvd/user-password-dialog
@@ -146,6 +159,10 @@
                           (update-tab-pref tpane tab (assoc pref :alert val))))))
              [aitem eitem])
       nil)))
+
+(defn- close-statements [tpane]
+  (doseq [pstmt (vals (:pstmts @(.state tpane)))] (.close pstmt))
+  (swap! (.state tpane) assoc :pstmts {}))
 
 (defn- etp-getTabMenuItems [this idx]
   (when-not (= 0 idx)
@@ -174,23 +191,6 @@
 		  (doto (JMenuItem. "削除")
 		    (add-action-listener (confirm-rem-tab-fn this tab))))))))))
 
-(defn- etp-updatePgms [this]
-  (when (< 0 (pgm/count-pgms))
-    (doseq [idx (range 1 (.getTabCount this))]
-      (let [id-tab (.hashCode (.getTabComponentAt this idx))
-            tab (.getTabComponentAt this idx)
-            content (.getComponentAt this idx)
-            title (get-in @(.state this) [:tab-titles id-tab])
-            pstmt (get-in @(.state this) [:pstmts id-tab])]
-        (if (and pstmt (not (.isClosed pstmt)))
-          (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
-            (when (get-in @(.state this) [:tab-prefs id-tab :alert])
-              (future
-                (doseq [[id npgm] npgms] (when-not (:alerted npgm) (al/alert-pgm id)))))
-            (.setPgms content npgms)
-            (.setTitle tab (format "%s (%d)" title (count npgms))))
-          (.setTitle tab (format "%s (-)" title)))))))
-
 (defn- etp-getTabPrefs [this]
   (let [tprefs (:tab-prefs @(.state this))]
     (vec (map #(get tprefs (.hashCode (.getTabComponentAt this %))) (range 1 (.getTabCount this))))))
@@ -216,8 +216,8 @@
 	 (mouseReleased [e])))))
   (let [[queue pool] (c/periodic-executor 1 TimeUnit/SECONDS 3)]
     (swap! (.state this) assoc :queue queue :pool pool))
-  (pgm/add-pgms-hook :updated (fn [] (.execute (:pool @(.state this)) #(.updatePgms this))))
+  (pgm/add-pgms-hook :updated (fn [] (.execute (:pool @(.state this)) #(update-tabs this))))
   (nr/add-rss-hook :countdown (fn [count max]
                                 (when (= 0 (rem count 3)) (.repaintTable (.getSelectedComponent this)))))
-  (pgm/add-db-hook :shutdown (fn [] (.closeStatements this))))
+  (pgm/add-db-hook :shutdown (fn [] (close-statements this))))
 
