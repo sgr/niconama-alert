@@ -29,7 +29,8 @@
  :init init
  :post-init post-init
  :exposes-methods {addTab addTabSuper}
- :methods [[addTabs [clojure.lang.IPersistentVector] void]
+ :methods [[addTab [clojure.lang.PersistentArrayMap] void]
+           [addTabs [clojure.lang.IPersistentVector] void]
 	   [getTabMenuItems [int] clojure.lang.IPersistentVector]
 	   [getTabPrefs [] clojure.lang.IPersistentVector]])
 
@@ -108,21 +109,21 @@
                   (set-tab-statement tpane tab sql))))
     (.execute (:pool @(.state tpane)) #(update-tab tpane idx))))
 
-(defn- add-tab [tpane pref]
+(defn- etp-addTab [this pref]
   (when (or (= :kwd (:type pref)) (= :comm (:type pref)))
     (let [tab     (nico.ui.TabComponent. (:type pref))
           content (nico.ui.ProgramsPanel.)
           id-tab  (.hashCode tab)]
-      (swap! (.state tpane) assoc-in [:tab-prefs id-tab] pref)
-      (.addCloseButtonListener tab (confirm-rem-tab-fn tpane tab))
+      (swap! (.state this) assoc-in [:tab-prefs id-tab] pref)
+      (.addCloseButtonListener tab (confirm-rem-tab-fn this tab))
       (do-swing-and-wait
-        (.addTabSuper tpane nil content))
+        (.addTabSuper this nil content))
       (do-swing-and-wait
-        (.setTabComponentAt tpane (.indexOfComponent tpane content) tab))
-      (update-tab-pref tpane tab pref))))
+        (.setTabComponentAt this (.indexOfComponent this content) tab))
+      (update-tab-pref this tab pref))))
 
 (defn- etp-addTabs [this prefs]
-  (doseq [pref prefs] (add-tab this pref)))
+  (doseq [pref prefs] (.addTab this pref)))
 
 (defn- tabmenu-items-aux [tpane tab]
   (let [pref (get-in @(.state tpane) [:tab-prefs (.hashCode tab)])]
