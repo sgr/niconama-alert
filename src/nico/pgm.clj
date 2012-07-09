@@ -125,9 +125,10 @@
                (.setDriverClass DB-CLASSNAME)
                (.setJdbcUrl (format "jdbc:h2:file:%s;IGNORECASE=TRUE" path))
                (.setMinPoolSize 0)
+;;             (.setMaxPoolSize 3)
                (.setInitialPoolSize 0)
-               (.setMaxIdleTimeExcessConnections (* 2 60))
-               (.setMaxIdleTime 10))]
+               (.setMaxIdleTime 3)
+               (.setMaxIdleTimeExcessConnections 3))]
     {:datasource cpds}))
 
 (defmacro ^{:private true} with-conn-pool [pool-fn error-value & body]
@@ -180,6 +181,13 @@
       (when-not (tu/within? @called_at now INTERVAL-UPDATE)
         (run-pgms-hooks :updated)
         (reset! called_at now)))))
+
+(add-pgms-hook :updated #(when-let [db (db)]
+                           (let [ds (:datasource db)]
+                             (debug (format "Datasource: busy(%d), idle(%d), conns(%d)"
+                                            (.getNumBusyConnections ds)
+                                            (.getNumIdleConnections ds)
+                                            (.getNumConnections ds))))))
 
 (defn- memory-usage []
   (let [mbean (ManagementFactory/getMemoryMXBean)
