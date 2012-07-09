@@ -2,6 +2,7 @@
 (ns #^{:author "sgr"
        :doc "クエリー操作"}
   query-utils
+  (:use [clojure.tools.logging])
   (:require [clojure.string :as s])
   (:import [java.util Stack]))
 
@@ -18,7 +19,7 @@
     stack
     (let [token (let [str-token (s/lower-case (s/join token))]
                   (if (= 0 (count (peek stack)))
-                    (condp = str-token "and" :and "or" :or "not" :not)
+                    (condp = str-token "and" :and "or" :or "not" :not str-token)
                     str-token))]
       (conj (pop stack) (conj (peek stack) token)))))
 
@@ -27,7 +28,10 @@
                 (conj-top-stack stack (s/join token))
                 stack)]
     (if (= 1 (count stack))
-      (apply list (peek stack))
+      (let [s (peek stack)]
+        (if (= 1 (count s))
+          (first s)
+          (conj (apply list s) :and)))
       (throw (IllegalArgumentException.
               (format "spurious open paren or missing close: %d" (count stack)))))))
 
@@ -40,12 +44,9 @@
              []))
 
 (defn- check-close [src stack token]
-  (cond (= 1 (count stack))
-        (let [f (peek stack)
-              s (if (< 0 (count token))
-                  (list (apply list (conj f (s/join token))))
-                  (list (apply list f)))]
-          #(in-space (rest src) s []))
+  (cond (= 1 (count stack)) (throw (IllegalArgumentException.
+                                    (format "spurious close paren or missing open: %s"
+                                            (pr-str (peek stack)))))
         (< 1 (count stack))
         (let [s1 (peek stack)
               s2 (second stack)
@@ -84,7 +85,7 @@
 				#(in-quote (rest rsrc) stack (conj token (first rsrc))))
 	:else                 #(in-quote (rest src) stack (conj token (first src)))))
 
-(defn- readq [^String q-str] (trampoline (in-space (char-array q-str) '([:and]) [])))
+(defn- readq [^String q-str] (trampoline (in-space (char-array q-str) '([]) [])))
 
 (def ^{:private true} prefixes #{:not})
 (def ^{:private true} infixes #{:and :or})
@@ -108,6 +109,7 @@
   "prefix->infix for translating text matching query to SQL WHERE-CLAUSE using LIKE"
   [q-str columns]
   (let [q (readq q-str)]
+    (debug (format "read query: %s" (pr-str q)))
     (cond (< 1 (count columns))
           (s/join " or " (for [c columns] (to-where-clause-aux q c)))
           (= 1 (count columns))
