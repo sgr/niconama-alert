@@ -77,7 +77,7 @@
   (jdbc/do-commands "CREATE INDEX idx_imgs_id ON imgs(id)"
                     "CREATE INDEX idx_imgs_updated_at ON imgs(updated_at)"))
 
-(def ^{:private true} LEN_PGM_ID          10)
+(def ^{:private true} LEN_PGM_ID          12)
 (def ^{:private true} LEN_PGM_TITLE       64)
 (def ^{:private true} LEN_PGM_DESCRIPTION 256)
 (def ^{:private true} LEN_PGM_CATEGORY    24)
@@ -117,15 +117,17 @@
       (create-comms)
       (create-imgs)))
   (defn- shutdown-db [path]
-    (jdbc/with-connection (assoc db :subname (format "file:%s;IGNORECASE=TRUE" path))
-      (jdbc/do-commands "SHUTDOWN IMMEDIATELY"))))
+    (try
+      (jdbc/with-connection (assoc db :subname (format "file:%s;IGNORECASE=TRUE" path))
+        (jdbc/do-commands "SHUTDOWN IMMEDIATELY"))
+      (catch Exception e
+        (warn e "shutdown db")))))
 
 (defn- pool [path]
   (let [cpds (doto (ComboPooledDataSource.)
                (.setDriverClass DB-CLASSNAME)
                (.setJdbcUrl (format "jdbc:h2:file:%s;IGNORECASE=TRUE" path))
                (.setMinPoolSize 0)
-;;             (.setMaxPoolSize 3)
                (.setInitialPoolSize 0)
                (.setMaxIdleTime 3)
                (.setMaxIdleTimeExcessConnections 3))]
@@ -146,6 +148,12 @@
     (doseq [f [db-file db-trace-file db-trace-old-file db-lobs-file db-lock-file]]
       (io/delete-all-files f))))
 
+(defn- pool-status [pooled-db]
+  (let [ds (:datasource pooled-db)]
+    [(.getNumBusyConnections ds)
+     (.getNumIdleConnections ds)
+     (.getNumConnections ds)]))
+
 (let [db-path (io/temp-file-name "nico-")
       ro-conns (atom [])
       pooled-db (atom nil)]
@@ -159,12 +167,20 @@
     (let [d @pooled-db]
       (reset! pooled-db nil)
       (doseq [ro-conn @ro-conns] (.close ro-conn))
-      (doto (:datasource d)
-        (.setMinPoolSize 0)
+       (doto (:datasource d)
         (.setInitialPoolSize 0)
+        (.setMinPoolSize 0)
         (.setMaxIdleTime 1))
-      (.sleep TimeUnit/SECONDS 5)
-      (.close (:datasource d))
+      (loop [[bc ic nc] (pool-status d)]
+        (if (< 0 nc)
+          (do (debug (format "waiting for closing connections: %d/%d/%d" bc ic nc))
+              (.sleep TimeUnit/MILLISECONDS 500)
+              (recur (pool-status d)))
+          (debug (format "all connections were closed: %d/%d/%d" bc ic nc))))
+      (doto (:datasource d)
+        (.hardReset)
+        (.close))
+      (.sleep TimeUnit/SECONDS 1)
 ;;      (shutdown-db db-path)
       (delete-db-files db-path)))
   (defn- db [] @pooled-db)
@@ -183,11 +199,8 @@
         (reset! called_at now)))))
 
 (add-pgms-hook :updated #(when-let [db (db)]
-                           (let [ds (:datasource db)]
-                             (debug (format "Datasource: busy(%d), idle(%d), conns(%d)"
-                                            (.getNumBusyConnections ds)
-                                            (.getNumIdleConnections ds)
-                                            (.getNumConnections ds))))))
+                           (let [[bc ic nc] (pool-status db)]
+                             (debug (format "Datasource: busy(%d), idle(%d), conns(%d)" bc ic nc)))))
 
 (defn- memory-usage []
   (let [mbean (ManagementFactory/getMemoryMXBean)
