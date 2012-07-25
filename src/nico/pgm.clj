@@ -3,22 +3,21 @@
        :doc "ニコニコ生放送の番組情報とその操作"}
   nico.pgm
   (:use [clojure.tools.logging])
-  (:require [hook-utils :as hu]
+  (:require [clojure.java.jdbc :as jdbc]
+            [hook-utils :as hu]
             [io-utils :as io]
             [log-utils :as l]
-            [net-utils :as n]
             [query-utils :as q]
             [str-utils :as s]
 	    [time-utils :as tu]
-            [clojure.java.jdbc :as jdbc])
+            [nico.thumbnail :as thumbnail])
   (:import [clojure.lang Keyword]
            [com.mchange.v2.c3p0 ComboPooledDataSource]
-           [java.io ByteArrayInputStream File OutputStream]
            [java.lang.management ManagementFactory]
            [java.sql Connection DriverManager SQLException Timestamp]
            [java.util Calendar]
            [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
-           [javax.imageio ImageIO]))
+           [javax.swing ImageIcon]))
 
 (def ^{:private true} NTHREADS 3) ;; 番組追加ワーカースレッド数
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
@@ -27,8 +26,6 @@
 (def ^{:private true} INTERVAL-CLEAN 180) ;; 古い番組情報を削除する間隔
 (def ^{:private true} INTERVAL-UPDATE 3) ;; 更新フック呼び出し間隔
 (def ^{:private true} INTERVAL-UPDATE-THUMBNAIL (* 24 3600)) ; サムネイル更新間隔
-
-(def ^{:private true} NO-IMAGE (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
 
 (def ^{:private true} DB-CLASSNAME "org.h2.Driver")
 
@@ -225,46 +222,38 @@
       (first rs))))
 
 (defn get-comm-thumbnail [^Keyword comm_id]
-  (letfn [(store-thumbnail [comm_id img update]
+  (letfn [(store-thumbnail [comm_id img-bytes update]
             (with-conn-pool db nil
               (jdbc/transaction
                (let [now (tu/sql-now)]
                  (if update
                    (jdbc/update-values
-                    :imgs ["=id?" comm_id] {:img img :updated_at now})
+                    :imgs ["=id?" comm_id] {:img img-bytes :updated_at now})
                    (jdbc/insert-record
-                    :imgs {:id comm_id :img img :fetched_at now :updated_at now}))))))
-          (fetch-image-aux [url]
-            (try
-              (let [is (n/url-stream url)]
-                (try (io/input-stream-to-bytes is)
-                     (finally (when is (.close is)))))
-              (catch Exception e
-                (warn (format "failed open inputstream from %s: %s" url (.getMessage e)))
-                nil)))
+                    :imgs {:id comm_id :img img-bytes :fetched_at now :updated_at now}))))))
           (fetch-image [comm_id update]
             (if-let [row-comm (get-row-comm comm_id)]
               (let [url (:thumbnail row-comm)
-                    img (fetch-image-aux url)
-                    bis (ByteArrayInputStream. img)]
-                (future (store-thumbnail comm_id img update))
-                (try (ImageIO/read bis)
-                     (catch Exception e (error e (format "failed reading image: %s" url)) NO-IMAGE)
-                     (finally (.close bis))))
-              NO-IMAGE))]
-    (with-conn-pool db NO-IMAGE
+                    img (thumbnail/fetch url)
+                    img-bytes (thumbnail/to-bytes img)]
+                (future (store-thumbnail comm_id img-bytes update))
+                img)
+              thumbnail/NO-IMAGE))]
+    (with-conn-pool db thumbnail/NO-IMAGE
       (jdbc/with-query-results rs [{:concurrency :read-only}
                                    "SELECT img,updated_at FROM imgs WHERE id=?" (name comm_id)]
         (if-let [r (first rs)]
           (if (tu/within? (tu/timestamp-to-date (:updated_at r)) (tu/now) INTERVAL-UPDATE-THUMBNAIL)
             (let [blob (:img r)]
               (if (and blob (< 0 (.length blob)))
-                (let [bs (.getBinaryStream (:img r))]
-                  (try (ImageIO/read bs)
-                       (finally (.close bs) (.free blob))))
-                NO-IMAGE))
-            (fetch-image (name comm_id) true))
-          (fetch-image (name comm_id) false))))))
+                (let [bs (.getBinaryStream (:img r))
+                      bimg (io/input-stream-to-bytes bs)]
+                  (try (ImageIcon. bimg)
+                       (finally (.close bs)
+                                (.free blob))))
+                thumbnail/NO-IMAGE))
+            (ImageIcon. (fetch-image (name comm_id) true)))
+          (ImageIcon. (fetch-image (name comm_id) false)))))))
 
 (defn- row-to-pgm [row-pgm]
   (let [row-comm (get-row-comm (:comm_id row-pgm))]

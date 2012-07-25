@@ -9,26 +9,13 @@
             [time-utils :as tu]
 	    [nico.ui.alert-dlg :as uad]
 	    [nico.pgm :as pgm])
-  (:import [java.awt GraphicsEnvironment RenderingHints]
-	   [java.awt.image BufferedImage]
+  (:import [java.awt GraphicsEnvironment]
            [javax.swing ImageIcon]
            [java.util.concurrent TimeUnit]))
 
 (def ^{:private true} DISPLAY-TIME 20) ; アラートウィンドウの表示時間(秒)
 (def ^{:private true} KEEP-ALIVE 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
 (def ^{:private true} INTERVAL-DISPLAY 500) ; アラートウィンドウ表示処理の実行間隔(ミリ秒)
-
-(defn- comm-thumbnail [comm_id]
-  (letfn [(adjust-img [img width height]
-            (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
-                  g2d (.createGraphics nimg)]
-              (doto g2d
-                (.setRenderingHint RenderingHints/KEY_INTERPOLATION
-                                   RenderingHints/VALUE_INTERPOLATION_BILINEAR)
-                (.drawImage img 0 0 width height nil)
-                (.dispose))
-              nimg))]
-    (ImageIcon. (adjust-img (pgm/get-comm-thumbnail comm_id) 64 64))))
 
 (defn- divide-plats []
   (let [r (.getMaximumWindowBounds (GraphicsEnvironment/getLocalGraphicsEnvironment))
@@ -89,7 +76,7 @@
             (recur pgm thumbicn)))))
   (defn alert-pgm [id]
     (if-let [pgm (pgm/not-alerted id)]
-      (let [thumbnail (comm-thumbnail (:comm_id pgm))]
+      (let [thumbnail (pgm/get-comm-thumbnail (:comm_id pgm))]
         (trace (str "alert: " id))
         (.execute pool #(display-alert pgm thumbnail)))
       (trace (str "already alerted: " id)))))

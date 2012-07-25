@@ -9,7 +9,7 @@
 
 (defn- byte-buf [len] (byte-array len (repeat len (byte 0))))
 
-(defn input-stream-to-bytes [is]
+(defn input-stream-to-bytes [^java.io.InputStream is]
   (let [buf-size 1024
         buf (byte-buf buf-size)
         bos (ByteArrayOutputStream.)]
