@@ -25,6 +25,11 @@
     (.delete f)
     (.getCanonicalPath f)))
 
+(defn- delete [^File f]
+  (let [result (.delete f)]
+    (debug (format "deleting %s: %s" (.getAbsolutePath f) result))
+    (when-not result (.deleteOnExit f))))
+
 (defn delete-all-files
   "If the path describes a file, it will be deleted only.
    If the path describes a directory, both itself and containing files will be deleted recursively."
@@ -34,7 +39,6 @@
       (if (.isDirectory f)
         (l/with-debug (format "deleting all children of %s"  path)
           (doseq [c (.listFiles f)] (delete-all-files c))
-          (let [result (.delete f)]
-            (debug (format "deleting directory: %s -> %s" path result))))
-        (let [result (.delete f)]
-          (debug (format "deleting file: %s -> %s" path result)))))))
+          (delete f))
+        (delete f)))))
+
