@@ -96,14 +96,14 @@
     ;; res_fromを-1200にすると、全ての番組を取得するらしい。
     (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
 		    (:thrd alert-status))]
-      (.write wtr q) (.flush wtr)
+      (doto wtr (.write q) (.flush))
       (connected-fn)
       (loop [c (.read rdr) s nil]
 	(condp = c
 	    -1 (info "******* Connection closed *******")
 	    0  (let [received (tu/now)]
 		 (if-let [[date id cid uid] (parse-chat-str s)]
-		   (let [pid (str "lv" id)] (create-task-fn pid cid uid received))
+		   (create-task-fn (str "lv" id) cid uid received)
 		   (warn (format "couldn't parse the chat str: %s" s)))
 		 (recur (.read rdr) nil))
 	    (recur (.read rdr) (str s (char c))))))))
