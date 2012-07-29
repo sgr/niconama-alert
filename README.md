@@ -8,6 +8,11 @@ JRE (Java SE Runtime Environment) 上で動作します。
 表示することができます。さらにこれらの番組については開始を検知した時点で、
 デスクトップ上にアラートウィンドウを表示します。
 
+## Download
+
+こちら (https://github.com/sgr/niconama-alert/downloads) より、
+nicoalert-<VERSION>-standalone.jar を取得してください。
+
 ## Usage
 
 JREをインストールし、次のコマンドラインで起動します。
