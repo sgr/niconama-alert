@@ -22,10 +22,10 @@
            "clojure.java.jdbc 0.2.3 Copyright (c) Stephen Gilardi, Sean Corfield, 2011-2012. All rights reserved."
            "clojure.math.numeric-tower 0.0.1"
            "clojure.tools.logging 0.2.3 Copyright (c) 2009 Alex Taggart"
-           "clj-http 0.4.3 authored by mmcgrana and dakrone"
+           "clj-http 0.5 authored by mmcgrana and dakrone"
            "swing-utils 0.2.0 Copyright (c) Stephen C. Gilardi and Meikel Brandmeyer. All rights reserved."
-           "Enlive 1.0.1 Copyright (c) Christophe Grand, 2012. All rights reserved."
-           "c3p0 0.9.1.2 Copyright (c) 2012 Machinery For Change, Inc."
+           "Enlive 1.0 Copyright (c) Christophe Grand, 2012. All rights reserved."
+           "c3p0 0.9 Copyright (c) 2012 Machinery For Change, Inc."
            "H2 Database Engine 1.3"
            "... and great dependencies"]))
 
