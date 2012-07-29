@@ -109,13 +109,14 @@
 (let [db {:classname DB-CLASSNAME
           :subprotocol "h2"}]
   (defn- create-db [path]
-    (jdbc/with-connection (assoc db :subname (format "file:%s;IGNORECASE=TRUE" path) :create true)
+    (jdbc/with-connection (assoc db :subname (format "file:%s" path) :create true)
+      (jdbc/do-commands "SET IGNORECASE TRUE")
       (create-pgms)
       (create-comms)
       (create-imgs)))
   (defn- shutdown-db [path]
     (try
-      (jdbc/with-connection (assoc db :subname (format "file:%s;IGNORECASE=TRUE" path))
+      (jdbc/with-connection (assoc db :subname (format "file:%s" path))
         (jdbc/do-commands "SHUTDOWN IMMEDIATELY"))
       (catch Exception e
         (warn e "shutdown db")))))
@@ -123,7 +124,7 @@
 (defn- pool [path]
   (let [cpds (doto (ComboPooledDataSource.)
                (.setDriverClass DB-CLASSNAME)
-               (.setJdbcUrl (format "jdbc:h2:file:%s;IGNORECASE=TRUE" path))
+               (.setJdbcUrl (format "jdbc:h2:file:%s" path))
                (.setMinPoolSize 0)
                (.setInitialPoolSize 0)
                (.setMaxIdleTime 3)
@@ -158,7 +159,12 @@
   (defn init-db []
     (io/delete-all-files db-path)
     (create-db db-path)
-    (reset! pooled-db (pool db-path)))
+    (reset! pooled-db (pool db-path))
+    (jdbc/with-connection @pooled-db
+      (jdbc/do-commands "SET CACHE_SIZE 8192")
+      (jdbc/do-commands "SET MAX_OPERATION_MEMORY 10000")
+;;      (jdbc/do-commands "SET MAX_MEMORY_ROWS 1000")
+      (jdbc/do-commands "SET MAX_MEMORY_UNDO 1000")))
   (defn shutdown []
     (run-db-hooks :shutdown)
     (let [d @pooled-db]
