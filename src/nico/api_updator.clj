@@ -12,15 +12,14 @@
   (:import [java.util.concurrent Callable CountDownLatch LinkedBlockingQueue
             ThreadPoolExecutor TimeUnit]))
 
-(def ^{:private true} RETRY-CONNECT 3)    ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
-(def ^{:private true} RECONNECT-SEC 2)    ;; API接続が切れたときのリトライ間隔(秒)
-(def ^{:private true} NTHREADS-COMM 2)    ;; 所属コミュニティの番組情報取得スレッドの最大数
-(def ^{:private true} NTHREADS-NORMAL 3)  ;; それ以外の番組情報取得スレッドの最大数
+(def ^{:private true} RETRY-CONNECT 5)    ;; APIでXML Socketを開くのに失敗した際のリトライ回数上限
+(def ^{:private true} RECONNECT-SEC 5)    ;; API接続が切れたときのリトライ間隔(秒)
+(def ^{:private true} NTHREADS-COMM 1)    ;; 所属コミュニティの番組情報取得スレッドの最大数
 (def ^{:private true} KEEP-ALIVE 5)       ;; 番組取得待機時間(秒)。これを過ぎると取得スレッドは終了する。
 (def ^{:private true} LIMIT-ELAPSED 1200) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
 (def ^{:private true} LIMIT-QUEUE 1000)    ;; スレッドプールにリトライ登録可能な数の目安
 (def ^{:private true} RATE-UI-UPDATE 5)   ;; UIの更新間隔(秒)
-(def ^{:private true} INTERVAL-SCRAPE 5)   ;; 番組情報再取得インターバル
+(def ^{:private true} INTERVAL-SCRAPE 10)   ;; 番組情報再取得インターバル
 
 (defn- create-pgm-from-scrapedinfo
   [pid cid]
