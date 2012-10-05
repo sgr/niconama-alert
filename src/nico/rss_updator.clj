@@ -22,8 +22,8 @@
 	      fetched-upd (reduce conj fetched (map :id cur_pgms))
 	      cfetched (count fetched-upd)]
           (trace (format "fetched RSS(%d) cur_total: %d" page cur_total))
-	  (when (and (< 0 cur_total) (not= (pgm/get-total) cur_total))
-	    (pgm/set-total cur_total))
+;;	  (when (and (< 0 cur_total) (not= (pgm/get-total) cur_total))
+;;	    (pgm/set-total cur_total))
           (trace (format "adding fetched pgms of RSS(%d)" page))
 	  ;; 番組の追加と取得状況のリアルタイム更新
 	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
