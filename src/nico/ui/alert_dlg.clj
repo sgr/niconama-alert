@@ -24,7 +24,7 @@
 
 (def ^{:private true} ASIZE (Dimension. 220 130))
 (def ^{:private true} LINK-CURSOR (.getLinkCursor (HTMLEditorKit.)))
-(def ^{:private true} CLOSE-ICON (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "closebtn.png")))
+(def ^{:private true} CLOSE-ICON (ImageIcon. (clojure.java.io/resource "closebtn.png")))
 (def ^{:private true} MONLY-BGCOLOR (Color. 165 204 255))
 (def ^{:private true} DESC-SIZE (Dimension. 115 64))
 (def ^{:private true} RETRY-LIMIT 5)

@@ -6,9 +6,9 @@
   (:import [java.awt BorderLayout Dimension]
 	   [javax.swing BorderFactory ImageIcon JButton JLabel JPanel]))
 
-(def ^{:private true} COMM-TAB-ICON  (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "usrtab.png")))
-(def ^{:private true} KWD-TAB-ICON   (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "kwdtab.png")))
-(def ^{:private true} CLOSE-BTN-ICON (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "closebtn.png")))
+(def ^{:private true} COMM-TAB-ICON  (ImageIcon. (clojure.java.io/resource "usrtab.png")))
+(def ^{:private true} KWD-TAB-ICON   (ImageIcon. (clojure.java.io/resource "kwdtab.png")))
+(def ^{:private true} CLOSE-BTN-ICON (ImageIcon. (clojure.java.io/resource "closebtn.png")))
 
 (gen-class
  :name nico.ui.TabComponent

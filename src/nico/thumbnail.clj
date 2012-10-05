@@ -10,7 +10,7 @@
            [java.io ByteArrayInputStream ByteArrayOutputStream]
            [javax.imageio ImageIO]))
 
-(def NO-IMAGE (ImageIO/read (.getResource (.getClassLoader (class (fn []))) "noimage.png")))
+(def NO-IMAGE (ImageIO/read (clojure.java.io/resource "noimage.png")))
 (def ^{:private true} ICON-WIDTH  64)
 (def ^{:private true} ICON-HEIGHT 64)
 
