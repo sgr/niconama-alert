@@ -17,28 +17,30 @@
   (hu/defhook rss :countdown :fetching :fetched)
   (defn- fetch-rss []
     (try
-      (loop [page 1, total 0, cur_total total, fetched #{}]
+      (loop [page 1, total 0, pids #{}]
 	(let [[cur_total cur_pgms] (rss/get-programs-from-rss page)
-	      fetched-upd (reduce conj fetched (map :id cur_pgms))
-	      cfetched (count fetched-upd)]
-          (trace (format "fetched RSS(%d) cur_total: %d" page cur_total))
-;;	  (when (and (< 0 cur_total) (not= (pgm/get-total) cur_total))
-;;	    (pgm/set-total cur_total))
+              total (max total cur_total)
+	      pids-updated (reduce conj pids (map :id cur_pgms))
+	      cids (count pids-updated)]
+          (trace (format "fetched RSS(%d) cur_total: %d" page total))
+	  (when (< (pgm/get-total) total) (pgm/set-total total))
           (trace (format "adding fetched pgms of RSS(%d)" page))
 	  ;; 番組の追加と取得状況のリアルタイム更新
-	  (doseq [pgm cur_pgms] (when pgm (pgm/add pgm)))
+	  (doseq [pgm cur_pgms] (pgm/add pgm))
           (trace (format "added fetched pgms of RSS(%d)" page))
-	  (run-rss-hooks :fetching cfetched cur_total page)
+	  (run-rss-hooks :fetching cids total page)
 	  ;; 取得完了・中断・継続の判定
 	  (cond
-	   (or (>= cfetched (pgm/get-total)) (>= cfetched cur_total)) ;; 総番組数分取得したら、取得完了
-	   (l/with-info (format "finished fetching programs: %d" cfetched)
-	     [:finished cfetched cur_total])
+	   (or (>= cids (pgm/get-total)) (>= cids total)) ;; 総番組数分取得したら、取得完了
+	   (l/with-info (format "finished fetching programs: %d" cids)
+             (pgm/set-total total)
+	     [:finished cids total])
 	   (= 0 (count cur_pgms)) ;; ひとつも番組が取れない場合は中止
-	   (l/with-warn (format "aborted fetching programs: %d" cfetched)
-	     [:aborted cfetched cur_total])
+	   (l/with-warn (format "aborted fetching programs: %d" cids)
+             (pgm/set-total total)
+	     [:aborted cids total])
 	   :else
-	   (recur (inc page), total cur_total fetched-upd))))
+	   (recur (inc page) total pids-updated))))
       (catch Exception e (error e "failed fetching RSS")
 	     [:error 0 0])))
   (defn set-counter [c] (reset! counter c))
