@@ -3,7 +3,8 @@
        :doc "Utility for networking."}
   net-utils
   (:use [clojure.tools.logging])
-  (:import [java.util.concurrent TimeUnit]
+  (:import [java.io IOException]
+           [java.util.concurrent TimeUnit]
            [java.net SocketTimeoutException]))
 
 (def ^{:private true} CONNECT-TIMEOUT 5000)
@@ -26,16 +27,21 @@
            (error msg#)
            (throw (Exception. msg#)))))))
 
-(defn url-stream [^String url]
+(defn url-stream
+  "returns an input stream of the URL. When any error occurred (ex. HTTP response 50x), it returns an error stream."
+  [^String url]
   (letfn [(url-stream-aux [^String url ^Integer connect-timeout ^Integer read-timeout]
-            (try
-              (let [u (java.net.URL. url)]
-                (.getInputStream (doto (.openConnection u)
-                                   (.setConnectTimeout connect-timeout)
-                                   (.setReadTimeout read-timeout))))
-              (catch SocketTimeoutException e
-                (warn e (format "timeouted open input stream from: %s (%d, %d)" url connect-timeout read-timeout))
-                nil)))]
+            (let [conn (doto (.openConnection (java.net.URL. url))
+                         (.setConnectTimeout connect-timeout)
+                         (.setReadTimeout read-timeout))]
+              (try
+                (.getInputStream conn)
+                (catch IOException e
+                  (warn e (format "caught HTTP response: %d for %s" (.getResponseCode conn) url))
+                  (.getErrorStream conn))
+                (catch SocketTimeoutException e
+                  (warn e (format "timeouted open an input stream from: %s (%d, %d)" url connect-timeout read-timeout))
+                  nil))))]
     (if-let [is (url-stream-aux url CONNECT-TIMEOUT READ-TIMEOUT)]
       is
       (do (.sleep TimeUnit/SECONDS INTERVAL-RETRY)
