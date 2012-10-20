@@ -41,9 +41,9 @@
           supported-tl  (.booleanValue (.invoke mIsTS nil (to-array [TRANSLUCENT])))
           supported-ptl (.booleanValue (.invoke mIsTS nil (to-array [PERPIXEL_TRANSLUCENT])))
           supported-ptp (.booleanValue (.invoke mIsTS nil (to-array [PERPIXEL_TRANSPARENT])))]
-      (debug (format "This environment is supported TRANSLUCENT: %s" supported-tl))
-      (debug (format "This environment is supported PERPIXCEL_TRANSLUCENT: %s" supported-ptl))
-      (debug (format "This environment is supported PERPIXCEL_TRANSPARENT: %s" supported-ptp))
+      (info (format "This environment is supported TRANSLUCENT: %s" supported-tl))
+      (info (format "This environment is supported PERPIXCEL_TRANSLUCENT: %s" supported-ptl))
+      (info (format "This environment is supported PERPIXCEL_TRANSPARENT: %s" supported-ptp))
       (let [cWindow (Class/forName "java.awt.Window")
             cShape (Class/forName "java.awt.Shape")
             mSetWO (.getMethod cAu "setWindowOpacity" (into-array Class [cWindow Float/TYPE]))
@@ -67,9 +67,9 @@
         supported-tl  (.isWindowTranslucencySupported gd TRANSLUCENT)
         supported-ptl (.isWindowTranslucencySupported gd PERPIXEL_TRANSLUCENT)
         supported-ptp (.isWindowTranslucencySupported gd PERPIXEL_TRANSPARENT)]
-    (debug (format "This environment is supported TRANSLUCENT: %s" supported-tl))
-    (debug (format "This environment is supported PERPIXCEL_TRANSLUCENT: %s" supported-ptl))
-    (debug (format "This environment is supported PERPIXCEL_TRANSPARENT: %s" supported-ptp))
+    (info (format "This environment is supported TRANSLUCENT: %s" supported-tl))
+    (info (format "This environment is supported PERPIXCEL_TRANSLUCENT: %s" supported-ptl))
+    (info (format "This environment is supported PERPIXCEL_TRANSPARENT: %s" supported-ptp))
     (fn [dlg]
         (.setUndecorated dlg true)
         (when supported-tl  (.setOpacity dlg  OPACITY))
