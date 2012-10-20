@@ -70,19 +70,24 @@
 	thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src)]
 		    (if (= type :community) bn (str base bn)))
 	now (tu/now)]
-    (when-not pubdate (error (format " NULL PUBDATE: %s (%s)" title url)))
-    {:title title
-     :pubdate pubdate
-     :desc desc
-     :category category
-     :link url
-     :thumbnail thumbnail
-     :owner_name owner_name
-     :member_only member_only
-     :type type
-     :comm_name comm_name
-     :fetched_at now
-     :updated_at now}))
+    (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts h))]
+      (do
+        (warn (format "frequently access error: %s" (pr-str node)))
+        nil)
+      (do
+        (when-not pubdate (error (format " NULL PUBDATE: %s (%s)" title url)))
+        {:title title
+         :pubdate pubdate
+         :desc desc
+         :category category
+         :link url
+         :thumbnail thumbnail
+         :owner_name owner_name
+         :member_only member_only
+         :type type
+         :comm_name comm_name
+         :fetched_at now
+         :updated_at now}))))
 
 (defn fetch-pgm-info
   "ニコ生の番組ページから番組情報を取得する。"
