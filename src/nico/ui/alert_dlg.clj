@@ -32,24 +32,36 @@
 (defn- decorate-aux-sun-java6 []
   (try
     (let [cAu (Class/forName "com.sun.awt.AWTUtilities")
-          cWindow (Class/forName "java.awt.Window")
-          cShape (Class/forName "java.awt.Shape")
-          setwo (.getMethod cAu "setWindowOpacity" (into-array Class [cWindow Float/TYPE]))
-          setws (.getMethod cAu "setWindowShape" (into-array Class [cWindow cShape]))]
-      (fn [dlg]
-        (.invoke setwo nil (to-array [dlg OPACITY]))
-        (try
-          (.invoke setws nil (to-array [dlg (get-shape dlg)]))
-          (catch Exception e (warn "failed invoking setWindowShape" e)))))
+          cWT (Class/forName "com.sun.awt.AWTUtilities$Translucency")
+          mVO (.getMethod cWT "valueOf" (into-array Class [String]))
+          TRANSLUCENT (.invoke mVO nil (to-array ["TRANSLUCENT"]))
+          PERPIXEL_TRANSLUCENT (.invoke mVO nil (to-array ["PERPIXEL_TRANSLUCENT"]))
+          PERPIXEL_TRANSPARENT (.invoke mVO nil (to-array ["PERPIXEL_TRANSPARENT"]))
+          mIsTS (.getMethod cAu "isTranslucencySupported" (into-array Class [cWT]))
+          supported-tl  (.booleanValue (.invoke mIsTS nil (to-array [TRANSLUCENT])))
+          supported-ptl (.booleanValue (.invoke mIsTS nil (to-array [PERPIXEL_TRANSLUCENT])))
+          supported-ptp (.booleanValue (.invoke mIsTS nil (to-array [PERPIXEL_TRANSPARENT])))]
+      (debug (format "This environment is supported TRANSLUCENT: %s" supported-tl))
+      (debug (format "This environment is supported PERPIXCEL_TRANSLUCENT: %s" supported-ptl))
+      (debug (format "This environment is supported PERPIXCEL_TRANSPARENT: %s" supported-ptp))
+      (let [cWindow (Class/forName "java.awt.Window")
+            cShape (Class/forName "java.awt.Shape")
+            mSetWO (.getMethod cAu "setWindowOpacity" (into-array Class [cWindow Float/TYPE]))
+            mSetWS (.getMethod cAu "setWindowShape" (into-array Class [cWindow cShape]))]
+        (fn [dlg]
+          (try
+            (when supported-tl (.invoke mSetWO nil (to-array [dlg OPACITY])))
+            (when supported-ptp (.invoke mSetWS nil (to-array [dlg (get-shape dlg)])))
+            (catch Exception e (warn (.getCause e) "failed invoking method"))))))
     (catch Exception e
-      (warn "This platform doesn't support AWTUtilities" e) nil)))
+      (warn e "This platform doesn't support AWTUtilities") nil)))
 
 (defn- decorate-aux-java7 []
   (let [cWT (Class/forName "java.awt.GraphicsDevice$WindowTranslucency")
-        vo (.getMethod cWT "valueOf" (into-array Class [String]))
-        TRANSLUCENT (.invoke vo nil (to-array ["TRANSLUCENT"]))
-        PERPIXEL_TRANSLUCENT (.invoke vo nil (to-array ["PERPIXEL_TRANSLUCENT"]))
-        PERPIXEL_TRANSPARENT (.invoke vo nil (to-array ["PERPIXEL_TRANSPARENT"]))
+        mVO (.getMethod cWT "valueOf" (into-array Class [String]))
+        TRANSLUCENT (.invoke mVO nil (to-array ["TRANSLUCENT"]))
+        PERPIXEL_TRANSLUCENT (.invoke mVO nil (to-array ["PERPIXEL_TRANSLUCENT"]))
+        PERPIXEL_TRANSPARENT (.invoke mVO nil (to-array ["PERPIXEL_TRANSPARENT"]))
         ge (GraphicsEnvironment/getLocalGraphicsEnvironment)
         gd (.getDefaultScreenDevice ge)
         supported-tl  (.isWindowTranslucencySupported gd TRANSLUCENT)
@@ -61,7 +73,7 @@
     (fn [dlg]
         (.setUndecorated dlg true)
         (when supported-tl  (.setOpacity dlg  OPACITY))
-        (when supported-ptl (.setShape dlg (get-shape dlg))))))
+        (when supported-ptp (.setShape dlg (get-shape dlg))))))
 
 (let [decorate-fn (atom nil)]
   (defn- decorate [dlg]
