@@ -113,7 +113,7 @@
 	comm-executor (create-executor NTHREADS-COMM comm-q)]
     (defn- create-task [pid cid uid received]
       (let [task (nico.api-updator.WrappedFutureTask. pid cid uid received)]
-	(if true;(some #(contains? (set (:comms %)) cid) (vals @alert-statuses))
+	(if (some #(contains? (set (:comms %)) cid) (vals @alert-statuses))
 	  (l/with-info (format "%s will fetched because %s is joined community." pid cid)
             (.execute comm-executor task))
 	  (trace (format "%s: %s isn't your community." pid cid)))))
