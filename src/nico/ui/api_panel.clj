@@ -54,11 +54,11 @@
                              (doto tbtn (.setEnabled false))
                              (.setText status "接続中断のため再接続中"))))
     (au/add-api-hook :rate-updated
-                     (fn [fetched-rate fetching-comm]
+                     (fn [received-rate fetched-rate fetching-comm]
                        (do-swing
                         (doto tbtn (.setEnabled false))
-                        (.setText status (format "情報取得中: %d 番組\n追加: %d 番組/分"
-                                                 fetching-comm fetched-rate)))))
+                        (.setText status (format "開始: %d 番組/分\n取得: %d 番組/分\n追加: %d 番組/分"
+                                                 received-rate fetching-comm fetched-rate)))))
     (doto tbtn
       (.setPreferredSize BTN-SIZE)
       (.setToolTipText istr)

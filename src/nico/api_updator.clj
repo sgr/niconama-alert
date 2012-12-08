@@ -2,7 +2,8 @@
 (ns #^{:author "sgr"
        :doc "ニコ生の番組情報を更新する。(API)"}
     nico.api-updator
-  (:use [clojure.tools.logging])
+  (:use [clojure.set :only [union]]
+        [clojure.tools.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.api :as api]
 	    [nico.scrape :as ns]
@@ -78,10 +79,10 @@
 (let [latch (ref (CountDownLatch. 1)) ;; API取得に関するラッチ
       alert-statuses (ref {}) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
       awaiting-status (ref :need_login) ;; API updatorの状態
-      fetched (atom [])] ;; API updatorにより登録された最近1分間の番組数
+      received-rate (atom []) ;; API updatorが受信した最近1分間の番組数
+      fetched-rate (atom [])] ;; API updatorにより登録された最近1分間の番組数
   (hu/defhook api :awaiting :connected :reconnecting :rate-updated)
   (defn get-awaiting-status [] @awaiting-status)
-  (defn get-fetched-rate [] (count @fetched))
   (defn add-alert-status [as]
     (dosync
      (alter alert-statuses assoc (:user_id as) as)
@@ -91,7 +92,7 @@
   (defn- add-pgm [pgm]
     (when (some nil? (list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
       (warn (format "Some nil properties found in: %s" (pr-str pgm))))
-    (swap! fetched conj (tu/now))
+    (swap! fetched-rate conj (tu/now))
     (pgm/add pgm))
   (defn- create-executor [nthreads queue]
     (proxy [ThreadPoolExecutor] [0 nthreads KEEP-ALIVE TimeUnit/SECONDS queue]
@@ -112,11 +113,12 @@
   (let [comm-q (LinkedBlockingQueue.)
 	comm-executor (create-executor NTHREADS-COMM comm-q)]
     (defn- create-task [pid cid uid received]
-      (let [task (nico.api-updator.WrappedFutureTask. pid cid uid received)]
-	(if (some #(contains? (set (:comms %)) cid) (vals @alert-statuses))
-	  (l/with-info (format "%s will fetched because %s is joined community." pid cid)
-            (.execute comm-executor task))
-	  (trace (format "%s: %s isn't your community." pid cid)))))
+      (let [comms (apply union (for [as (vals @alert-statuses)] (:comms as)))]
+        (swap! received-rate conj (tu/now))
+        (if (contains? comms cid)
+          (l/with-info (format "%s will fetched because %s is joined community." pid cid)
+            (.execute comm-executor (nico.api-updator.WrappedFutureTask. pid cid uid received)))
+          (trace (format "%s: %s isn't your community." pid cid)))))
     (defn request-fetch
       "RSSでタイトルが空の場合('<'を含んだ場合になるようだ)など、
        どうしてもスクレイピングで番組情報を取得したい場合に用いる。"
@@ -147,10 +149,13 @@
 		   (run-api-hooks :reconnecting)
 		   (recur (dec c)))))))
     (defn update-rate []
-      (loop [last-updated (tu/now)]
-	(when (= 1 (.getCount @latch)) (.await @latch))
-	(swap! fetched (fn [coll] (filter #(tu/within? % last-updated 60) coll)))
-	(run-api-hooks :rate-updated (count @fetched) (.size comm-q))
-	(when (tu/within? last-updated (tu/now) RATE-UI-UPDATE)
-	  (.sleep TimeUnit/SECONDS RATE-UI-UPDATE))
-	(recur (tu/now))))))
+      (letfn [(update-last [coll last-updated sec]
+                (filter #(tu/within? % last-updated sec) coll))]
+        (loop [last-updated (tu/now)]
+          (when (= 1 (.getCount @latch)) (.await @latch))
+          (swap! received-rate #(update-last % last-updated 60))
+          (swap! fetched-rate  #(update-last % last-updated 60))
+          (run-api-hooks :rate-updated (count @received-rate) (count @fetched-rate) (.size comm-q))
+          (when (tu/within? last-updated (tu/now) RATE-UI-UPDATE)
+            (.sleep TimeUnit/SECONDS RATE-UI-UPDATE))
+          (recur (tu/now)))))))
