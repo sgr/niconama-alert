@@ -78,6 +78,7 @@
 
 (let [latch (ref (CountDownLatch. 1)) ;; API取得に関するラッチ
       alert-statuses (ref {}) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
+      communities (ref #{})   ;; ログインしたユーザーの参加しているコミュニティの和集合
       awaiting-status (ref :need_login) ;; API updatorの状態
       received-rate (atom []) ;; API updatorが受信した最近1分間の番組数
       fetched-rate (atom [])] ;; API updatorにより登録された最近1分間の番組数
@@ -86,6 +87,7 @@
   (defn add-alert-status [as]
     (dosync
      (alter alert-statuses assoc (:user_id as) as)
+     (ref-set communities (apply union (map #(-> % :comms set) (vals @alert-statuses))))
      (ref-set awaiting-status :ready))
     (run-api-hooks :awaiting))
   (defn start-update-api [] (.countDown @latch))
@@ -113,12 +115,11 @@
   (let [comm-q (LinkedBlockingQueue.)
 	comm-executor (create-executor NTHREADS-COMM comm-q)]
     (defn- create-task [pid cid uid received]
-      (let [comms (apply union (for [as (vals @alert-statuses)] (:comms as)))]
-        (swap! received-rate conj (tu/now))
-        (if (contains? comms cid)
-          (l/with-info (format "%s will fetched because %s is joined community." pid cid)
-            (.execute comm-executor (nico.api-updator.WrappedFutureTask. pid cid uid received)))
-          (trace (format "%s: %s isn't your community." pid cid)))))
+      (swap! received-rate conj (tu/now))
+      (if (contains? @communities cid)
+        (l/with-info (format "%s will be fetched because %s is joined community." pid cid)
+          (.execute comm-executor (nico.api-updator.WrappedFutureTask. pid cid uid received)))
+        (trace (format "%s: %s isn't your community." pid cid))))
     (defn request-fetch
       "RSSでタイトルが空の場合('<'を含んだ場合になるようだ)など、
        どうしてもスクレイピングで番組情報を取得したい場合に用いる。"
