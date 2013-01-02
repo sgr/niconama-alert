@@ -41,16 +41,16 @@
           (.close baos)))))
 
   (defn fetch [url]
-    (debug (format "called thumbnail/fetch with %s" url))
-    (let [is (n/url-stream-with-caching url)
-          iis (if is (ImageIO/createImageInputStream is) nil)
-          img (if iis (do (.setInput jpeg-reader iis)
-                          (.read jpeg-reader 0))
-                  nil)]
-      (try
-        (if img (adjust-img img ICON-WIDTH ICON-HEIGHT) NO-IMAGE)
-        (catch Exception e (error e (format "failed fetching image: %s" url)) NO-IMAGE)
-        (finally (when img (.flush img))
-                 (when jpeg-reader (.reset jpeg-reader))
-                 (when iis (.close iis))
-                 (when is (.close is)))))))
+    (locking jpeg-reader
+      (let [is (n/url-stream-with-caching url)
+            iis (if is (ImageIO/createImageInputStream is) nil)
+            img (if iis (do (.setInput jpeg-reader iis)
+                            (.read jpeg-reader 0))
+                    nil)]
+        (try
+          (if img (adjust-img img ICON-WIDTH ICON-HEIGHT) NO-IMAGE)
+          (catch Exception e (error e (format "failed fetching image: %s" url)) NO-IMAGE)
+          (finally (when img (.flush img))
+                   (when jpeg-reader (.reset jpeg-reader))
+                   (when iis (.close iis))
+                   (when is (.close is))))))))
