@@ -25,7 +25,6 @@
 (def ^{:private true} SCALE 1.05) ;; 番組最大保持数
 (def ^{:private true} INTERVAL-CLEAN 180) ;; 古い番組情報を削除する間隔
 (def ^{:private true} INTERVAL-UPDATE 3) ;; 更新フック呼び出し間隔
-(def ^{:private true} INTERVAL-UPDATE-THUMBNAIL (* 24 3600)) ; サムネイル更新間隔
 
 (def ^{:private true} DB-CLASSNAME "org.h2.Driver")
 
@@ -63,16 +62,6 @@
   (jdbc/do-commands "CREATE INDEX idx_comms_id ON comms(id)"
                     "CREATE INDEX idx_comms_name ON comms(comm_name)"
                     "CREATE INDEX idx_comms_updated_at ON comms(updated_at)"))
-
-(defn- create-imgs []
-  (jdbc/create-table
-   :imgs
-   [:id (varchar LEN_COMM_ID) "PRIMARY KEY"]
-   [:img "blob(100K)"]
-   [:fetched_at :timestamp]
-   [:updated_at :timestamp])
-  (jdbc/do-commands "CREATE INDEX idx_imgs_id ON imgs(id)"
-                    "CREATE INDEX idx_imgs_updated_at ON imgs(updated_at)"))
 
 (def ^{:private true} LEN_PGM_ID          12)
 (def ^{:private true} LEN_PGM_TITLE       64)
@@ -112,8 +101,7 @@
     (jdbc/with-connection (assoc db :subname (format "file:%s" path) :create true)
       (jdbc/do-commands "SET IGNORECASE TRUE")
       (create-pgms)
-      (create-comms)
-      (create-imgs)))
+      (create-comms)))
   (defn- shutdown-db [path]
     (try
       (jdbc/with-connection (assoc db :subname (format "file:%s" path))
@@ -228,38 +216,18 @@
       (first rs))))
 
 (defn get-comm-thumbnail [^Keyword comm_id]
-  (letfn [(store-thumbnail [comm_id img-bytes update]
-            (with-conn-pool db nil
-              (jdbc/transaction
-               (let [now (tu/sql-now)]
-                 (if update
-                   (jdbc/update-values
-                    :imgs ["=id?" comm_id] {:img img-bytes :updated_at now})
-                   (jdbc/insert-record
-                    :imgs {:id comm_id :img img-bytes :fetched_at now :updated_at now}))))))
-          (fetch-image [comm_id update]
-            (if-let [row-comm (get-row-comm comm_id)]
-              (let [url (:thumbnail row-comm)
-                    img (thumbnail/fetch url)
-                    img-bytes (thumbnail/to-bytes img)]
-                (future (store-thumbnail comm_id img-bytes update))
-                img)
-              thumbnail/NO-IMAGE))]
-    (with-conn-pool db thumbnail/NO-IMAGE
-      (jdbc/with-query-results rs [{:concurrency :read-only}
-                                   "SELECT img,updated_at FROM imgs WHERE id=?" (name comm_id)]
-        (if-let [r (first rs)]
-          (if (tu/within? (tu/timestamp-to-date (:updated_at r)) (tu/now) INTERVAL-UPDATE-THUMBNAIL)
-            (let [blob (:img r)]
-              (if (and blob (< 0 (.length blob)))
-                (let [bs (.getBinaryStream (:img r))
-                      bimg (io/input-stream-to-bytes bs)]
-                  (try (ImageIcon. bimg)
-                       (finally (.close bs)
-                                (.free blob))))
-                thumbnail/NO-IMAGE))
-            (ImageIcon. (fetch-image (name comm_id) true)))
-          (ImageIcon. (fetch-image (name comm_id) false)))))))
+  (debug (format "getting community's thumbnail: %s" comm_id))
+  (ImageIcon.
+   (try
+     (if-let [row-comm (get-row-comm (name comm_id))]
+       (let [url (:thumbnail row-comm)]
+         (if url (thumbnail/fetch url)
+             thumbnail/NO-IMAGE))
+       thumbnail/NO-IMAGE)
+     (catch Exception e
+       (error e (format "failed getting community(%s)'s thumbnail: %s"
+                        (name comm_id) (.getMessage e)))
+       thumbnail/NO-IMAGE))))
 
 (defn- row-to-pgm [row-pgm]
   (let [row-comm (get-row-comm (:comm_id row-pgm))]

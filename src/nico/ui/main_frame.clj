@@ -17,7 +17,7 @@
                               "FormattedTextField.font" "Spinner.font" "PasswordField.font"
                               "List.font" "TableHeader.font" "ComboBox.font"])
 
-(defn main-frame []
+(defn main-frame [add-hook-fn closing-fn]
   (UIManager/setLookAndFeel (UIManager/getSystemLookAndFeelClassName))
   (UIManager/put "OptionPane.okButtonText" "OK")
   (UIManager/put "OptionPane.cancelButtonText" "キャンセル")
@@ -52,10 +52,11 @@
 	  (let [w (.getWidth frame), h (.getHeight frame)
 		p (.getLocationOnScreen frame), tp (.getTabPrefs tabbed-pane)]
             (do-swing-and-wait (.setVisible frame false))
-	    (swap! (p/get-pref)
-		   assoc :window {:width w :height h :posx (.x p) :posy (.y p)} :tabs tp)
-	    (p/store-pref)
-            (pgm/shutdown)
+            (add-hook-fn (fn []
+                           (swap! (p/get-pref)
+                                  assoc :window {:width w :height h :posx (.x p) :posy (.y p)} :tabs tp)
+                           (p/store-pref)))
+            (closing-fn)
 	    (do-swing-and-wait (.dispose frame))))
 	 (windowClosed [e] (System/exit 0))
 	 (windowOpened [e])
