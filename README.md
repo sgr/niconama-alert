@@ -10,8 +10,8 @@ JRE (Java SE Runtime Environment) 上で動作します。
 
 ## Download
 
-こちら (https://github.com/sgr/niconama-alert/downloads) より、
-nicoalert-\<VERSION\>-standalone.jar を取得してください。
+[こちら](https://docs.google.com/open?id=0BwIJLE1B4O3mdHhqd2RSMV96SU0) より、
+nicoalert-1.5.3-standalone.jar を取得してください。
 
 ## Usage
 
