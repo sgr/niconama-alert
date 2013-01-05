@@ -10,8 +10,8 @@ JRE (Java SE Runtime Environment) 上で動作します。
 
 ## Download
 
-[こちら](https://docs.google.com/open?id=0BwIJLE1B4O3mdHhqd2RSMV96SU0) より、
-nicoalert-1.5.3-standalone.jar を取得してください。
+[こちら](https://docs.google.com/open?id=0BwIJLE1B4O3mV0RaZTdSekRKREk) より、
+nicoalert-1.5.4-standalone.jar を取得してください。
 
 ## Usage
 
@@ -25,6 +25,10 @@ JREをインストールし、次のコマンドラインで起動します。
 ## Installation
 
 スタンドアロンjarファイルを好きな場所に配置します。
+
+## Old Releases
+
+* [1.5.3](https://docs.google.com/open?id=0BwIJLE1B4O3mdHhqd2RSMV96SU0)
 
 ## License
 
