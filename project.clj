@@ -10,7 +10,7 @@
                  [swing-utils "0.2.0"]
                  [enlive "1.0.1"]
                  [com.mchange/c3p0 "0.9.2-pre8"]
-                 [com.h2database/h2 "[1.3,)"]
+                 [org.xerial/sqlite-jdbc "3.7.2"]
                  [net.sourceforge.htmlcleaner/htmlcleaner "2.2"]]
   :profiles {:dev
              {:dependencies [[org.clojure/tools.nrepl "0.2.0-RC1"]]}

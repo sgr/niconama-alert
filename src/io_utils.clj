@@ -20,10 +20,12 @@
         (do (.write bos buf 0 n)
             (recur (.read is buf 0 buf-size)))))))
 
-(defn temp-file-name [prefix]
-  (let [f (File/createTempFile prefix nil)]
-    (.delete f)
-    (.getCanonicalPath f)))
+(defn temp-file-name
+  ([prefix suffix]
+     (let [f (File/createTempFile prefix suffix)]
+       (.delete f)
+       (.getCanonicalPath f)))
+  ([prefix] (temp-file-name prefix nil)))
 
 (defn- delete [^File f]
   (if (.delete f)

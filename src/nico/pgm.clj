@@ -26,7 +26,7 @@
 (def ^{:private true} INTERVAL-CLEAN 180) ;; 古い番組情報を削除する間隔
 (def ^{:private true} INTERVAL-UPDATE 3) ;; 更新フック呼び出し間隔
 
-(def ^{:private true} DB-CLASSNAME "org.h2.Driver")
+(def ^{:private true} DB-CLASSNAME "org.sqlite.JDBC")
 
 (defrecord Pgm
   [id		;; 番組ID
@@ -96,23 +96,18 @@
                     "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"))
 
 (let [db {:classname DB-CLASSNAME
-          :subprotocol "h2"}]
+          :subprotocol "sqlite"}]
   (defn- create-db [path]
-    (jdbc/with-connection (assoc db :subname (format "file:%s" path) :create true)
-      (jdbc/do-commands "SET IGNORECASE TRUE")
+    (jdbc/with-connection (assoc db :subname path)
+      (jdbc/do-commands "PRAGMA auto_vacuum=2")
+      (jdbc/do-commands "PRAGMA incremental_vacuum(64)")
       (create-pgms)
-      (create-comms)))
-  (defn- shutdown-db [path]
-    (try
-      (jdbc/with-connection (assoc db :subname (format "file:%s" path))
-        (jdbc/do-commands "SHUTDOWN IMMEDIATELY"))
-      (catch Exception e
-        (warn e "shutdown db")))))
+      (create-comms))))
 
 (defn- pool [path]
   (let [cpds (doto (ComboPooledDataSource.)
                (.setDriverClass DB-CLASSNAME)
-               (.setJdbcUrl (format "jdbc:h2:file:%s" path))
+               (.setJdbcUrl (format "jdbc:sqlite:%s" path))
                (.setMinPoolSize 0)
                (.setInitialPoolSize 0)
                (.setMaxIdleTime 3)
@@ -125,21 +120,14 @@
        ~@body)
      ~error-value))
 
-(defn- delete-db-files [path]
-  (let [db-file           (str path ".h2.db")
-        db-trace-file     (str path ".trace.db")
-        db-trace-old-file (str path ".trace.db.old")
-        db-lobs-file      (str path ".lobs.db")
-        db-lock-file      (str path ".lock.db")]
-    (doseq [f [db-file db-trace-file db-trace-old-file db-lobs-file db-lock-file]]
-      (io/delete-all-files f))))
+(defn- delete-db-file [path] (io/delete-all-files path))
 
 (defn- pool-status [ds]
   [(.getNumBusyConnections ds)
    (.getNumIdleConnections ds)
    (.getNumConnections ds)])
 
-(let [db-path (io/temp-file-name "nico-")
+(let [db-path (io/temp-file-name "nico-" ".db")
       ro-conns (atom [])
       pooled-db (atom nil)]
   (hu/defhook db :shutdown)
@@ -148,11 +136,7 @@
       (do
         (create-db db-path)
         (reset! pooled-db (pool db-path))
-        (jdbc/with-connection @pooled-db
-          (jdbc/do-commands "SET CACHE_SIZE 8192")
-          (jdbc/do-commands "SET MAX_OPERATION_MEMORY 10000")
-          ;;      (jdbc/do-commands "SET MAX_MEMORY_ROWS 1000")
-          (jdbc/do-commands "SET MAX_MEMORY_UNDO 1000"))
+        (info (format "initialized Database to %s" db-path))
         true)
       (do
         (error (format "failed initializing Database"))
@@ -178,12 +162,11 @@
             (.hardReset)
             (.close))
           (.sleep TimeUnit/SECONDS 1)
-          ;;      (shutdown-db db-path)
-          (delete-db-files db-path))
+          (delete-db-file db-path))
         (info "No database is running. Nothing to do..."))))
   (defn- db [] @pooled-db)
   (defn get-ro-conn []
-    (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:h2:file:%s;IGNORECASE=TRUE" db-path))
+    (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:sqlite:%s" db-path))
                     (.setReadOnly true))]
       (swap! ro-conns conj ro-conn)
       ro-conn)))
