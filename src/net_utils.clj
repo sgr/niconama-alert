@@ -53,22 +53,32 @@
       (do (.sleep TimeUnit/SECONDS INTERVAL-RETRY)
           (recur url)))))
 
-(let [cache-path (atom nil)
+(let [cache-dir (atom nil)
       resource-factory (atom nil)
       cache-config (CacheConfig.)
       cache-storage (BasicHttpCacheStorage. cache-config)]
   (defn clear-cache []
-    (when @cache-path (io/delete-all-files @cache-path)))
+    (when @cache-dir (io/delete-all-files @cache-dir)))
+
+  (defn init-cache
+    "This function must be called before using url-stream-with-caching"
+    []
+    (reset! resource-factory nil)
+    (reset! cache-dir (File. (str (System/getProperty "java.io.tmpdir") File/separator "nico_cache")))
+    (let [cp (.getCanonicalPath @cache-dir)]
+      (when (.exists @cache-dir)
+        (warn (format "clear existing cache directory: %s" cp))
+        (clear-cache))
+      (if (.mkdir @cache-dir)
+        (do (debug (format "cache directory: %s" cp))
+            (reset! resource-factory (FileResourceFactory. @cache-dir))
+            true)
+        (do (error (format "failed creating cache direcotry: %s" cp))
+            false))))
 
   (defn url-stream-with-caching
     [^String url]
     (try
-      (when-not @resource-factory
-        (when-not @cache-path
-          (reset! cache-path (File. (str (System/getProperty "java.io.tmpdir") File/separator "nico_cache")))
-          (when-not (.exists @cache-path) (.mkdir @cache-path))
-          (debug (format "cache path: %s" (.getCanonicalPath @cache-path))))
-        (reset! resource-factory (FileResourceFactory. @cache-path)))
       (debug (format "fetching content from %s" url ))
       (let [client (CachingHttpClient. (DefaultHttpClient.) @resource-factory cache-storage cache-config)
             context (BasicHttpContext.)
@@ -76,7 +86,7 @@
             response (.execute client request context)
             status-code (-> response .getStatusLine .getStatusCode)
             cache-status (.getAttribute context CachingHttpClient/CACHE_RESPONSE_STATUS)]
-        (debug (format "response from %s is %s" url
+        (debug (format "cache status (%s) -> %s" url
                        (condp = cache-status
                          CacheResponseStatus/CACHE_HIT  "CACHE_HIT"
                          CacheResponseStatus/CACHE_MISS "CACHE_MISS"

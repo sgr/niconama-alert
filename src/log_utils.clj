@@ -3,7 +3,7 @@
        :doc "ログやエラー処理に関する操作"}
   log-utils
   (:use [prefs-utils :only [pref-base-path]]
-        [clojure.tools.logging :only [log]])
+        [clojure.tools.logging])
   (:import [java.io File FileInputStream FileOutputStream]
 	   [java.util Date Properties]
 	   [java.util.logging Formatter LogManager LogRecord]
@@ -45,8 +45,13 @@
 (defn load-log-props [^String appname ^Properties default-props]
   (let [file (File. (path-log-props appname))]
     (when-not (.exists file) (create-log-props default-props file))
-    (with-open [is (FileInputStream. file)]
-      (doto (LogManager/getLogManager) (.readConfiguration is)))))
+    (try
+      (with-open [is (FileInputStream. file)]
+        (doto (LogManager/getLogManager) (.readConfiguration is))
+        true)
+      (catch Exception e
+        (error e (format "failed reading log properties from %s" (.getCanonicalPath file)))
+        false))))
 
 (defmacro with-log
   {:arglists '([level msg & body] [level throwable msg & body])}

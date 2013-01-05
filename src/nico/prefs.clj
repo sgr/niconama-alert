@@ -22,7 +22,7 @@
 
 (let [p (atom {})]
   (defn get-pref [] p)
-  (defn load-pref [] (reset! p (if-let [lp (pu/load-pref "nico")] lp (gen-initial-pref))) p)
+  (defn load-pref [] (reset! p (if-let [lp (pu/load-pref "nico")] lp (gen-initial-pref))) @p)
   (defn store-pref [] (pu/store-pref @p "nico")))
 
 (defn gen-initial-user-tpref []

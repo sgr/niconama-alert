@@ -5,7 +5,7 @@
   (:use [clojure.java.io :only [file delete-file]]
         [clojure.tools.logging])
   (:require [log-utils :as l])
-  (:import [java.io ByteArrayOutputStream File]))
+  (:import [java.io ByteArrayOutputStream File IOException]))
 
 (defn- byte-buf [len] (byte-array len (repeat len (byte 0))))
 
@@ -26,19 +26,25 @@
     (.getCanonicalPath f)))
 
 (defn- delete [^File f]
-  (let [result (.delete f)]
-    (debug (format "deleting %s: %s" (.getAbsolutePath f) result))
-    (when-not result (.deleteOnExit f))))
+  (if (.delete f)
+    (debug (format "deleted %s" (.getCanonicalPath f)))
+    (throw (IOException. (format "failed deleting %s" (.getCanonicalPath f))))))
 
 (defn delete-all-files
   "If the path describes a file, it will be deleted only.
    If the path describes a directory, both itself and containing files will be deleted recursively."
   [path]
-  (let [f (file path)]
-    (when (.exists f)
-      (if (.isDirectory f)
-        (l/with-debug (format "deleting all children of %s"  path)
-          (doseq [c (.listFiles f)] (delete-all-files c))
-          (delete f))
-        (delete f)))))
-
+  (letfn [(delete-all-files-aux [^File f]
+            (when (.exists f)
+              (if (.isDirectory f)
+                (l/with-debug (format "deleting all children of %s"  path)
+                  (doseq [c (.listFiles f)] (delete-all-files-aux c))
+                  (delete f))
+                (delete f))))]
+    (let [f (file path)]
+      (try
+        (delete-all-files-aux f)
+        true
+        (catch Exception e
+          (error e (format "failed deleting file(s): %s" (.getCanonicalPath f)))
+          false)))))

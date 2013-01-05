@@ -134,46 +134,53 @@
     (doseq [f [db-file db-trace-file db-trace-old-file db-lobs-file db-lock-file]]
       (io/delete-all-files f))))
 
-(defn- pool-status [pooled-db]
-  (let [ds (:datasource pooled-db)]
-    [(.getNumBusyConnections ds)
-     (.getNumIdleConnections ds)
-     (.getNumConnections ds)]))
+(defn- pool-status [ds]
+  [(.getNumBusyConnections ds)
+   (.getNumIdleConnections ds)
+   (.getNumConnections ds)])
 
 (let [db-path (io/temp-file-name "nico-")
       ro-conns (atom [])
       pooled-db (atom nil)]
   (hu/defhook db :shutdown)
-  (defn init-db []
-    (io/delete-all-files db-path)
-    (create-db db-path)
-    (reset! pooled-db (pool db-path))
-    (jdbc/with-connection @pooled-db
-      (jdbc/do-commands "SET CACHE_SIZE 8192")
-      (jdbc/do-commands "SET MAX_OPERATION_MEMORY 10000")
-;;      (jdbc/do-commands "SET MAX_MEMORY_ROWS 1000")
-      (jdbc/do-commands "SET MAX_MEMORY_UNDO 1000")))
+  (defn init []
+    (if (io/delete-all-files db-path)
+      (do
+        (create-db db-path)
+        (reset! pooled-db (pool db-path))
+        (jdbc/with-connection @pooled-db
+          (jdbc/do-commands "SET CACHE_SIZE 8192")
+          (jdbc/do-commands "SET MAX_OPERATION_MEMORY 10000")
+          ;;      (jdbc/do-commands "SET MAX_MEMORY_ROWS 1000")
+          (jdbc/do-commands "SET MAX_MEMORY_UNDO 1000"))
+        true)
+      (do
+        (error (format "failed initializing Database"))
+        false)))
   (defn shutdown []
     (run-db-hooks :shutdown)
     (let [d @pooled-db]
-      (reset! pooled-db nil)
+      (reset! pooled-db nil) ; shut an other's access out.
       (doseq [ro-conn @ro-conns] (.close ro-conn))
-       (doto (:datasource d)
-        (.setInitialPoolSize 0)
-        (.setMinPoolSize 0)
-        (.setMaxIdleTime 1))
-      (loop [[bc ic nc] (pool-status d)]
-        (if (< 0 nc)
-          (do (debug (format "waiting for closing connections: %d/%d/%d" bc ic nc))
-              (.sleep TimeUnit/MILLISECONDS 500)
-              (recur (pool-status d)))
-          (debug (format "all connections were closed: %d/%d/%d" bc ic nc))))
-      (doto (:datasource d)
-        (.hardReset)
-        (.close))
-      (.sleep TimeUnit/SECONDS 1)
-;;      (shutdown-db db-path)
-      (delete-db-files db-path)))
+      (if-let [ds (:datasource d)]
+        (do
+          (doto ds
+            (.setInitialPoolSize 0)
+            (.setMinPoolSize 0)
+            (.setMaxIdleTime 1))
+          (loop [[bc ic nc] (pool-status ds)]
+            (if (< 0 nc)
+              (do (debug (format "waiting for closing connections: %d/%d/%d" bc ic nc))
+                  (.sleep TimeUnit/MILLISECONDS 500)
+                  (recur (pool-status ds)))
+              (debug (format "all connections were closed: %d/%d/%d" bc ic nc))))
+          (doto ds
+            (.hardReset)
+            (.close))
+          (.sleep TimeUnit/SECONDS 1)
+          ;;      (shutdown-db db-path)
+          (delete-db-files db-path))
+        (info "No database is running. Nothing to do..."))))
   (defn- db [] @pooled-db)
   (defn get-ro-conn []
     (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:h2:file:%s;IGNORECASE=TRUE" db-path))
@@ -190,7 +197,7 @@
         (reset! called_at now)))))
 
 (add-pgms-hook :updated #(when-let [db (db)]
-                           (let [[bc ic nc] (pool-status db)]
+                           (let [[bc ic nc] (pool-status (:datasource db))]
                              (debug (format "Datasource: busy(%d), idle(%d), conns(%d)" bc ic nc)))))
 
 (defn- memory-usage []
