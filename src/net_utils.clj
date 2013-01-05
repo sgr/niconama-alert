@@ -14,7 +14,7 @@
            [org.apache.http.impl.client.cache BasicHttpCacheStorage CacheConfig CachingHttpClient FileResourceFactory]))
 
 (def ^{:private true} CONNECT-TIMEOUT 5000)
-(def ^{:private true} READ-TIMEOUT    5000)
+(def ^{:private true} READ-TIMEOUT    8000)
 (def ^{:private true} INTERVAL-RETRY  2000)
 
 (def HTTP-OPTS
@@ -79,7 +79,7 @@
   (defn url-stream-with-caching
     [^String url]
     (try
-      (debug (format "fetching content from %s" url ))
+      (trace (format "fetching content from %s" url ))
       (let [client (CachingHttpClient. (DefaultHttpClient.) @resource-factory cache-storage cache-config)
             context (BasicHttpContext.)
             request (HttpGet. url)

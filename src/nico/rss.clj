@@ -20,19 +20,19 @@
 	   [java.util Locale]
            [java.util.concurrent TimeUnit]))
 
-(def ^{:private true} RETRY 10)
-(def ^{:private true} WAIT 3)
+(def ^{:private true} RETRY 2)
+(def ^{:private true} WAIT 5)
 
 (defn- get-nico-rss-aux [page]
   (try
     (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/recent/rss?p=%s" page)
                                           n/HTTP-OPTS)]
       (let [rss (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
-        (when (some #(let [title (-> % :content first :content first)]
-                       (if (nil? title) (do (warn title) true) false))
-                  (for [x (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
-                        :when (= :item (:tag (first x)))] (first x)))
-          (warn (format "contains NIL TITLE: %s" (pr-str raw-res))))
+        ;; (when (some #(let [title (-> % :content first :content first)]
+        ;;                (if (nil? title) (do (warn title) true) false))
+        ;;           (for [x (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
+        ;;                 :when (= :item (:tag (first x)))] (first x)))
+        ;;   (trace (format "contains NIL TITLE: %s" (pr-str raw-res))))
         rss))
     (catch Exception e
       (error e (format "failed fetching RSS #%d" page)) nil)))
@@ -93,15 +93,20 @@
 
 (defn- get-programs-from-rss-aux [rss]
   [(get-programs-count rss)
-   (for [item (for [x (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
-		    :when (= :item (:tag (first x)))] (first x))]
-     (let [now (tu/now)
-           pgm (create-pgm item now)]
-       (when (some nil? (list (:id pgm) (:title pgm) (:pubdate pgm)))
-         (warn (format "Some nil properties found in: %s" (pr-str item)))
-         (when-not (pgm/get-pgm (:id pgm))
-           (api/request-fetch (name (:id pgm)) (name (:comm_id pgm)) now)))
-       pgm))])
+   (let [nodes-child (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
+         items (for [x nodes-child :when (= :item (:tag (first x)))] (first x))]
+     (if (= 0 (count items))
+       (l/with-trace (format "no items in rss: %s" (pr-str nodes-child))
+         nil)
+       (remove
+        nil?
+        (for [item items]
+          (let [now (tu/now) pgm (create-pgm item now)]
+            (if (some nil? (list (:id pgm) (:title pgm) (:pubdate pgm)))
+              (l/with-trace (format "Some nil properties found in: %s" (pr-str item))
+                (when-not (pgm/get-pgm (:id pgm))
+                  (api/request-fetch (name (:id pgm)) (name (:comm_id pgm)) now)))
+              pgm))))))])
 
 (defn get-programs-from-rss [page]
   (loop [c RETRY
@@ -109,14 +114,10 @@
          [total pgms] (get-programs-from-rss-aux rss)]
     (if (= 0 c)
       (l/with-debug "reached limit fetching RSS"
-        [total pgms])
-      (if (or (= 0 total) (> 0 total))
-        (l/with-debug (format "retry fetching RSS #%d (%d) caused by wrong total number: %d" page c total)
+        [total (if pgms pgms '())])
+      (if (or (>= 0 total) (nil? pgms))
+        (l/with-debug (format "retry fetching RSS #%d (%d) total number: %d, pgms: %d"
+                              page c total (if-not pgms 0 (count pgms)))
           (.sleep TimeUnit/SECONDS WAIT)
           (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
-        (if (and (= 0 (count pgms)) (> total (* 18 page)))
-          (l/with-debug (format "retry fetching RSS #%d (%d) caused by lack of programs: %d,%d,%d"
-                                page c total (* 18 page) (count pgms))
-            (.sleep TimeUnit/SECONDS WAIT)
-            (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
-          [total pgms])))))
+        [total pgms]))))

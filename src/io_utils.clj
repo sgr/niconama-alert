@@ -27,7 +27,7 @@
 
 (defn- delete [^File f]
   (if (.delete f)
-    (debug (format "deleted %s" (.getCanonicalPath f)))
+    (trace (format "deleted %s" (.getCanonicalPath f)))
     (throw (IOException. (format "failed deleting %s" (.getCanonicalPath f))))))
 
 (defn delete-all-files

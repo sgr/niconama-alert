@@ -114,18 +114,20 @@
          (.sleep TimeUnit/SECONDS INTERVAL-SCRAPE)))))
   (let [comm-q (LinkedBlockingQueue.)
 	comm-executor (create-executor NTHREADS-COMM comm-q)]
+    (defn- enqueue [pid cid uid received]
+      (.execute comm-executor (nico.api-updator.WrappedFutureTask. pid cid uid received)))
     (defn- create-task [pid cid uid received]
       (swap! received-rate conj (tu/now))
       (if (contains? @communities cid)
         (l/with-info (format "%s will be fetched because %s is joined community." pid cid)
-          (.execute comm-executor (nico.api-updator.WrappedFutureTask. pid cid uid received)))
+          (enqueue pid cid uid received))
         (trace (format "%s: %s isn't your community." pid cid))))
     (defn request-fetch
       "RSSでタイトルが空の場合('<'を含んだ場合になるようだ)など、
        どうしてもスクレイピングで番組情報を取得したい場合に用いる。"
       [pid cid received]
-      (debug (format "request fetching %s %s %s" pid cid received))
-      (.execute comm-executor (nico.api-updator.WrappedFutureTask. pid cid nil received)))
+      (l/with-debug (format "request force scraping with %s %s %s" pid cid received)
+        (enqueue pid cid nil received)))
     (defn- update-api-aux []
       (try
 	(api/listen (first (vals @alert-statuses)) (fn [] (run-api-hooks :connected)) create-task)
