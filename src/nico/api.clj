@@ -78,11 +78,9 @@
   (try
     (let [chat (-> chat-str s/utf8stream xml/parse)]
       (if (= :chat (-> chat :tag))
-	(let [s (-> chat :content)
-	      date (Date. (* 1000 (Long/parseLong (-> chat :attrs :date))))]
+	(let [s (-> chat :content)]
 	  (if s
-	    (let [[pid cid uid] (.split (first s) ",")]
-	      (list date pid cid uid))
+	    (.split (first s) ",")
 	    nil))
 	nil))
     (catch Exception e (error e (format "parse error: %s" chat-str)) nil)))
@@ -102,7 +100,7 @@
 	(condp = c
 	    -1 (info "******* Connection closed *******")
 	    0  (let [received (tu/now)]
-		 (if-let [[date id cid uid] (parse-chat-str s)]
+		 (if-let [[id cid uid] (parse-chat-str s)]
 		   (create-task-fn (str "lv" id) cid uid received)
 		   (warn (format "couldn't parse the chat str: %s" s)))
 		 (recur (.read rdr) nil))

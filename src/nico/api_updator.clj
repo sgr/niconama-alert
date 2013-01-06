@@ -156,8 +156,8 @@
                 (filter #(tu/within? % last-updated sec) coll))]
         (loop [last-updated (tu/now)]
           (when (= 1 (.getCount @latch)) (.await @latch))
-          (swap! received-rate #(update-last % last-updated 60))
-          (swap! fetched-rate  #(update-last % last-updated 60))
+          (swap! received-rate update-last last-updated 60)
+          (swap! fetched-rate  update-last last-updated 60)
           (run-api-hooks :rate-updated (count @received-rate) (count @fetched-rate) (.size comm-q))
           (when (tu/within? last-updated (tu/now) RATE-UI-UPDATE)
             (.sleep TimeUnit/SECONDS RATE-UI-UPDATE))
