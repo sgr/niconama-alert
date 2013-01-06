@@ -37,7 +37,7 @@
 (defn- etp-init []
   [[] (atom {:tab-prefs {}
              :tab-titles {}
-             :conn (delay (pgm/get-ro-conn))
+             :conn (delay (pgm/get-conn))
              :pstmts {}})])
 
 (defn- confirm-rem-tab-fn [tpane tab]

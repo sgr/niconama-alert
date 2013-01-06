@@ -1,4 +1,4 @@
-(defproject nicoalert "1.5.4"
+(defproject nicoalert "1.6.0"
   :description "Niconama Alert J"
   :dependencies [[org.clojure/clojure "1.4.0"]
                  [org.clojure/data.zip "0.1.1"]
@@ -9,7 +9,6 @@
                  [org.apache.httpcomponents/httpclient-cache "4.2.2"]
                  [swing-utils "0.2.0"]
                  [enlive "1.0.1"]
-                 [com.mchange/c3p0 "0.9.2-pre8"]
                  [org.xerial/sqlite-jdbc "3.7.2"]
                  [net.sourceforge.htmlcleaner/htmlcleaner "2.2"]]
   :profiles {:dev

@@ -12,14 +12,12 @@
 	    [time-utils :as tu]
             [nico.thumbnail :as thumbnail])
   (:import [clojure.lang Keyword]
-           [com.mchange.v2.c3p0 ComboPooledDataSource]
            [java.lang.management ManagementFactory]
            [java.sql Connection DriverManager SQLException Timestamp]
            [java.util Calendar]
            [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
            [javax.swing ImageIcon]))
 
-(def ^{:private true} NTHREADS 1) ;; 番組追加ワーカースレッド数
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
 
 (def ^{:private true} SCALE 1.05) ;; 番組最大保持数
@@ -95,82 +93,47 @@
                     "CREATE INDEX idx_pgms_comm_id ON pgms(comm_id)"
                     "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"))
 
-(let [db {:classname DB-CLASSNAME
-          :subprotocol "sqlite"}]
-  (defn- create-db [path]
-    (jdbc/with-connection (assoc db :subname path)
-      (jdbc/do-commands "PRAGMA auto_vacuum=2")
-      (jdbc/do-commands "PRAGMA incremental_vacuum(64)")
-      (create-pgms)
-      (create-comms))))
-
-(defn- pool [path]
-  (let [cpds (doto (ComboPooledDataSource.)
-               (.setDriverClass DB-CLASSNAME)
-               (.setJdbcUrl (format "jdbc:sqlite:%s" path))
-               (.setMinPoolSize 0)
-               (.setInitialPoolSize 0)
-               (.setMaxPoolSize 2)
-               (.setMaxIdleTime 3)
-               (.setMaxIdleTimeExcessConnections 3))]
-    {:datasource cpds}))
-
-(defmacro ^{:private true} with-conn-pool [pool-fn error-value & body]
-  `(if-let [db# (~pool-fn)]
-     (jdbc/with-connection db#
-       ~@body)
-     ~error-value))
+(defn- create-db [db-spec]
+  (jdbc/with-connection db-spec
+    (jdbc/do-commands "PRAGMA auto_vacuum=2")
+    (jdbc/do-commands "PRAGMA incremental_vacuum(64)")
+    (create-pgms)
+    (create-comms)))
 
 (defn- delete-db-file [path] (io/delete-all-files path))
 
-(defn- pool-status [ds]
-  [(.getNumBusyConnections ds)
-   (.getNumIdleConnections ds)
-   (.getNumConnections ds)])
-
 (let [db-path (io/temp-file-name "nico-" ".db")
-      ro-conns (atom [])
-      pooled-db (atom nil)]
+      db (atom {:classname DB-CLASSNAME
+                :subprotocol "sqlite"
+                :subname db-path})]
   (hu/defhook db :shutdown)
   (defn init []
     (if (io/delete-all-files db-path)
-      (do
-        (create-db db-path)
-        (reset! pooled-db (pool db-path))
-        (info (format "initialized Database to %s" db-path))
+      (l/with-info (format "initialize Database to %s" db-path)
+        (create-db @db)
+        (swap! db assoc :connection (DriverManager/getConnection (format "jdbc:sqlite:%s" db-path)))
         true)
-      (do
-        (error (format "failed initializing Database"))
+      (l/with-error (format "failed initializing Database")
         false)))
   (defn shutdown []
     (run-db-hooks :shutdown)
-    (let [d @pooled-db]
-      (reset! pooled-db nil) ; shut an other's access out.
-      (doseq [ro-conn @ro-conns] (.close ro-conn))
-      (if-let [ds (:datasource d)]
-        (do
-          (doto ds
-            (.setInitialPoolSize 0)
-            (.setMinPoolSize 0)
-            (.setMaxIdleTime 1))
-          (loop [[bc ic nc] (pool-status ds)]
-            (if (< 0 nc)
-              (do (debug (format "waiting for closing connections: %d/%d/%d" bc ic nc))
-                  (.sleep TimeUnit/MILLISECONDS 500)
-                  (recur (pool-status ds)))
-              (debug (format "all connections were closed: %d/%d/%d" bc ic nc))))
-          (doto ds
-            (.hardReset)
-            (.close))
-          (.sleep TimeUnit/SECONDS 1)
-          (delete-db-file db-path))
-        (info "No database is running. Nothing to do..."))))
-  (defn- db [] @pooled-db)
-  (defn get-ro-conn []
-    (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:sqlite:%s" db-path))
-                    (.setReadOnly true))]
-      (swap! ro-conns conj ro-conn)
-      ro-conn)))
+    (when-let [conn (:connection @db)]
+      (try
+        (.close conn)
+        (catch Exception e
+          (error e (format "failed closing conn: %s" (pr-str conn))))
+        (finally
+          (swap! db dissoc :connection))))
+    (.sleep TimeUnit/SECONDS 1)
+    (delete-db-file db-path))
+  (defn- db [] (deref db))
+  (defn get-conn [] (:connection @db)))
+
+(defmacro ^{:private true} with-pooled-conn [no-conn-value & body]
+  `(if-let [conn# (:connection (db))]
+     (locking conn#
+       (jdbc/with-connection (db) ~@body))
+     ~no-conn-value))
 
 (let [called_at (atom (tu/now))]
   (hu/defhook pgms :updated)
@@ -179,10 +142,6 @@
       (when-not (tu/within? @called_at now INTERVAL-UPDATE)
         (run-pgms-hooks :updated)
         (reset! called_at now)))))
-
-(add-pgms-hook :updated #(when-let [db (db)]
-                           (let [[bc ic nc] (pool-status (:datasource db))]
-                             (debug (format "Datasource: busy(%d), idle(%d), conns(%d)" bc ic nc)))))
 
 (defn- memory-usage []
   (let [mbean (ManagementFactory/getMemoryMXBean)
@@ -200,7 +159,7 @@
   (defn get-total [] @total))
 
 (defn- get-row-comm [^String comm_id]
-  (if-let [raw-row (with-conn-pool db nil
+  (if-let [raw-row (with-pooled-conn nil
                      (jdbc/with-query-results rs
                        [{:concurrency :read-only} "SELECT * FROM comms WHERE id=?" comm_id]
                        (first rs)))]
@@ -244,7 +203,7 @@
   (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT COUNT(*) AS cnt FROM pgms"]
     (:cnt (first rs))))
 
-(defn count-pgms [] (with-conn-pool db -1 (count-pgms-aux)))
+(defn count-pgms [] (with-pooled-conn -1 (count-pgms-aux)))
 
 (defn- get-pgm-aux [^String id]
   (if-let [raw-row (jdbc/with-query-results rs
@@ -254,7 +213,7 @@
     nil))
 
 (defn get-pgm [^Keyword id]
-  (with-conn-pool db nil
+  (with-pooled-conn nil
     (if-let [row-pgm (get-pgm-aux (name id))] (row-to-pgm row-pgm) nil)))
 
 (defn not-alerted
@@ -268,7 +227,7 @@
               (catch Exception e
                 (debug e (format "failed updating for " id))
                 false)))]
-    (with-conn-pool db nil
+    (with-pooled-conn nil
       (if (update-alerted-aux (name id))
         (if-let [row-pgm (get-pgm-aux (name id))]
           (row-to-pgm row-pgm)
@@ -324,7 +283,7 @@
 (let [q (LinkedBlockingQueue.)
       last-updated (atom (tu/now))
       last-cleaned (atom (tu/now))
-      pool (proxy [ThreadPoolExecutor] [1 NTHREADS KEEP-ALIVE TimeUnit/SECONDS q]
+      pool (proxy [ThreadPoolExecutor] [1 1 KEEP-ALIVE TimeUnit/SECONDS q]
              (afterExecute
                [r e]
                (reset! last-updated (tu/now))
@@ -345,7 +304,7 @@
               (reset! last-cleaned (tu/now))))
           (clean-old1 []
             (try
-              (with-conn-pool db nil
+              (with-pooled-conn nil
                 (when-not (tu/within? @last-cleaned (tu/now) INTERVAL-CLEAN)
                   (let [total (get-total)
                         cnt (count-pgms-aux)
@@ -405,14 +364,14 @@
           ;; jdbc/transactionはネストされると外側のトランザクションのみが有効となることを利用している。
           (add1 [^Pgm pgm]
             (try
-              (with-conn-pool db nil
+              (with-pooled-conn nil
                 (add2 pgm)
                 (call-hook-updated))
               (catch Exception e
                 (error e (format "failed adding program (%s) %s" (name (:id pgm)) (:title pgm))))))
           (add1-pgms [pgms]
             (try
-              (with-conn-pool db nil
+              (with-pooled-conn nil
                 (jdbc/transaction
                  (doseq [pgm pgms]
                    (add2 pgm)
@@ -444,7 +403,7 @@
     (str "SELECT * FROM pgms JOIN comms ON pgms.comm_id=comms.id WHERE " where-clause)))
 
 (defn- search-pgms-by-sql [sql]
-  (with-conn-pool db nil
+  (with-pooled-conn nil
     (jdbc/with-query-results rs [{:concurrency :read-only} sql]
       (rs-to-pgms rs))))
 
@@ -456,9 +415,10 @@
 
 (defn search-pgms-by-pstmt [pstmt]
   (if pstmt
-    (let [rs (.executeQuery pstmt)]
-      (try
-        (rs-to-pgms (jdbc/resultset-seq rs))
-        (catch Exception e (error e (format "failed rs-to-pgms: %s" pstmt)))
-        (finally (.close rs))))
+    (locking (.getConnection pstmt)
+      (let [rs (.executeQuery pstmt)]
+        (try
+          (rs-to-pgms (jdbc/resultset-seq rs))
+          (catch Exception e (error e (format "failed rs-to-pgms: %s" pstmt)))
+          (finally (.close rs)))))
     {}))
