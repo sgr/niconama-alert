@@ -19,7 +19,7 @@
            [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
            [javax.swing ImageIcon]))
 
-(def ^{:private true} NTHREADS 3) ;; 番組追加ワーカースレッド数
+(def ^{:private true} NTHREADS 1) ;; 番組追加ワーカースレッド数
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
 
 (def ^{:private true} SCALE 1.05) ;; 番組最大保持数
@@ -169,9 +169,7 @@
   (defn get-ro-conn []
     (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:sqlite:%s" db-path))
                     (.setReadOnly true))]
-      (info (format "ro-conn: %s" (pr-str ro-conn)))
       (swap! ro-conns conj ro-conn)
-      (info (format "ro-conns: %s" (pr-str @ro-conns)))
       ro-conn)))
 
 (let [called_at (atom (tu/now))]
@@ -416,8 +414,9 @@
             (try
               (with-conn-pool db nil
                 (jdbc/transaction
-                 (doseq [pgm pgms] (add2 pgm)))
-                (call-hook-updated))
+                 (doseq [pgm pgms]
+                   (add2 pgm)
+                   (call-hook-updated))))
               (catch Exception e
                 (error e (format "failed adding programs: [%s]" (pr-str pgms))))))]
     (defn add [^Pgm pgm] (.execute pool #(add1 pgm)))
