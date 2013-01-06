@@ -71,10 +71,10 @@
         (clear-cache))
       (if (.mkdir @cache-dir)
         (do (debug (format "cache directory: %s" cp))
-            (reset! resource-factory (FileResourceFactory. @cache-dir))
-            true)
-        (do (error (format "failed creating cache direcotry: %s" cp))
-            false))))
+            (reset! resource-factory (FileResourceFactory. @cache-dir)))
+        (let [msg (format "failed creating cache direcotry: %s" cp)]
+          (error msg)
+          (throw (Exception. msg))))))
 
   (defn url-stream-with-caching
     [^String url]

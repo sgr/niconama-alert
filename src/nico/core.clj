@@ -14,26 +14,32 @@
 
 (h/defhook main :shutdown)
 
+(defn- startup []
+  (l/load-log-props)
+  (p/load-pref)
+  (n/init-cache)
+  (pgm/init))
+
 (defn -main []
   ;; set up shutdown hooks
   (add-main-hook :shutdown (fn [] (pgm/shutdown)))
   (add-main-hook :shutdown (fn [] (n/clear-cache)))
 
   ;; call start-up functions
-  (if (and (l/load-log-props)
-           (p/load-pref)
-           (n/init-cache)
-           (pgm/init))
-    (do
-      ;; invoke main frame
-      (let [frame (main-frame (fn [f] (add-main-hook :shutdown f))
-                              (fn [] (run-main-hooks :shutdown)))]
-        (do-swing (.setVisible frame true)))
-      (start-updators)) ; start updators
-    (do
-      (error "failed starting up. shutting down...")
+  (try
+    (l/load-log-props)
+    (p/load-pref)
+    (n/init-cache)
+    (pgm/init)
+    ;; invoke main frame
+    (let [frame (main-frame (fn [f] (add-main-hook :shutdown f))
+                            (fn [] (run-main-hooks :shutdown)))]
+      (do-swing (.setVisible frame true)))
+    (start-updators) ; start updators
+    (catch Exception e
+      (error e (format "failed starting up"))
       (JOptionPane/showMessageDialog
        nil
-       "Failed start-up procedure.\nThe cause is written the log file. \nShutting down..."
+       (format "Failed start-up procedure.\nCause: %s\nShutting down..." (.getMessage e))
        "initializing error" JOptionPane/ERROR_MESSAGE)
       (run-main-hooks :shutdown))))

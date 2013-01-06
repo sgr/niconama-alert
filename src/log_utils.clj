@@ -45,13 +45,8 @@
 (defn load-log-props [^String appname ^Properties default-props]
   (let [file (File. (path-log-props appname))]
     (when-not (.exists file) (create-log-props default-props file))
-    (try
-      (with-open [is (FileInputStream. file)]
-        (doto (LogManager/getLogManager) (.readConfiguration is))
-        true)
-      (catch Exception e
-        (error e (format "failed reading log properties from %s" (.getCanonicalPath file)))
-        false))))
+    (with-open [is (FileInputStream. file)]
+      (doto (LogManager/getLogManager) (.readConfiguration is)))))
 
 (defmacro with-log
   {:arglists '([level msg & body] [level throwable msg & body])}
