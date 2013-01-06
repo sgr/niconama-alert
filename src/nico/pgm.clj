@@ -109,12 +109,12 @@
   (hu/defhook db :shutdown)
   (defn init []
     (if (io/delete-all-files db-path)
-      (l/with-info (format "initialize Database to %s" db-path)
+      (l/with-info (format "initialize Database: %s" db-path)
         (create-db @db)
-        (swap! db assoc :connection (DriverManager/getConnection (format "jdbc:sqlite:%s" db-path)))
-        true)
-      (l/with-error (format "failed initializing Database")
-        false)))
+        (swap! db assoc :connection (DriverManager/getConnection (format "jdbc:sqlite:%s" db-path))))
+      (let [msg (format "failed initializing Database: %s" db-path)]
+        (error msg)
+        (throw (Exception. msg)))))
   (defn shutdown []
     (run-db-hooks :shutdown)
     (when-let [conn (:connection @db)]
@@ -143,13 +143,20 @@
         (run-pgms-hooks :updated)
         (reset! called_at now)))))
 
-(defn- memory-usage []
-  (let [mbean (ManagementFactory/getMemoryMXBean)
-        husage (.getHeapMemoryUsage mbean)]
-    husage))
-(add-pgms-hook :updated #(let [u (memory-usage)]
-                           (debug (format "JVM memory usage: init(%d), used(%d), committed(%d), max(%d)"
-                                          (.getInit u) (.getUsed u) (.getCommitted u) (.getMax u)))))
+(let [mbean (ManagementFactory/getMemoryMXBean)]
+  (letfn [(husage [] (.getHeapMemoryUsage mbean))
+          (nusage [] (.getNonHeapMemoryUsage mbean))
+          (usage-map [usage]
+            {:init (.getInit usage) :used (.getUsed usage)
+             :committed (.getCommitted usage) :max (.getMax usage)})]
+    (defn- memory-usage []
+      [(usage-map (husage)) (usage-map (nusage))])))
+
+(add-pgms-hook :updated #(let [[h n] (memory-usage)]
+                           (debug (format "JVM heap usage:     init(%d), used(%d) ->     heap delta: %d  "
+                                          (:init h) (:used h) (- (:used h) (:init h))))
+                           (debug (format "JVM non-heap usage: init(%d), used(%d) -> non-heap delta: %d"
+                                          (:init n) (:used n) (- (:used n) (:init n))))))
 
 (let [total (atom -1)]
   (defn set-total [ntotal]
@@ -195,7 +202,7 @@
      (condp = (:type row-pgm) 0 :community 1 :channel 2 :official)
      (:comm_name row-comm)
      (keyword (:comm_id row-pgm))
-     (:alerted row-pgm)
+     (condp = (:alerted row-pgm) 0 false 1 true)
      (tu/timestamp-to-date (:fetched_at row-pgm))
      (tu/timestamp-to-date (:updated_at row-pgm)))))
 
@@ -222,7 +229,7 @@
   (letfn [(update-alerted-aux [^String id]
             (try
               (jdbc/transaction
-               (let [result (jdbc/update-values :pgms ["id=? AND alerted=FALSE" (name id)] {:alerted true})]
+               (let [result (jdbc/update-values :pgms ["id=? AND alerted=0" (name id)] {:alerted true})]
                  (if (= 1 (first result)) true false)))
               (catch Exception e
                 (debug e (format "failed updating for " id))
@@ -295,12 +302,11 @@
   (defn adding-queue-size [] (.size q))
   (defn last-updated [] @last-updated)
   (letfn [(clean-old2 [num]
-;;            (let [start (Timestamp. (.getTimeInMillis (doto (Calendar/getInstance) (.add Calendar/MINUTE -30))))]
             ;; sqliteはtimestamp値をミリ秒longで保持するのでこの値でそのまま比較できるはず。
             (let [start (.getTimeInMillis (doto (Calendar/getInstance) (.add Calendar/MINUTE -30)))]
               (jdbc/transaction
-               (jdbc/delete-rows :pgms ["id IN (SELECT TOP ? id FROM pgms WHERE pubdate < ? ORDER BY updated_at)"
-                                        num start]))
+               (jdbc/delete-rows :pgms ["id IN (SELECT id FROM pgms WHERE pubdate < ? ORDER BY updated_at LIMIT ?)"
+                                        start num]))
               (reset! last-cleaned (tu/now))))
           (clean-old1 []
             (try
