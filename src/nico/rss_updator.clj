@@ -29,7 +29,7 @@
 	  (when (< (pgm/get-total) total) (pgm/set-total total))
           (trace (format "adding fetched pgms of RSS(%d)" page))
 	  ;; 番組の追加と取得状況のリアルタイム更新
-	  (doseq [pgm cur_pgms] (pgm/add pgm))
+	  (pgm/add-pgms cur_pgms)
           (trace (format "added fetched pgms of RSS(%d)" page))
 	  (run-rss-hooks :fetching cids total page)
 	  ;; 取得完了・中断・継続の判定

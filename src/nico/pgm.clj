@@ -110,6 +110,7 @@
                (.setJdbcUrl (format "jdbc:sqlite:%s" path))
                (.setMinPoolSize 0)
                (.setInitialPoolSize 0)
+               (.setMaxPoolSize 2)
                (.setMaxIdleTime 3)
                (.setMaxIdleTimeExcessConnections 3))]
     {:datasource cpds}))
@@ -168,7 +169,9 @@
   (defn get-ro-conn []
     (let [ro-conn (doto (DriverManager/getConnection (format "jdbc:sqlite:%s" db-path))
                     (.setReadOnly true))]
+      (info (format "ro-conn: %s" (pr-str ro-conn)))
       (swap! ro-conns conj ro-conn)
+      (info (format "ro-conns: %s" (pr-str @ro-conns)))
       ro-conn)))
 
 (let [called_at (atom (tu/now))]
@@ -398,20 +401,33 @@
                      (add3 pgm))
                     nil) ; 自分のほうが古ければ追加は不要
                   (jdbc/transaction (add3 pgm))))))
+          ;; add2はadd1とadd1-pgms双方から呼ばれる。違いはadd1が一つずつ追加するのに対し、
+          ;; add1-pgmsは複数を一度で追加する。add1から呼ばれた場合はadd2の中のトランザクションが有効となる。
+          ;; add1-pgmsから呼ばれた場合は外側(add1-pgms内)でくくられたトランザクションが有効となる。
+          ;; jdbc/transactionはネストされると外側のトランザクションのみが有効となることを利用している。
           (add1 [^Pgm pgm]
             (try
               (with-conn-pool db nil
                 (add2 pgm)
                 (call-hook-updated))
               (catch Exception e
-                (error e (format "failed adding program (%s) %s" (name (:id pgm)) (:title pgm))))))]
-    (defn add [^Pgm pgm] (.execute pool #(add1 pgm)))))
+                (error e (format "failed adding program (%s) %s" (name (:id pgm)) (:title pgm))))))
+          (add1-pgms [pgms]
+            (try
+              (with-conn-pool db nil
+                (jdbc/transaction
+                 (doseq [pgm pgms] (add2 pgm)))
+                (call-hook-updated))
+              (catch Exception e
+                (error e (format "failed adding programs: [%s]" (pr-str pgms))))))]
+    (defn add [^Pgm pgm] (.execute pool #(add1 pgm)))
+    (defn add-pgms [pgms] (.execute pool #(add1-pgms pgms)))))
 
 (defn- rs-to-pgms [rs]
   (let [pgms (atom {})]
     (doseq [r rs]
       (let [p (-> r (tu/update-timestamp-sqlite [:pubdate :fetched_at :updated_at]) row-to-pgm)]
-        (info (format "raw-row: %s => %s" (pr-str r) (pr-str p)))
+        (trace (format "raw-row: %s => %s" (pr-str r) (pr-str p)))
         (swap! pgms assoc (:id p) p)))
     @pgms))
 
@@ -440,8 +456,7 @@
   (search-pgms-by-sql (get-sql-kwds query targets)))
 
 (defn search-pgms-by-pstmt [pstmt]
-;;  (if-not (.isClosed pstmt)
-  (if-not pstmt
+  (if pstmt
     (let [rs (.executeQuery pstmt)]
       (try
         (rs-to-pgms (jdbc/resultset-seq rs))
