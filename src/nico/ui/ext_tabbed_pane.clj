@@ -68,7 +68,8 @@
         content (.getComponentAt tpane idx)
         title (get-in @(.state tpane) [:tab-titles id-tab])
         pstmt (get-in @(.state tpane) [:pstmts id-tab])]
-    (if (and pstmt (not (.isClosed pstmt)))
+;;    (if (and pstmt (not (.isClosed pstmt)))
+    (if pstmt
       (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
         (when (get-in @(.state tpane) [:tab-prefs id-tab :alert])
           (future

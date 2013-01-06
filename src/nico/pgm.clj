@@ -199,11 +199,12 @@
   (defn get-total [] @total))
 
 (defn- get-row-comm [^String comm_id]
-  (with-conn-pool db nil
-    (jdbc/with-query-results
-      rs [{:concurrency :read-only}
-          "SELECT id,comm_name,thumbnail,fetched_at,updated_at FROM comms WHERE id=?" comm_id]
-      (first rs))))
+  (if-let [raw-row (with-conn-pool db nil
+                     (jdbc/with-query-results rs
+                       [{:concurrency :read-only} "SELECT * FROM comms WHERE id=?" comm_id]
+                       (first rs)))]
+    (tu/update-timestamp-sqlite raw-row [:fetched_at :updated_at])
+    nil))
 
 (defn get-comm-thumbnail [^Keyword comm_id]
   (debug (format "getting community's thumbnail: %s" comm_id))
@@ -230,7 +231,7 @@
      (:link row-pgm)
      (:thumbnail row-comm)
      (:owner_name row-pgm)
-     (:member_only row-pgm)
+     (condp = (:member_only row-pgm) 0 false 1 true)
      (condp = (:type row-pgm) 0 :community 1 :channel 2 :official)
      (:comm_name row-comm)
      (keyword (:comm_id row-pgm))
@@ -245,8 +246,11 @@
 (defn count-pgms [] (with-conn-pool db -1 (count-pgms-aux)))
 
 (defn- get-pgm-aux [^String id]
-  (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT * FROM pgms WHERE pgms.id=?" id]
-    (first rs)))
+  (if-let [raw-row (jdbc/with-query-results rs
+                     [{:concurrency :read-only} "SELECT * FROM pgms WHERE pgms.id=?" id]
+                     (first rs))]
+    (tu/update-timestamp-sqlite raw-row [:pubdate :fetched_at :updated_at])
+    nil))
 
 (defn get-pgm [^Keyword id]
   (with-conn-pool db nil
@@ -274,8 +278,11 @@
   (jdbc/delete-rows :pgms ["id=?" pid]))
 
 (defn- get-row-pgm-by-comm-id [^String comm_id]
-  (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT * FROM pgms WHERE comm_id=?" comm_id]
-    (first rs)))
+  (if-let [raw-row (jdbc/with-query-results rs
+                     [{:concurrency :read-only} "SELECT * FROM pgms WHERE comm_id=?" comm_id]
+                     (first rs))]
+    (tu/update-timestamp-sqlite raw-row [:pubdate :fetched_at :updated_at])
+    nil))
 
 (defn- merge-pgm [row-pgm ^Pgm pgm]
   (letfn [(longer-for [k x ^Pgm y]
@@ -328,7 +335,9 @@
   (defn adding-queue-size [] (.size q))
   (defn last-updated [] @last-updated)
   (letfn [(clean-old2 [num]
-            (let [start (Timestamp. (.getTimeInMillis (doto (Calendar/getInstance) (.add Calendar/MINUTE -30))))]
+;;            (let [start (Timestamp. (.getTimeInMillis (doto (Calendar/getInstance) (.add Calendar/MINUTE -30))))]
+            ;; sqliteはtimestamp値をミリ秒longで保持するのでこの値でそのまま比較できるはず。
+            (let [start (.getTimeInMillis (doto (Calendar/getInstance) (.add Calendar/MINUTE -30)))]
               (jdbc/transaction
                (jdbc/delete-rows :pgms ["id IN (SELECT TOP ? id FROM pgms WHERE pubdate < ? ORDER BY updated_at)"
                                         num start]))
@@ -401,7 +410,8 @@
 (defn- rs-to-pgms [rs]
   (let [pgms (atom {})]
     (doseq [r rs]
-      (let [p (row-to-pgm r)]
+      (let [p (-> r (tu/update-timestamp-sqlite [:pubdate :fetched_at :updated_at]) row-to-pgm)]
+        (info (format "raw-row: %s => %s" (pr-str r) (pr-str p)))
         (swap! pgms assoc (:id p) p)))
     @pgms))
 
@@ -430,7 +440,8 @@
   (search-pgms-by-sql (get-sql-kwds query targets)))
 
 (defn search-pgms-by-pstmt [pstmt]
-  (if-not (.isClosed pstmt)
+;;  (if-not (.isClosed pstmt)
+  (if-not pstmt
     (let [rs (.executeQuery pstmt)]
       (try
         (rs-to-pgms (jdbc/resultset-seq rs))
