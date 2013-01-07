@@ -8,22 +8,25 @@
   (:import [java.awt GraphicsEnvironment RenderingHints]
 	   [java.awt.image BufferedImage]
            [java.io ByteArrayInputStream ByteArrayOutputStream]
-           [javax.imageio ImageIO]))
+           [javax.imageio ImageIO]
+           [javax.swing ImageIcon]))
 
-(def NO-IMAGE (ImageIO/read (clojure.java.io/resource "noimage.png")))
+(def NO-IMAGE (ImageIcon. (ImageIO/read (clojure.java.io/resource "noimage.png"))))
 (def ^{:private true} ICON-WIDTH  64)
 (def ^{:private true} ICON-HEIGHT 64)
 
 (defn adjust-img [^BufferedImage img width height]
   (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
         g2d (.createGraphics nimg)]
-    (doto g2d
-      (.setRenderingHint RenderingHints/KEY_INTERPOLATION
-                         RenderingHints/VALUE_INTERPOLATION_BILINEAR)
-      (.drawImage img 0 0 width height nil)
-      (.dispose))
-    (.flush img)
-    nimg))
+    (try
+      (doto g2d
+        (.setRenderingHint RenderingHints/KEY_INTERPOLATION RenderingHints/VALUE_INTERPOLATION_BILINEAR)
+        (.drawImage img 0 0 width height nil))
+      nimg
+      (finally
+        (.dispose g2d)
+        (.finalize g2d)
+        (.flush img)))))
 
 (let [jpeg-reader (.next (ImageIO/getImageReadersByFormatName "jpeg"))
       jpeg-writer (.next (ImageIO/getImageWritersByFormatName "jpeg"))
@@ -44,12 +47,17 @@
     (locking jpeg-reader
       (let [is (n/url-stream-with-caching url)
             iis (if is (ImageIO/createImageInputStream is) nil)
-            img (if iis (do (.setInput jpeg-reader iis)
-                            (.read jpeg-reader 0))
-                    nil)]
+            img (if iis
+                  (do (.setInput jpeg-reader iis)
+                      (.read jpeg-reader 0))
+                  nil)]
         (try
-          (if img (adjust-img img ICON-WIDTH ICON-HEIGHT) NO-IMAGE)
-          (catch Exception e (error e (format "failed fetching image: %s" url)) NO-IMAGE)
+          (if img
+            (ImageIcon. (adjust-img img ICON-WIDTH ICON-HEIGHT))
+            NO-IMAGE)
+          (catch Exception e
+            (error e (format "failed fetching image: %s" url))
+            NO-IMAGE)
           (finally (when img (.flush img))
                    (when jpeg-reader (.reset jpeg-reader))
                    (when iis (.close iis))

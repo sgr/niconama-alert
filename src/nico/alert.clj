@@ -7,6 +7,7 @@
   (:require [concurrent-utils :as c]
             [log-utils :as l]
             [time-utils :as tu]
+            [nico.thumbnail :as thumbnail]
 	    [nico.ui.alert-dlg :as uad]
 	    [nico.pgm :as pgm])
   (:import [java.awt GraphicsEnvironment]
@@ -59,7 +60,12 @@
     (let [now (tu/now)
           [i plat] (if (tu/within? @last-modified now 5) (reserve-plat-A) (reserve-plat-B))]
       (if i
-        (let [adlg (uad/alert-dlg pgm thumbicn #(release-plat i plat))
+        (let [release-fn (fn []
+                           (if (not= thumbicn thumbnail/NO-IMAGE)
+                             (.flush (.getImage thumbicn))
+                             (debug "NO-IMAGE, no flush"))
+                           (release-plat i plat))
+              adlg (uad/alert-dlg pgm thumbicn release-fn)
               worker (proxy [javax.swing.SwingWorker][]
                        (doInBackground [] (.sleep TimeUnit/SECONDS DISPLAY-TIME))
                        (done []
@@ -67,8 +73,7 @@
                            (.setVisible false)
                            (.dispatchEvent (WindowEvent. adlg WindowEvent/WINDOW_CLOSING))
                            (.dispose))
-                         (.flush (.getImage thumbicn))
-                         (release-plat i plat)))]
+                         (release-fn)))]
           (reset! last-modified now)
           (do-swing-and-wait (doto adlg
                                (.setLocation (:x plat) (:y plat))

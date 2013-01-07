@@ -15,8 +15,7 @@
            [java.lang.management ManagementFactory]
            [java.sql Connection DriverManager SQLException Timestamp]
            [java.util Calendar]
-           [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
-           [javax.swing ImageIcon]))
+           [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]))
 
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
 
@@ -143,20 +142,27 @@
         (run-pgms-hooks :updated)
         (reset! called_at now)))))
 
-(let [mbean (ManagementFactory/getMemoryMXBean)]
-  (letfn [(husage [] (.getHeapMemoryUsage mbean))
-          (nusage [] (.getNonHeapMemoryUsage mbean))
-          (usage-map [usage]
-            {:init (.getInit usage) :used (.getUsed usage)
-             :committed (.getCommitted usage) :max (.getMax usage)})]
-    (defn- memory-usage []
-      [(usage-map (husage)) (usage-map (nusage))])))
-
-(add-pgms-hook :updated #(let [[h n] (memory-usage)]
-                           (debug (format "JVM heap usage:     init(%d), used(%d) ->     heap delta: %d  "
-                                          (:init h) (:used h) (- (:used h) (:init h))))
-                           (debug (format "JVM non-heap usage: init(%d), used(%d) -> non-heap delta: %d"
-                                          (:init n) (:used n) (- (:used n) (:init n))))))
+(let [mbean (ManagementFactory/getMemoryMXBean)
+      husage #(.getHeapMemoryUsage mbean)
+      nusage #(.getNonHeapMemoryUsage mbean)
+      usage-map (fn [u] {:init (.getInit u) :used (.getUsed u)
+                         :committed (.getCommitted u) :max (.getMax u)})
+      log-memory-usage #(let [h (usage-map (husage))
+                              n (usage-map (nusage))]
+                          (debug (format "JVM heap usage:     init(%d), used(%d) ->     heap delta: %d  "
+                                         (:init h) (:used h) (- (:used h) (:init h))))
+                          (debug (format "JVM non-heap usage: init(%d), used(%d) -> non-heap delta: %d"
+                                         (:init n) (:used n) (- (:used n) (:init n)))))
+      listener (proxy [javax.management.NotificationListener][]
+                     (handleNotification [notif handback]
+                       (when (= (.getType notif)
+                                java.lang.management.MemoryNotificationInfo/MEMORY_THRESHOLD_EXCEEDED)
+                         (debug "calling GC!")
+                         (log-memory-usage)
+                         (.gc mbean)
+                         (log-memory-usage))))]
+  (.addNotificationListener mbean listener nil nil)
+  (add-pgms-hook :updated log-memory-usage))
 
 (let [total (atom -1)]
   (defn set-total [ntotal]
@@ -175,17 +181,16 @@
 
 (defn get-comm-thumbnail [^Keyword comm_id]
   (debug (format "getting community's thumbnail: %s" comm_id))
-  (ImageIcon.
-   (try
-     (if-let [row-comm (get-row-comm (name comm_id))]
-       (let [url (:thumbnail row-comm)]
-         (if url (thumbnail/fetch url)
-             thumbnail/NO-IMAGE))
-       thumbnail/NO-IMAGE)
-     (catch Exception e
-       (error e (format "failed getting community(%s)'s thumbnail: %s"
-                        (name comm_id) (.getMessage e)))
-       thumbnail/NO-IMAGE))))
+  (try
+    (if-let [row-comm (get-row-comm (name comm_id))]
+      (if-let [url (:thumbnail row-comm)]
+        (thumbnail/fetch url)
+        thumbnail/NO-IMAGE)
+      thumbnail/NO-IMAGE)
+    (catch Exception e
+      (error e (format "failed getting community(%s)'s thumbnail: %s"
+                       (name comm_id) (.getMessage e)))
+      thumbnail/NO-IMAGE)))
 
 (defn- row-to-pgm [row-pgm]
   (let [row-comm (get-row-comm (:comm_id row-pgm))]
