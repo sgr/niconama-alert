@@ -2,7 +2,7 @@
 (ns #^{:author "sgr"
        :doc "Alert dialog."}
   nico.ui.alert-dlg
-  (:use [clojure.tools.swing-utils :only [add-action-listener do-swing-and-wait]]
+  (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
 	[clojure.tools.logging])
   (:require [nico.prefs :as p]
 	    [nico.ui.util :as uu]
@@ -12,7 +12,7 @@
 	    [time-utils :as tu])
   (:import [java.awt Color Dimension FlowLayout Font GraphicsEnvironment
 		     GridBagLayout GridBagConstraints Insets]
-	   [java.awt.event ComponentAdapter MouseListener MouseMotionListener]
+	   [java.awt.event ActionListener ComponentAdapter MouseListener MouseMotionListener]
 	   [java.awt.geom RoundRectangle2D$Float]
 	   [java.net URL]
            [java.util.concurrent TimeUnit]
@@ -111,9 +111,19 @@
 	  olabel (JLabel. (format " %s (%s)" owner comm_name))
 	  time (JLabel. (format "%s  （%d分前に開始）"
 				(if (:member_only pgm) "※コミュ限" "")
-				(tu/minute (tu/interval (:pubdate pgm) (tu/now)))))]
+				(tu/minute (tu/interval (:pubdate pgm) (tu/now)))))
+          close-fn (fn [e]
+                     (do-swing-and-wait (.setVisible dlg false) (.dispose dlg))
+                     (extra-close-fn))]
       (let [title (JLabel. (su/ifstr (:title pgm) (name (:id pgm))))
-	    cbtn (JButton. CLOSE-ICON), layout (SpringLayout.)]
+	    cbtn (JButton. CLOSE-ICON), layout (SpringLayout.)
+            close-listener (proxy [ActionListener][]
+                             (actionPerformed [e]
+                               (do-swing-and-wait
+                                (.setVisible dlg false)
+                                (.removeActionListener cbtn this)
+                                (.dispose dlg))
+                               (extra-close-fn)))]
 	(doto title (.setFont uu/DEFAULT-FONT))
 	(doto layout
 	  (.putConstraint SpringLayout/NORTH title 0 SpringLayout/NORTH tpanel)
@@ -124,10 +134,7 @@
 	  (.putConstraint SpringLayout/EAST title 0 SpringLayout/WEST cbtn)
 	  (.putConstraint SpringLayout/EAST cbtn 0 SpringLayout/EAST tpanel))
 	(doto cbtn
-	  (add-action-listener
-	   (fn [e]
-	     (do-swing-and-wait (.setVisible dlg false) (.dispose dlg))
-	     (extra-close-fn)))
+          (.addActionListener close-listener)
 	  (.setPreferredSize (Dimension. (.getIconWidth CLOSE-ICON) (.getIconHeight CLOSE-ICON))))
 	(when (:member_only pgm) (.setBackground cbtn MONLY-BGCOLOR))
 	(doto tpanel
