@@ -11,7 +11,7 @@
            [javax.imageio ImageIO]
            [javax.swing ImageIcon]))
 
-(def NO-IMAGE (ImageIcon. (ImageIO/read (clojure.java.io/resource "noimage.png"))))
+(def NO-IMAGE (ImageIcon. (clojure.java.io/resource "noimage.png")))
 (def ^{:private true} ICON-WIDTH  64)
 (def ^{:private true} ICON-HEIGHT 64)
 
@@ -25,12 +25,11 @@
       nimg
       (finally
         (.dispose g2d)
-        (.finalize g2d)
         (.flush img)))))
 
-(let [jpeg-reader (.next (ImageIO/getImageReadersByFormatName "jpeg"))
-      jpeg-writer (.next (ImageIO/getImageWritersByFormatName "jpeg"))
-      use-cache (do (ImageIO/setUseCache false) (ImageIO/getUseCache))]
+(let [use-cache (do (ImageIO/setUseCache false) (ImageIO/getUseCache))
+      jpeg-reader (.next (ImageIO/getImageReadersByFormatName "jpeg"))
+      jpeg-writer (.next (ImageIO/getImageWritersByFormatName "jpeg"))]
   (defn to-bytes [^java.awt.Image img]
     (let [baos (ByteArrayOutputStream.)
           ios (ImageIO/createImageOutputStream baos)]

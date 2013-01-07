@@ -2,7 +2,8 @@
 (ns #^{:author "sgr"
        :doc "番組情報取得パネル"}
   nico.ui.rss-panel
-  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
+  (:use [clojure.java.io :only [resource]]
+        [clojure.tools.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.rss-updator :as nru])
   (:import [java.awt Dimension]
 	   [javax.swing GroupLayout ImageIcon JPanel JButton JProgressBar JLabel]
@@ -15,10 +16,9 @@
   (let [rss-panel (JPanel.)
 	status (JLabel. "右のボタンでRSS取得開始")
 	pbar (JProgressBar.)
-	cloader (.getClassLoader (class (fn [])))
-	ricn (ImageIcon. (.getResource cloader "reload.png"))
-	sicn (ImageIcon. (.getResource cloader "start.png"))
-	picn (ImageIcon. (.getResource cloader "pause.png"))
+	ricn (ImageIcon. (resource "reload.png"))
+	sicn (ImageIcon. (resource "start.png"))
+	picn (ImageIcon. (resource "pause.png"))
 	rbtn (JButton. ricn), tbtn (JButton. sicn)
 	layout (GroupLayout. rss-panel)
 	hgrp (.createSequentialGroup layout)

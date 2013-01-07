@@ -2,7 +2,8 @@
 (ns #^{:author "sgr"
        :doc "APIによる番組情報取得状況表示パネル"}
   nico.ui.api-panel
-  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
+  (:use [clojure.java.io :only [resource]]
+        [clojure.tools.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.api-updator :as au]
 	    [nico.ui.util :as uu]
 	    [time-utils :as tu])
@@ -17,10 +18,9 @@
 (defn api-panel []
   (let [panel (JPanel.)
 	status (uu/mlabel "有効なユーザータブが必要です" STATUS-SIZE)
-	cloader (.getClassLoader (class (fn [])))
-	sicn (ImageIcon. (.getResource cloader "start.png"))
-	picn (ImageIcon. (.getResource cloader "pause.png"))
-	ricn (ImageIcon. (.getResource cloader "reload.png"))
+	sicn (ImageIcon. (resource "start.png"))
+	picn (ImageIcon. (resource "pause.png"))
+	ricn (ImageIcon. (resource "reload.png"))
 	tbtn (JButton. sicn)
 	istr "APIによる番組情報取得はできません"
 	tstr "APIによる番組情報取得を開始します"

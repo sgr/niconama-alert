@@ -2,13 +2,14 @@
 (ns #^{:author "sgr"
        :doc "タブに閉じるボタンと種別アイコンがついたJTabbedPane"}
   nico.ui.tab-component
-  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
+  (:use [clojure.java.io :only [resource]]
+        [clojure.tools.swing-utils :only [do-swing add-action-listener]])
   (:import [java.awt BorderLayout Dimension]
 	   [javax.swing BorderFactory ImageIcon JButton JLabel JPanel]))
 
-(def ^{:private true} COMM-TAB-ICON  (ImageIcon. (clojure.java.io/resource "usrtab.png")))
-(def ^{:private true} KWD-TAB-ICON   (ImageIcon. (clojure.java.io/resource "kwdtab.png")))
-(def ^{:private true} CLOSE-BTN-ICON (ImageIcon. (clojure.java.io/resource "closebtn.png")))
+(def ^{:private true} COMM-TAB-ICON  (ImageIcon. (resource "usrtab.png")))
+(def ^{:private true} KWD-TAB-ICON   (ImageIcon. (resource "kwdtab.png")))
+(def ^{:private true} CLOSE-BTN-ICON (ImageIcon. (resource "closebtn.png")))
 
 (gen-class
  :name nico.ui.TabComponent

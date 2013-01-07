@@ -22,7 +22,7 @@
   (UIManager/put "OptionPane.okButtonText" "OK")
   (UIManager/put "OptionPane.cancelButtonText" "キャンセル")
   (doseq [k F-KEYS] (UIManager/put k (Font. "Default" Font/PLAIN 12)))
-  (let [appicn (ImageIcon. (.getResource (.getClassLoader (class (fn []))) "dempakun.png"))
+  (let [appicn (ImageIcon. (clojure.java.io/resource "dempakun.png"))
 	pref @(p/get-pref)
 	frame (JFrame. "NicoNama Alert (J)")
 	tabbed-pane (nico.ui.ExtTabbedPane.)
