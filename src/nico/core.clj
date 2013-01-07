@@ -14,12 +14,6 @@
 
 (h/defhook main :shutdown)
 
-(defn- startup []
-  (l/load-log-props)
-  (p/load-pref)
-  (n/init-cache)
-  (pgm/init))
-
 (defn -main []
   ;; set up shutdown hooks
   (add-main-hook :shutdown (fn [] (pgm/shutdown)))
