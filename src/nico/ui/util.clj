@@ -67,35 +67,11 @@
       (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl)))))
   this)
 (defn- sr-setValue [this val]
-  (.setText this
-	    (if val
-	      (condp = (class val)
-		  java.util.Date (do (.setHorizontalTextPosition this DefaultTableCellRenderer/CENTER)
-				     (tu/format-time-short val))
-		  (.toString val))
-	      "")))
-
-(defn stripe-renderer
-  "奇数行の背景を色付けするテーブルレンダラー"
-  []
-  (proxy [DefaultTableCellRenderer][]
-    (getTableCellRendererComponent
-     [tbl val selected focus row col]
-     (proxy-super getTableCellRendererComponent tbl val selected focus row col)
-     (if selected
-       (doto this
-	 (.setForeground (.getSelectionForeground tbl))
-	 (.setBackground (.getSelectionBackground tbl)))
-       (doto this
-	 (.setForeground (.getForeground tbl))
-	 (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl)))))
-     this)
-    (setValue
-     [val]
-     (.setText this (if val
-		      (condp = (class val)
-			  java.util.Date (do (.setHorizontalTextPosition this
-									 DefaultTableCellRenderer/CENTER)
-					     (tu/format-time-short val))
-			  (.toString val))
-		      "")))))
+  (.setText
+   this
+   (if val
+     (condp = (class val)
+       java.util.Date (do (.setHorizontalTextPosition this DefaultTableCellRenderer/CENTER)
+                          (tu/format-time-short val))
+       (.toString val))
+     "")))
