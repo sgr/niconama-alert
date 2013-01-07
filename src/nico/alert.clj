@@ -10,6 +10,7 @@
 	    [nico.ui.alert-dlg :as uad]
 	    [nico.pgm :as pgm])
   (:import [java.awt GraphicsEnvironment]
+           [java.awt.event WindowEvent]
            [javax.swing ImageIcon]
            [java.util.concurrent TimeUnit]))
 
@@ -58,16 +59,17 @@
     (let [now (tu/now)
           [i plat] (if (tu/within? @last-modified now 5) (reserve-plat-A) (reserve-plat-B))]
       (if i
-        (l/with-trace (str "display alert dialog: " (:id pgm))
-          (let [adlg (uad/alert-dlg pgm thumbicn #(release-plat i plat))]
-            (reset! last-modified now)
-            (future 
+        (do
+          (reset! last-modified now)
+          (future 
+            (let [adlg (uad/alert-dlg pgm thumbicn #(release-plat i plat))]
               (do-swing-and-wait (doto adlg
                                    (.setLocation (:x plat) (:y plat))
                                    (.setVisible true)))
               (.sleep TimeUnit/SECONDS DISPLAY-TIME)
               (do-swing-and-wait (doto adlg
                                    (.setVisible false)
+                                   (.dispatchEvent (WindowEvent. adlg WindowEvent/WINDOW_CLOSING))
                                    (.dispose)))
               (.flush (.getImage thumbicn))
               (release-plat i plat))))
@@ -80,4 +82,3 @@
         (trace (str "alert: " id))
         (.execute pool #(display-alert pgm thumbnail)))
       (trace (str "already alerted: " id)))))
-

@@ -170,6 +170,7 @@
 	  (.setLayout layout)
 	  (.add tpanel) (.add dpanel) (.add olabel) (.add time))))
     (doto dlg
+      (.setDefaultCloseOperation JDialog/DISPOSE_ON_CLOSE)
       (.addComponentListener
        (proxy [ComponentAdapter][] (componentResized [e] (decorate dlg))))
       (.setFocusableWindowState false)

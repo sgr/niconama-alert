@@ -96,6 +96,7 @@
 	  (.setLayout layout)))
       (check)
       (doto dlg
+        (.setDefaultCloseOperation JDialog/DISPOSE_ON_CLOSE)
 	(.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth DLG-SIZE)) 2)))
 		      (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight DLG-SIZE)) 2))))
 	(.setResizable false)
