@@ -59,20 +59,21 @@
     (let [now (tu/now)
           [i plat] (if (tu/within? @last-modified now 5) (reserve-plat-A) (reserve-plat-B))]
       (if i
-        (do
+        (let [adlg (uad/alert-dlg pgm thumbicn #(release-plat i plat))
+              worker (proxy [javax.swing.SwingWorker][]
+                       (doInBackground [] (.sleep TimeUnit/SECONDS DISPLAY-TIME))
+                       (done []
+                         (doto adlg
+                           (.setVisible false)
+                           (.dispatchEvent (WindowEvent. adlg WindowEvent/WINDOW_CLOSING))
+                           (.dispose))
+                         (.flush (.getImage thumbicn))
+                         (release-plat i plat)))]
           (reset! last-modified now)
-          (future 
-            (let [adlg (uad/alert-dlg pgm thumbicn #(release-plat i plat))]
-              (do-swing-and-wait (doto adlg
-                                   (.setLocation (:x plat) (:y plat))
-                                   (.setVisible true)))
-              (.sleep TimeUnit/SECONDS DISPLAY-TIME)
-              (do-swing-and-wait (doto adlg
-                                   (.setVisible false)
-                                   (.dispatchEvent (WindowEvent. adlg WindowEvent/WINDOW_CLOSING))
-                                   (.dispose)))
-              (.flush (.getImage thumbicn))
-              (release-plat i plat))))
+          (do-swing-and-wait (doto adlg
+                               (.setLocation (:x plat) (:y plat))
+                               (.setVisible true)))
+          (.execute worker))
         (l/with-trace (str "waiting plats.." (:id pgm))
             (.sleep TimeUnit/SECONDS 5)
             (recur pgm thumbicn)))))
