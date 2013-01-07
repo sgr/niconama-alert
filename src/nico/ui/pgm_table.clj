@@ -9,7 +9,6 @@
 	    [str-utils :as su]
 	    [time-utils :as tu])
   (:import [java.awt Color Font]
-	   [java.awt.event MouseListener]
            [java.awt.font TextAttribute]
 	   [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
 	   [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]))
@@ -44,6 +43,14 @@
 	   [getProgramTitle [int] String]
 	   [setPgms [clojure.lang.IPersistentMap] void]
 	   [getPgm [int] nico.pgm.Pgm]])
+
+(gen-class
+ :name nico.ui.PgmMouseListener
+ :extends java.awt.event.MouseAdapter
+ :prefix "pml-"
+ :constructors {[javax.swing.JTable] []}
+ :state state
+ :init init)
 
 ;; ProgramsTableは、ProgramsTableModelを表示するJTable。
 ;; ツールチップを表示できる。
@@ -96,44 +103,6 @@
       (doseq [[i pc] (map-indexed vector PGM-COLUMNS)] (.addColumn col-model (gen-col i pc)))
       col-model)))
 
-(defn pgm-table
-  "番組情報テーブルを生成する"
-  []
-  (let [tbl (nico.ui.ProgramsTable. (nico.ui.ProgramsTableModel. {}) (pgm-column-model))]
-    (doto tbl
-      (.setSelectionMode ListSelectionModel/SINGLE_SELECTION)
-      (.addMouseListener
-       (proxy [MouseListener] []
-	 (mouseClicked
-	  [e]
-	  (let [c (.columnAtPoint tbl (.getPoint e)), r (.rowAtPoint tbl (.getPoint e))]
-	    (when (and (<= 0 c) (<= 0 r))
-	      (let [mc (.convertColumnIndexToModel tbl c), mr (.convertRowIndexToModel tbl r)]
-		(cond (and (= 2 (.getClickCount e)) (<= 0 mc) (<= 0 mr))
-		      (p/open-url :first (.getUrl (.getModel tbl) mr))
-		      (and (SwingUtilities/isRightMouseButton e) (<= 0 mr))
-		      (let [pmenu (JPopupMenu.)
-			    pid (.getProgramId (.getModel tbl) mr)
-			    ptitle (.getProgramTitle (.getModel tbl) mr)
-			    url (.getUrl (.getModel tbl) mr)
-			    titem (JMenuItem. (format "%s (%s)" ptitle (name pid)))]
-			(doto titem
-			  (.setEnabled false))
-			(doto pmenu
-			  (.add titem)
-			  (.addSeparator))
-			(doseq [[name ofn] (p/browsers)]
-			  (let [mitem (if (= :default name)
-					(JMenuItem. "デフォルトブラウザで開く")
-					(JMenuItem. (str name "で開く")))]
-			    (add-action-listener mitem (fn [e] (ofn url)))
-			    (doto pmenu (.add mitem))))
-			(.show pmenu tbl (.getX e) (.getY e))))))))
-	 (mouseEntered [e])
-	 (mouseExited [e])
-	 (mousePressed [e])
-	 (mouseReleased [e]))))))
-
 (defn- ptm-init [pgms]
   [[] (atom (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))])
 
@@ -173,10 +142,6 @@
 
 (defn- ptm-isCellEditable [this row col] false)
 
-(defn pgm-table-model
-  "ProgramsTableModelを生成する。"
-  [pgms] (nico.ui.ProgramsTableModel. pgms))
-
 (defn- pt-init [ptm pcm]
   [[ptm pcm] nil])
 
@@ -197,3 +162,44 @@
 		 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))))
 
 (defn- pt-setSortable [this sortability] (.setAutoCreateRowSorter this sortability))
+
+(defn- pml-init [tbl] [[] (atom tbl)])
+(defn- pml-mouseClicked [this evt]
+  (let [tbl @(.state this)
+        c (.columnAtPoint tbl (.getPoint evt))
+        r (.rowAtPoint tbl (.getPoint evt))]
+    (when (and (<= 0 c) (<= 0 r))
+      (let [mc (.convertColumnIndexToModel tbl c), mr (.convertRowIndexToModel tbl r)]
+        (cond (and (= 2 (.getClickCount evt)) (<= 0 mc) (<= 0 mr))
+              (p/open-url :first (.getUrl (.getModel tbl) mr))
+              (and (SwingUtilities/isRightMouseButton evt) (<= 0 mr))
+              (let [pmenu (JPopupMenu.)
+                    pid (.getProgramId (.getModel tbl) mr)
+                    ptitle (.getProgramTitle (.getModel tbl) mr)
+                    url (.getUrl (.getModel tbl) mr)
+                    titem (JMenuItem. (format "%s (%s)" ptitle (name pid)))]
+                (doto titem
+                  (.setEnabled false))
+                (doto pmenu
+                  (.add titem)
+                  (.addSeparator))
+                (doseq [[name ofn] (p/browsers)]
+                  (let [mitem (if (= :default name)
+                                (JMenuItem. "デフォルトブラウザで開く")
+                                (JMenuItem. (str name "で開く")))]
+                    (add-action-listener mitem (fn [e] (ofn url)))
+                    (doto pmenu (.add mitem))))
+                (.show pmenu tbl (.getX evt) (.getY evt))))))))
+
+(defn pgm-table-model
+  "ProgramsTableModelを生成する。"
+  [pgms]
+  (nico.ui.ProgramsTableModel. pgms))
+
+(defn pgm-table
+  "番組情報テーブルを生成する"
+  []
+  (let [tbl (nico.ui.ProgramsTable. (nico.ui.ProgramsTableModel. {}) (pgm-column-model))]
+    (doto tbl
+      (.setSelectionMode ListSelectionModel/SINGLE_SELECTION)
+      (.addMouseListener (nico.ui.PgmMouseListener. tbl)))))
