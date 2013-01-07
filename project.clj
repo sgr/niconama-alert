@@ -11,6 +11,8 @@
                  [enlive "1.0.1"]
                  [org.xerial/sqlite-jdbc "3.7.2"]
                  [net.sourceforge.htmlcleaner/htmlcleaner "2.2"]]
+  :exclusions [org.apache.ant/ant]
+  :debug false
   :profiles {:dev
              {:dependencies [[org.clojure/tools.nrepl "0.2.0-RC1"]]}
              :debug
