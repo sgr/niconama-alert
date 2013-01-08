@@ -25,6 +25,8 @@
 (def ^{:private true} ASIZE (Dimension. 220 130))
 (def ^{:private true} LINK-CURSOR (.getLinkCursor (HTMLEditorKit.)))
 (def ^{:private true} CLOSE-ICON (ImageIcon. (clojure.java.io/resource "closebtn.png")))
+(def ^{:private true} CLOSE-ICON-SIZE (Dimension. (.getIconWidth CLOSE-ICON) (.getIconHeight CLOSE-ICON)))
+(def ^{:private true} TITLE-PANEL-SIZE (Dimension. 210 18))
 (def ^{:private true} MONLY-BGCOLOR (Color. 165 204 255))
 (def ^{:private true} DESC-SIZE (Dimension. 115 64))
 (def ^{:private true} RETRY-LIMIT 5)
@@ -135,10 +137,10 @@
 	  (.putConstraint SpringLayout/EAST cbtn 0 SpringLayout/EAST tpanel))
 	(doto cbtn
           (.addActionListener close-listener)
-	  (.setPreferredSize (Dimension. (.getIconWidth CLOSE-ICON) (.getIconHeight CLOSE-ICON))))
+	  (.setPreferredSize CLOSE-ICON-SIZE))
 	(when (:member_only pgm) (.setBackground cbtn MONLY-BGCOLOR))
 	(doto tpanel
-	  (.setPreferredSize (Dimension. 210 18))
+	  (.setPreferredSize TITLE-PANEL-SIZE)
 	  (.setLayout layout) (.add title) (.add cbtn)))
       (let [thumbnail (JLabel. thumbicn),
 	    desc (uu/mlabel (su/ifstr (:desc pgm) "") DESC-SIZE)

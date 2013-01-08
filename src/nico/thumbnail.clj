@@ -47,7 +47,7 @@
       (let [is (n/url-stream-with-caching url)
             iis (if is (ImageIO/createImageInputStream is) nil)
             img (if iis
-                  (do (.setInput jpeg-reader iis)
+                  (do (.setInput jpeg-reader iis true true)
                       (.read jpeg-reader 0))
                   nil)]
         (try
