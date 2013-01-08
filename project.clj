@@ -14,9 +14,12 @@
   :exclusions [org.apache.ant/ant]
   :debug false
   :profiles {:dev
-             {:dependencies [[org.clojure/tools.nrepl "0.2.0-RC1"]]}
+             {:dependencies [[org.clojure/tools.nrepl "0.2.0-RC1"]]
+              :debug true
+              :warn-on-reflection true}
              :debug
              {:debug true
+              :warn-on-reflection true
               :injections [(prn (into {} (System/getProperties)))]}}
   :omit-source true
   :resource-paths ["resources"]
