@@ -20,7 +20,7 @@
 	   [java.util Locale]
            [java.util.concurrent TimeUnit]))
 
-(def ^{:private true} RETRY 1)
+(def ^{:private true} RETRY 0)
 (def ^{:private true} WAIT 5)
 
 (defn- get-nico-rss-aux [page]
@@ -113,8 +113,7 @@
          rss (get-nico-rss page)
          [total pgms] (get-programs-from-rss-aux rss)]
     (if (= 0 c)
-      (l/with-debug "reached limit fetching RSS"
-        [total (if pgms pgms '())])
+      [total (if pgms pgms '())]
       (if (or (>= 0 total) (nil? pgms))
         (l/with-debug (format "retry fetching RSS #%d (%d) total number: %d, pgms: %d"
                               page c total (if-not pgms 0 (count pgms)))
