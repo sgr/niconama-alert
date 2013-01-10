@@ -14,7 +14,7 @@
   (:import [clojure.lang Keyword]
            [java.lang.management ManagementFactory]
            [java.sql Connection DriverManager SQLException Timestamp]
-           [java.util Calendar]
+           [java.util Calendar Date]
            [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]))
 
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
@@ -172,12 +172,10 @@
   (defn get-total [] @total))
 
 (defn- get-row-comm [^String comm_id]
-  (if-let [raw-row (with-pooled-conn nil
-                     (jdbc/with-query-results rs
-                       [{:concurrency :read-only} "SELECT * FROM comms WHERE id=?" comm_id]
-                       (first rs)))]
-    (tu/update-timestamp-sqlite raw-row [:fetched_at :updated_at])
-    nil))
+  (with-pooled-conn nil
+    (jdbc/with-query-results rs
+      [{:concurrency :read-only} "SELECT * FROM comms WHERE id=?" comm_id]
+      (first rs))))
 
 (defn get-comm-thumbnail [^Keyword comm_id]
   (debug (format "getting community's thumbnail: %s" comm_id))
@@ -197,7 +195,7 @@
     (nico.pgm.Pgm.
      (keyword (:id row-pgm))
      (:title row-pgm)
-     (tu/timestamp-to-date (:pubdate row-pgm))
+     (Date. (:pubdate row-pgm))
      (:description row-pgm)
      (:category row-pgm)
      (:link row-pgm)
@@ -208,8 +206,8 @@
      (:comm_name row-comm)
      (keyword (:comm_id row-pgm))
      (condp = (:alerted row-pgm) 0 false 1 true)
-     (tu/timestamp-to-date (:fetched_at row-pgm))
-     (tu/timestamp-to-date (:updated_at row-pgm)))))
+     (Date. (:fetched_at row-pgm))
+     (Date. (:updated_at row-pgm)))))
 
 (defn- count-pgms-aux []
   (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT COUNT(*) AS cnt FROM pgms"]
@@ -218,11 +216,9 @@
 (defn count-pgms [] (with-pooled-conn -1 (count-pgms-aux)))
 
 (defn- get-pgm-aux [^String id]
-  (if-let [raw-row (jdbc/with-query-results rs
-                     [{:concurrency :read-only} "SELECT * FROM pgms WHERE pgms.id=?" id]
-                     (first rs))]
-    (tu/update-timestamp-sqlite raw-row [:pubdate :fetched_at :updated_at])
-    nil))
+  (jdbc/with-query-results rs
+    [{:concurrency :read-only} "SELECT * FROM pgms WHERE pgms.id=?" id]
+    (first rs)))
 
 (defn get-pgm [^Keyword id]
   (with-pooled-conn nil
@@ -250,11 +246,9 @@
   (jdbc/delete-rows :pgms ["id=?" pid]))
 
 (defn- get-row-pgm-by-comm-id [^String comm_id]
-  (if-let [raw-row (jdbc/with-query-results rs
-                     [{:concurrency :read-only} "SELECT * FROM pgms WHERE comm_id=?" comm_id]
-                     (first rs))]
-    (tu/update-timestamp-sqlite raw-row [:pubdate :fetched_at :updated_at])
-    nil))
+  (jdbc/with-query-results rs
+    [{:concurrency :read-only} "SELECT * FROM pgms WHERE comm_id=?" comm_id]
+    (first rs)))
 
 (defn- merge-pgm [row-pgm ^Pgm pgm]
   (letfn [(longer-for [k x ^Pgm y]
@@ -266,7 +260,7 @@
                   (nil? y) x
                   :else nil))
           (later-for [k x ^Pgm y]
-            (tu/date-to-timestamp (later (tu/timestamp-to-date (get x k)) (get y k))))
+            (max (get x k) (.getTime ^Date (.get y k))))
           (if-assoc [m f k x ^Pgm y]
             (let [vx (get x k) v (f k x y)]
               (if (not= vx v) (assoc m k v) m)))]
@@ -298,6 +292,7 @@
       pool (proxy [ThreadPoolExecutor] [1 1 KEEP-ALIVE TimeUnit/SECONDS q]
              (afterExecute
                [r e]
+               (proxy-super afterExecute r e)
                (reset! last-updated (tu/now))
                (trace (format "added pgm (%d / %d)" (.getActiveCount this) (.size q)))
                (when (= 0 (.size q))
@@ -362,12 +357,11 @@
                  (let [diff-pgm (merge-pgm row-pgm pgm)]
                    (trace (format "update pgm (%s) with %s" pid (pr-str diff-pgm)))
                    (jdbc/update-values :pgms ["id=?" pid] diff-pgm)))
-                (if row-comm-pgm ; 同じコミュニティの番組があったらどちらが古いかを確認する
-                  (if (tu/later? (:pubdate pgm) (tu/timestamp-to-date (:pubdate row-comm-pgm)))
+                (if row-comm-pgm ; 同じコミュニティの番組があったらどちらが新しいかを確認する
+                  (when (> (.getTime ^Date (:pubdate pgm)) (:pubdate row-comm-pgm))
                     (jdbc/transaction ; 自分のほうが新しければ古いのを削除してから追加する
                      (rem-pgm-by-id (:id row-comm-pgm))
-                     (add3 pgm))
-                    nil) ; 自分のほうが古ければ追加は不要
+                     (add3 pgm)))
                   (jdbc/transaction (add3 pgm))))))
           ;; add2はadd1とadd1-pgms双方から呼ばれる。違いはadd1が一つずつ追加するのに対し、
           ;; add1-pgmsは複数を一度で追加する。add1から呼ばれた場合はadd2の中のトランザクションが有効となる。
@@ -395,8 +389,7 @@
 (defn- rs-to-pgms [rs]
   (let [pgms (atom {})]
     (doseq [r rs]
-      (let [p (-> r (tu/update-timestamp-sqlite [:pubdate :fetched_at :updated_at]) row-to-pgm)]
-        (trace (format "raw-row: %s => %s" (pr-str r) (pr-str p)))
+      (let [p (row-to-pgm r)]
         (swap! pgms assoc (:id p) p)))
     @pgms))
 

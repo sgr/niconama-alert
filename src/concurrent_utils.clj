@@ -16,7 +16,7 @@
     [queue
      (proxy [ThreadPoolExecutor] [0 size KEEP-ALIVE TimeUnit/SECONDS queue]
        (afterExecute
-         [r t]
-         (when t (error t "failed execution"))
-         (.sleep unit interval)
-         (proxy-super afterExecute r t)))]))
+         [r e]
+         (proxy-super afterExecute r e)
+         (when e (error e "failed execution"))
+         (.sleep unit interval)))]))

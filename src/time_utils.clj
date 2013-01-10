@@ -10,17 +10,6 @@
 (defn now [] (.getTime (Calendar/getInstance)))
 (defn date-to-timestamp [^Date d] (Timestamp. (.getTime d)))
 (defn sql-now [] (date-to-timestamp (now)))
-(defn timestamp-to-date [^Timestamp t]
-  (.getTime (doto (Calendar/getInstance) (.setTimeInMillis (.getTime t)))))
-
-(defn update-timestamp-sqlite
-  "sqliteはtimestamp型をlongで保持しているので、ResultSetから取り出したマップをこの関数で変換する。
-   TODO 今はad hocな対応。後でrow-to-pgmと合わせて整理する。"
-  [raw-row ks]
-  (reduce (fn [m [k v]] (if (some #(= k %) ks)
-                          (assoc m k (Timestamp. v))
-                          (assoc m k v)))
-          {} raw-row))
 
 (defn format-time [date fmt]
   (if (instance? java.util.Date date)
