@@ -27,15 +27,14 @@
   (try
     (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/recent/rss?p=%s" page)
                                           n/HTTP-OPTS)]
-      (let [rss (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
-        ;; (when (some #(let [title (-> % :content first :content first)]
-        ;;                (if (nil? title) (do (warn title) true) false))
-        ;;           (for [x (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
-        ;;                 :when (= :item (:tag (first x)))] (first x)))
-        ;;   (trace (format "contains NIL TITLE: %s" (pr-str raw-res))))
-        rss))
+      (try
+        (-> raw-res :body s/cleanup s/utf8stream xml/parse)
+        (catch Exception e
+          (error e (format "failed parsing RSS #%d, raw-response:\n%s" page (pr-str raw-res)))
+          nil)))
     (catch Exception e
-      (error e (format "failed fetching RSS #%d" page)) nil)))
+      (error e (format "failed fetching RSS #%d" page))
+      nil)))
 
 (defn- get-nico-rss [page]
   (loop [c RETRY]
