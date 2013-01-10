@@ -8,15 +8,15 @@
 
 ;; 各更新スレッドを起動
 (let [rss-updator (atom {:updator (Thread. rss/update-rss)
-			 :started false})
+                         :started false})
       api-updator (atom {:updator (Thread. api/update-api)
-			 :started false})
+                         :started false})
       rate-updator (atom {:updator (Thread. api/update-rate)
-			  :started false})]
+        		  :started false})]
   (defn start-updators []
     (doseq [u [rss-updator api-updator rate-updator]]
       (when-let [t (:updator (deref u))]
-	(when-not (:started (deref u))
-	  (.start t)
-	  (reset! u (assoc (deref u) :started true)))))))
+        (when-not (:started (deref u))
+          (.start t)
+          (reset! u (assoc (deref u) :started true)))))))
 

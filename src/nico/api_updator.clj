@@ -83,6 +83,7 @@
       received-rate (atom []) ;; API updatorが受信した最近1分間の番組数
       fetched-rate (atom [])] ;; API updatorにより登録された最近1分間の番組数
   (hu/defhook api :awaiting :connected :reconnecting :rate-updated)
+
   (defn get-awaiting-status [] @awaiting-status)
   (defn add-alert-status [as]
     (dosync
@@ -99,23 +100,24 @@
   (defn- create-executor [nthreads queue]
     (proxy [ThreadPoolExecutor] [0 nthreads KEEP-ALIVE TimeUnit/SECONDS queue]
       (afterExecute
-       [r e]
-       (when (and (nil? e) (instance? nico.api-updator.WrappedFutureTask r))
-         (let [result (.get r) pid (.pid r) cid (.cid r) uid (.uid r)
-               received (.received r) lreceived (tu/format-time-long received)]
-           (cond
-            (instance? nico.pgm.Pgm result) (add-pgm result)
-            (= :failed result)
-            (if (> LIMIT-QUEUE (.getActiveCount this))
-              (l/with-debug (format "retry task (%s/%s/%s %s)" pid cid uid lreceived)
-                (.execute this (nico.api-updator.WrappedFutureTask. pid cid uid received)))
-              (warn (format "too many tasks (%d) to retry (%s/%s/%s %s)"
-                            (.size queue) pid cid uid lreceived)))))
-         (.sleep TimeUnit/SECONDS INTERVAL-SCRAPE)))))
-  (let [comm-q (LinkedBlockingQueue.)
-	comm-executor (create-executor NTHREADS-COMM comm-q)]
+        [r e]
+        (proxy-super afterExecute r e)
+        (when (and (nil? e) (instance? nico.api-updator.WrappedFutureTask r))
+          (let [result (.get r) pid (.pid r) cid (.cid r) uid (.uid r)
+                received (.received r) lreceived (tu/format-time-long received)]
+            (cond
+             (instance? nico.pgm.Pgm result) (add-pgm result)
+             (= :failed result)
+             (if (> LIMIT-QUEUE (.getActiveCount this))
+               (l/with-debug (format "retry task (%s/%s/%s %s)" pid cid uid lreceived)
+                 (.execute this (nico.api-updator.WrappedFutureTask. pid cid uid received)))
+               (warn (format "too many tasks (%d) to retry (%s/%s/%s %s)"
+                             (.size queue) pid cid uid lreceived)))))
+          (.sleep TimeUnit/SECONDS INTERVAL-SCRAPE)))))
+  (let [q (LinkedBlockingQueue.)
+        pool (create-executor NTHREADS-COMM q)]
     (defn- enqueue [pid cid uid received]
-      (.execute comm-executor (nico.api-updator.WrappedFutureTask. pid cid uid received)))
+      (.execute pool (nico.api-updator.WrappedFutureTask. pid cid uid received)))
     (defn- create-task [pid cid uid received]
       (swap! received-rate conj (tu/now))
       (if (contains? @communities cid)
@@ -139,18 +141,19 @@
                    (ref-set awaiting-status astatus)
                    (ref-set latch (CountDownLatch. 1)))))]
 	(loop [c RETRY-CONNECT]
-	  (when (= 1 (.getCount @latch)) ;; pause中かどうか
-	    (do (run-api-hooks :awaiting)
-		(.await @latch)))
-	  (cond
-	   (= 0 c) (do (reset :aborted) (recur RETRY-CONNECT))
-	   (empty? @alert-statuses) (do (reset :need_login) (recur RETRY-CONNECT))
-	   :else (l/with-info (format "Will reconnect (%d/%d) after %d sec..."
+          (when (= 1 (.getCount @latch)) ;; pause中かどうか
+            (do (run-api-hooks :awaiting)
+                (.await @latch)))
+          (cond
+           (= 0 c) (do (reset :aborted) (recur RETRY-CONNECT))
+           (empty? @alert-statuses) (do (reset :need_login) (recur RETRY-CONNECT))
+           :else (l/with-info (format "Will reconnect (%d/%d) after %d sec..."
                                       c RETRY-CONNECT RECONNECT-SEC)
-		   (update-api-aux)
-		   (.sleep TimeUnit/SECONDS RECONNECT-SEC)
-		   (run-api-hooks :reconnecting)
-		   (recur (dec c)))))))
+                   (update-api-aux)
+                   (.sleep TimeUnit/SECONDS RECONNECT-SEC)
+                   (run-api-hooks :reconnecting)
+                   (recur (dec c)))))))
+
     (defn update-rate []
       (letfn [(update-last [coll last-updated sec]
                 (filter #(tu/within? % last-updated sec) coll))]
@@ -158,7 +161,7 @@
           (when (= 1 (.getCount @latch)) (.await @latch))
           (swap! received-rate update-last last-updated 60)
           (swap! fetched-rate  update-last last-updated 60)
-          (run-api-hooks :rate-updated (count @received-rate) (count @fetched-rate) (.size comm-q))
+          (run-api-hooks :rate-updated (count @received-rate) (count @fetched-rate) (.size q))
           (when (tu/within? last-updated (tu/now) RATE-UI-UPDATE)
             (.sleep TimeUnit/SECONDS RATE-UI-UPDATE))
           (recur (tu/now)))))))
