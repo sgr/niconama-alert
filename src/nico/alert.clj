@@ -3,13 +3,13 @@
        :doc "Alert management functions."}
   nico.alert
   (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
-	[clojure.tools.logging])
+        [clojure.tools.logging])
   (:require [concurrent-utils :as c]
             [log-utils :as l]
             [time-utils :as tu]
             [nico.thumbnail :as thumbnail]
-	    [nico.ui.alert-dlg :as uad]
-	    [nico.pgm :as pgm])
+            [nico.ui.alert-dlg :as uad]
+            [nico.pgm :as pgm])
   (:import [java.awt GraphicsEnvironment]
            [java.awt.event WindowEvent]
            [javax.swing JDialog ImageIcon]
@@ -27,7 +27,7 @@
                  {:used false, :x (- rw (* x aw)), :y (- rh (* y ah))})
               (for [x (range 1 (inc w)) y (range 1 (inc h))] [x y])))))
 
-(let [plats (atom (divide-plats))	;; アラートダイアログの表示領域
+(let [plats (atom (divide-plats))  ;; アラートダイアログの表示領域
       [queue pool] (c/periodic-executor 1 TimeUnit/MILLISECONDS INTERVAL-DISPLAY)
       last-modified (atom (tu/now))]
   (defn- reserve-plat-aux [i]
