@@ -30,9 +30,9 @@
                                             "utf-8")))
         base (-> (html/select h [:base]) first :attrs :href)
         infobox (first (html/select h [:div.infobox]))
-        title (s/cleanup (first (html/select infobox [:h2 (html/attr= :itemprop "name") :> html/text-node])))
+        title (s/cleanup (first (html/select infobox [:h2 (html/attr= :itemprop "name") :> html/text-node])) :html)
         desc (cs/join " " (for [n (html/select infobox [:div.bgm :> :div :> html/text-node])]
-                            (s/cleanup n)))
+                            (s/cleanup n :html)))
         pubdate (let [[^String sday ^String sopen ^String sstart] ; 開始日 開場時刻 開演時刻
                       (html/select infobox
                                    [:div.kaijo :> :strong :> html/text-node])]
@@ -63,19 +63,21 @@
         comm_name (if comm
                     (condp = type
                       :community (let [name (html/select comm [:div.shosai (html/attr= :itemprop "name") :> html/text-node])]
-                                   (s/cleanup (first name)))
+                                   (s/cleanup (first name) :html))
                       :channel   (let [name (html/select comm [:div.shosai :> :a :> html/text-node])]
-                                   (s/cleanup (first name)))
+                                   (s/cleanup (first name) :html))
                       nil)
                     nil)
         owner_name (condp = type
                      :community (s/cleanup
                                  (first
                                   (html/select
-                                   comm [:strong.nicopedia_nushi (html/attr= :itemprop "member") :> html/text-node])))
+                                   comm [:strong.nicopedia_nushi (html/attr= :itemprop "member") :> html/text-node]))
+                                 :html)
                      :channel (s/cleanup
                                (second
-                                (html/select comm [:div.shosai (html/attr= :itemprop "name") :> html/text-node])))
+                                (html/select comm [:div.shosai (html/attr= :itemprop "name") :> html/text-node]))
+                               :html)
                      nil)
         thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src
                                (clojure.string/split #"\?") first)]

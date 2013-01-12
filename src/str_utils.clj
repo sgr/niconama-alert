@@ -3,7 +3,8 @@
        :doc "文字列に関する操作"}
   str-utils
   (:require [clojure.string :as s])
-  (:import [java.io ByteArrayInputStream]))
+  (:import [java.io ByteArrayInputStream]
+           [org.apache.commons.lang3 StringEscapeUtils]))
 
 (defn longer [^String x ^String y]
   (cond (and x y) (if (> (.length x) (.length y)) x y)
@@ -16,13 +17,19 @@
 
 (defn cleanup
   "絵文字など制御文字扱いになる文字を削除する"
-  [^String s]
-  (if s (.replaceAll s "[\\00-\\x1f\\x7f]" "") s))
+  ([^String s type]
+     (when s
+       (.replaceAll s "[\\00-\\x1f\\x7f]" "")
+       (condp = type
+         :html (StringEscapeUtils/unescapeHtml4 s)
+         :xml  (StringEscapeUtils/unescapeXml  s)
+         s)))
+  ([^String s] (cleanup s nil)))
 
 (defn utf8stream
   "translate from String to Stream."
   [^String s]
-  (if s (ByteArrayInputStream. (.getBytes s "UTF-8")) nil))
+  (when s (ByteArrayInputStream. (.getBytes s "UTF-8"))))
 
 (defn ifstr [s es] (if s s es))
 

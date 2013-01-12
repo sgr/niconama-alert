@@ -10,6 +10,7 @@
                  [swing-utils "0.2.0"]
                  [enlive "1.0.1"]
                  [org.xerial/sqlite-jdbc "3.7.2"]
+                 [org.apache.commons/commons-lang3 "3.1"]
                  [net.sourceforge.htmlcleaner/htmlcleaner "2.2"]]
   :exclusions [org.apache.ant/ant]
   :debug false

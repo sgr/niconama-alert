@@ -61,7 +61,7 @@
   (some #(if (= tag (:tag %)) %) (:content node)))
 
 (defn- get-child-content [tag node]
-  (first (:content (get-child-elm tag node))))
+  (s/cleanup (first (:content (get-child-elm tag node))) :xml))
 
 (defn- get-child-attr [tag attr node]
   (attr (:attrs (get-child-elm tag node))))
