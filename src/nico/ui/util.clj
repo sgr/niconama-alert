@@ -3,47 +3,43 @@
        :doc "UI Utilities."}
   nico.ui.util
   (:require [time-utils :as tu])
-  (:import [java.awt Color Dimension Font]
-	   [javax.swing JButton JLabel JTextArea SpringLayout]
+  (:import [java.awt Color Component Container Dimension Font]
+	   [javax.swing JButton JLabel JTable JTextArea SpringLayout]
 	   [javax.swing.table DefaultTableCellRenderer]))
 
-(def DEFAULT-FONT (Font. "Default" Font/PLAIN 12))
+(def ^Font DEFAULT-FONT (Font. "Default" Font/PLAIN 12))
 (def ^{:private true} BTN-HEIGHT 25)
 (def ^{:private true} BTN-SIZE (Dimension. 100 BTN-HEIGHT))
 (def ^{:private true} ODD-ROW-COLOR (Color. 224 233 246))
 
-(defn btn [text]
-  (let [b (JButton.)]
-    (doto b
-      (.setText text)
-      (.setMaximumSize BTN-SIZE)
-      (.setMinimumSize BTN-SIZE)
-      (.setPreferredSize BTN-SIZE))))
+(defn ^JButton btn [text]
+  (doto (JButton.)
+    (.setText text)
+    (.setMaximumSize BTN-SIZE)
+    (.setMinimumSize BTN-SIZE)
+    (.setPreferredSize BTN-SIZE)))
 
 (defn do-add-expand
   "親コンポーネントに子を追加する。その際、指定されたパディングを残して一杯にひろげる。"
-  [parent child pad]
+  [^Container parent ^Component child pad]
   (let [layout (SpringLayout.)]
     (doto layout
-      (.putConstraint SpringLayout/NORTH child pad SpringLayout/NORTH parent)
-      (.putConstraint SpringLayout/SOUTH child (* -1 pad) SpringLayout/SOUTH parent)
-      (.putConstraint SpringLayout/WEST child pad SpringLayout/WEST parent)
-      (.putConstraint SpringLayout/EAST child (* -1 pad) SpringLayout/EAST parent))
+      (.putConstraint SpringLayout/NORTH child ^int pad     SpringLayout/NORTH parent)
+      (.putConstraint SpringLayout/SOUTH child ^int (- pad) SpringLayout/SOUTH parent)
+      (.putConstraint SpringLayout/WEST  child ^int pad     SpringLayout/WEST  parent)
+      (.putConstraint SpringLayout/EAST  child ^int (- pad) SpringLayout/EAST  parent))
     (doto parent
       (.setLayout layout)
       (.add child))))
 
-(defn mlabel
+(defn ^JTextArea mlabel
   "複数行折り返し可能なラベル"
   ([^String text]
-     (let [l (JTextArea. text)]
-       (doto l
-	 (.setFont DEFAULT-FONT)
-	 (.setOpaque false) (.setEditable false) (.setFocusable false) (.setLineWrap true))))
+     (doto (JTextArea. text)
+       (.setFont DEFAULT-FONT)
+       (.setOpaque false) (.setEditable false) (.setFocusable false) (.setLineWrap true)))
   ([^String text ^Dimension size]
-     (let [ml (mlabel text)]
-       (doto ml
-	 (.setPreferredSize size)))))
+     (doto ^Component (mlabel text) (.setPreferredSize size))))
 
 (gen-class
  :name nico.ui.StripeRenderer
@@ -56,7 +52,7 @@
 
 (defn- sr-init [] [[] nil])
 (defn- sr-getTableCellRendererComponent
-  [this tbl val selected focus row col]
+  [^nico.ui.StripeRenderer this ^JTable tbl val selected focus row col]
   (.superGtcrc this tbl val selected focus row col)
   (if selected
     (doto this
@@ -66,7 +62,7 @@
       (.setForeground (.getForeground tbl))
       (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl)))))
   this)
-(defn- sr-setValue [this val]
+(defn- sr-setValue [^nico.ui.StripeRenderer this ^Object val]
   (.setText
    this
    (if val

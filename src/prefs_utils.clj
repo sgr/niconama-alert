@@ -8,7 +8,6 @@
 (defmacro with-out-writer
   "Opens a writer on f, binds it to *out*, and evalutes body.
   Anything printed within body will be written to f.
-
   imported this macro from old clojure.contrib.io"
   [f & body]
   `(with-open [stream# (writer ~f)]
@@ -35,13 +34,13 @@
 	   #"solaris" (pref-dir-unix uhome)
 	   (pref-dir-unix uhome)))))
 
-(defn- pref-path [appname]
+(defn- ^String pref-path [appname]
   (str (pref-base-path) "." appname ".clj"))
 
-(defn- old-pref-path [appname] (str (pref-path appname) ".old"))
+(defn- ^String old-pref-path [appname] (str (pref-path appname) ".old"))
 
-(defn- pref-file [appname] (File. (pref-path appname)))
-(defn- old-pref-file [appname] (File. (old-pref-path appname)))
+(defn- ^File pref-file [appname] (File. (pref-path appname)))
+(defn- ^File old-pref-file [appname] (File. (old-pref-path appname)))
 
 (defn load-pref [appname]
   (let [pfile (pref-file appname)]

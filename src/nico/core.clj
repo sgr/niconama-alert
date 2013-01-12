@@ -2,13 +2,13 @@
 (ns nico.core
   (:use [clojure.tools.swing-utils :only [do-swing]]
         [clojure.tools.logging]
-	[nico.updator :only [start-updators]]
-	[nico.ui.main-frame :only [main-frame]])
+        [nico.updator :only [start-updators]]
+        [nico.ui.main-frame :only [main-frame]])
   (:require [hook-utils :as h]
             [net-utils :as n]
             [nico.prefs :as p]
             [nico.pgm :as pgm]
-	    [nico.log :as l])
+            [nico.log :as l])
   (:import [javax.swing JOptionPane])
   (:gen-class))
 

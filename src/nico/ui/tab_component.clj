@@ -7,9 +7,9 @@
   (:import [java.awt BorderLayout Dimension]
 	   [javax.swing BorderFactory ImageIcon JButton JLabel JPanel]))
 
-(def ^{:private true} COMM-TAB-ICON  (ImageIcon. (resource "usrtab.png")))
-(def ^{:private true} KWD-TAB-ICON   (ImageIcon. (resource "kwdtab.png")))
-(def ^{:private true} CLOSE-BTN-ICON (ImageIcon. (resource "closebtn.png")))
+(def ^{:private true} ^ImageIcon COMM-TAB-ICON  (ImageIcon. (resource "usrtab.png")))
+(def ^{:private true} ^ImageIcon KWD-TAB-ICON   (ImageIcon. (resource "kwdtab.png")))
+(def ^{:private true} ^ImageIcon CLOSE-BTN-ICON (ImageIcon. (resource "closebtn.png")))
 
 (gen-class
  :name nico.ui.TabComponent
@@ -26,40 +26,38 @@
 (defn- tc-init [type]
   [[] (atom {:title-label nil :close-button nil})])
 
-(defn- tc-setTitle [this title]
-  (when-let [title-label (:title-label @(.state this))]
+(defn- tc-setTitle [^nico.ui.TabComponent this title]
+  (when-let [^JLabel title-label (:title-label @(.state this))]
     (do-swing (.setText title-label title))))
 
-(defn- tc-addCloseButtonListener [this f]
+(defn- tc-addCloseButtonListener [^nico.ui.TabComponent this f]
   (when-let [close-button (:close-button @(.state this))]
     (add-action-listener close-button f)))
 
-(defn- tc-post-init [this type]
+(defn- tc-post-init [^nico.ui.TabComponent this type]
   (.setLayout this (BorderLayout.))
   (if (= type :all)
     (let [ltitle (JLabel.)]
       (doto ltitle (.setBorder (BorderFactory/createEmptyBorder 0 4 0 4)))
       (swap! (.state this) assoc :title-label ltitle)
       (doto this
-	(.setOpaque false)
-	(.add ltitle BorderLayout/CENTER)
-	(.setBorder (BorderFactory/createEmptyBorder 2 0 0 0))))
-    (let [ticn (condp = type :comm COMM-TAB-ICON :kwd KWD-TAB-ICON)
-	  cicn CLOSE-BTN-ICON
-	  lticn (JLabel. ticn)
-	  ltitle (JLabel.)
-	  cbtn (JButton. cicn)]
+        (.setOpaque false)
+        (.add ltitle BorderLayout/CENTER)
+        (.setBorder (BorderFactory/createEmptyBorder 2 0 0 0))))
+    (let [^ImageIcon ticn (condp = type :comm COMM-TAB-ICON :kwd KWD-TAB-ICON)
+          lticn (JLabel. ticn)
+          ltitle (JLabel.)
+          cbtn (JButton. CLOSE-BTN-ICON)]
       (doto ltitle (.setBorder (BorderFactory/createEmptyBorder 0 4 0 10)))
       (swap! (.state this) assoc :title-label ltitle)
       (doto lticn
-	(.setPreferredSize (Dimension. (.getIconWidth ticn) (.getIconHeight ticn))))
+        (.setPreferredSize (Dimension. (.getIconWidth ticn) (.getIconHeight ticn))))
       (doto cbtn
-	(.setPreferredSize (Dimension. (.getIconWidth cicn) (.getIconHeight cicn))))
+        (.setPreferredSize (Dimension. (.getIconWidth CLOSE-BTN-ICON) (.getIconHeight CLOSE-BTN-ICON))))
       (swap! (.state this) assoc :close-button cbtn)
       (doto this
-	(.setOpaque false)
-	(.add lticn BorderLayout/WEST)
-	(.add ltitle BorderLayout/CENTER)
-	(.add cbtn BorderLayout/EAST)
-	(.setBorder (BorderFactory/createEmptyBorder 3 0 2 0))))))
-
+        (.setOpaque false)
+        (.add lticn BorderLayout/WEST)
+        (.add ltitle BorderLayout/CENTER)
+        (.add cbtn BorderLayout/EAST)
+        (.setBorder (BorderFactory/createEmptyBorder 3 0 2 0))))))

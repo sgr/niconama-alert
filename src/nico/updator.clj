@@ -7,15 +7,15 @@
 	    [nico.pgm :as pgm]))
 
 ;; 各更新スレッドを起動
-(let [rss-updator (atom {:updator (Thread. rss/update-rss)
+(let [rss-updator (atom {:updator (Thread. ^Runnable rss/update-rss)
                          :started false})
-      api-updator (atom {:updator (Thread. api/update-api)
+      api-updator (atom {:updator (Thread. ^Runnable api/update-api)
                          :started false})
-      rate-updator (atom {:updator (Thread. api/update-rate)
+      rate-updator (atom {:updator (Thread. ^Runnable api/update-rate)
         		  :started false})]
   (defn start-updators []
     (doseq [u [rss-updator api-updator rate-updator]]
-      (when-let [t (:updator (deref u))]
+      (when-let [^Thread t (:updator (deref u))]
         (when-not (:started (deref u))
           (.start t)
           (reset! u (assoc (deref u) :started true)))))))

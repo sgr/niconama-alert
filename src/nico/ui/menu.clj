@@ -4,20 +4,20 @@
   nico.ui.menu
   (:use [clojure.tools.swing-utils :only [do-swing add-action-listener make-action make-menubar]])
   (:require [nico.prefs :as p]
-	    [nico.ui.about-dlg :as uad]
+            [nico.ui.about-dlg :as uad]
             [nico.ui.ext-tabbed-pane]
-	    [nico.ui.key-val-dlg :as ukvd]
-	    [nico.ui.kwd-tab-dlg :as uktd]
-	    [nico.ui.browser-dlg :as ubd])
-  (:import [java.awt Desktop]
-	   [java.awt.event KeyEvent InputEvent WindowEvent WindowListener]
-	   [java.net URI]
-	   [javax.swing JMenuBar JMenu JMenuItem JSeparator KeyStroke]
-	   [javax.swing.event MenuListener]))
+            [nico.ui.key-val-dlg :as ukvd]
+            [nico.ui.kwd-tab-dlg :as uktd]
+            [nico.ui.browser-dlg :as ubd])
+  (:import [java.awt Desktop Window]
+           [java.awt.event InputEvent KeyEvent MouseEvent WindowEvent WindowListener]
+           [java.net URI]
+           [javax.swing JMenuBar JMenu JMenuItem JSeparator KeyStroke]
+           [javax.swing.event MenuListener]))
 
 (def ^{:private true} HELP-URL "https://github.com/sgr/niconama-alert/wiki/Help")
 
-(defn menu-bar [frame tpane]
+(defn ^JMenuBar menu-bar [^Window frame ^nico.ui.ExtTabbedPane tpane]
   (make-menubar
    [{:name "ファイル (F)" :mnemonic KeyEvent/VK_F
      :items [{:action (make-action
@@ -37,17 +37,17 @@
     {:name "タブ (T)" :mnemonic KeyEvent/VK_T
      :listener (proxy [MenuListener] []
                  (menuSelected
-                   [e]
+                   [^MouseEvent e]
                    (when-let [items (.getTabMenuItems tpane (.getSelectedIndex tpane))]
-                     (let [tmenu (.getSource e)]
+                     (let [^JMenu tmenu (.getSource e)]
                        (.add tmenu (JSeparator.))
-                       (doseq [item items] (.add tmenu item)))))
+                       (doseq [^JMenuItem item items] (.add tmenu item)))))
                  (menuDeselected
-                   [e]
-                   (let [tmenu (.getSource e)]
-                     (doseq [idx (range (dec (.getItemCount tmenu)) 1 -1)]
+                   [^MouseEvent e]
+                   (let [^JMenu tmenu (.getSource e)]
+                     (doseq [^long idx (range (dec (.getItemCount tmenu)) 1 -1)]
                        (.remove tmenu idx))))
-                 (menuCanceled [e]))
+                 (menuCanceled [^MouseEvent e]))
      :items [{:action (make-action
                        {:name "ユーザータブの追加... (U)" :mnemonic KeyEvent/VK_U
                         :handler (fn [e] (let [tpref (p/gen-initial-user-tpref)

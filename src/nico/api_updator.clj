@@ -71,10 +71,10 @@
 (defn- wft-init [pid cid uid received]
   (let [c #(create-pgm pid cid received)]
     [[c] (atom {:pid pid :cid cid :uid uid :received received})]))
-(defn- wft-pid [this] (:pid @(.state this)))
-(defn- wft-cid [this] (:cid @(.state this)))
-(defn- wft-uid [this] (:uid @(.state this)))
-(defn- wft-received [this] (:received @(.state this)))
+(defn- wft-pid [^nico.api-updator.WrappedFutureTask this] (:pid @(.state this)))
+(defn- wft-cid [^nico.api-updator.WrappedFutureTask this] (:cid @(.state this)))
+(defn- wft-uid [^nico.api-updator.WrappedFutureTask this] (:uid @(.state this)))
+(defn- wft-received [^nico.api-updator.WrappedFutureTask this] (:received @(.state this)))
 
 (let [latch (ref (CountDownLatch. 1)) ;; API取得に関するラッチ
       alert-statuses (ref {}) ;; ログイン成功したユーザータブの数だけ取得したalert-statusが入る。
@@ -91,33 +91,34 @@
      (ref-set communities (apply union (map #(-> % :comms set) (vals @alert-statuses))))
      (ref-set awaiting-status :ready))
     (run-api-hooks :awaiting))
-  (defn start-update-api [] (.countDown @latch))
+  (defn start-update-api [] (.countDown ^CountDownLatch @latch))
   (defn- add-pgm [pgm]
     (when (some nil? (list (:title pgm) (:id pgm) (:pubdate pgm) (:fetched_at pgm)))
       (warn (format "Some nil properties found in: %s" (pr-str pgm))))
     (swap! fetched-rate conj (tu/now))
     (pgm/add pgm))
-  (defn- create-executor [nthreads queue]
+  (defn- create-executor [nthreads ^java.util.concurrent.BlockingQueue queue]
     (proxy [ThreadPoolExecutor] [0 nthreads KEEP-ALIVE TimeUnit/SECONDS queue]
       (afterExecute
         [r e]
         (proxy-super afterExecute r e)
         (when (and (nil? e) (instance? nico.api-updator.WrappedFutureTask r))
-          (let [result (.get r) pid (.pid r) cid (.cid r) uid (.uid r)
-                received (.received r) lreceived (tu/format-time-long received)]
+          (let [^nico.api-updator.WrappedFutureTask t r
+                result (.get t) pid (.pid t) cid (.cid t) uid (.uid t)
+                received (.received t) lreceived (tu/format-time-long received)]
             (cond
              (instance? nico.pgm.Pgm result) (add-pgm result)
              (= :failed result)
-             (if (> LIMIT-QUEUE (.getActiveCount this))
+             (if (> LIMIT-QUEUE (.getActiveCount ^ThreadPoolExecutor this))
                (l/with-debug (format "retry task (%s/%s/%s %s)" pid cid uid lreceived)
-                 (.execute this (nico.api-updator.WrappedFutureTask. pid cid uid received)))
+                 (.execute ^ThreadPoolExecutor this (nico.api-updator.WrappedFutureTask. pid cid uid received)))
                (warn (format "too many tasks (%d) to retry (%s/%s/%s %s)"
                              (.size queue) pid cid uid lreceived)))))
           (.sleep TimeUnit/SECONDS INTERVAL-SCRAPE)))))
   (let [q (LinkedBlockingQueue.)
         pool (create-executor NTHREADS-COMM q)]
     (defn- enqueue [pid cid uid received]
-      (.execute pool (nico.api-updator.WrappedFutureTask. pid cid uid received)))
+      (.execute ^ThreadPoolExecutor pool (nico.api-updator.WrappedFutureTask. pid cid uid received)))
     (defn- create-task [pid cid uid received]
       (swap! received-rate conj (tu/now))
       (if (contains? @communities cid)
@@ -141,9 +142,9 @@
                    (ref-set awaiting-status astatus)
                    (ref-set latch (CountDownLatch. 1)))))]
 	(loop [c RETRY-CONNECT]
-          (when (= 1 (.getCount @latch)) ;; pause中かどうか
+          (when (= 1 (.getCount ^CountDownLatch @latch)) ;; pause中かどうか
             (do (run-api-hooks :awaiting)
-                (.await @latch)))
+                (.await ^CountDownLatch @latch)))
           (cond
            (= 0 c) (do (reset :aborted) (recur RETRY-CONNECT))
            (empty? @alert-statuses) (do (reset :need_login) (recur RETRY-CONNECT))
@@ -158,7 +159,8 @@
       (letfn [(update-last [coll last-updated sec]
                 (filter #(tu/within? % last-updated sec) coll))]
         (loop [last-updated (tu/now)]
-          (when (= 1 (.getCount @latch)) (.await @latch))
+          (when (= 1 (.getCount ^CountDownLatch @latch))
+            (.await ^CountDownLatch @latch))
           (swap! received-rate update-last last-updated 60)
           (swap! fetched-rate  update-last last-updated 60)
           (run-api-hooks :rate-updated (count @received-rate) (count @fetched-rate) (.size q))

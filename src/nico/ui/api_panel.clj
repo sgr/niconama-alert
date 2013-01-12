@@ -5,11 +5,11 @@
   (:use [clojure.java.io :only [resource]]
         [clojure.tools.swing-utils :only [do-swing add-action-listener]])
   (:require [nico.api-updator :as au]
-	    [nico.ui.util :as uu]
-	    [time-utils :as tu])
-  (:import [java.awt Dimension]
-	   [javax.swing GroupLayout ImageIcon JPanel JButton]
-	   [javax.swing.border TitledBorder]))
+            [nico.ui.util :as uu]
+            [time-utils :as tu])
+  (:import [java.awt Component Dimension]
+           [javax.swing GroupLayout ImageIcon JPanel JButton JTextArea]
+           [javax.swing.border TitledBorder]))
 
 (def ^{:private true} BTN-SIZE (Dimension. 80 30))
 (def ^{:private true} STATUS-SIZE (Dimension. 120 30))
@@ -17,17 +17,17 @@
 
 (defn api-panel []
   (let [panel (JPanel.)
-	status (uu/mlabel "有効なユーザータブが必要です" STATUS-SIZE)
-	sicn (ImageIcon. (resource "start.png"))
-	picn (ImageIcon. (resource "pause.png"))
-	ricn (ImageIcon. (resource "reload.png"))
-	tbtn (JButton. sicn)
-	istr "APIによる番組情報取得はできません"
-	tstr "APIによる番組情報取得を開始します"
-	pstr "APIによる番組情報取得を中止します"
-	layout (GroupLayout. panel)
-	hgrp (.createSequentialGroup layout)
-	vgrp (.createSequentialGroup layout)]
+        ^JTextArea status (uu/mlabel "有効なユーザータブが必要です" STATUS-SIZE)
+        sicn (ImageIcon. (resource "start.png"))
+        picn (ImageIcon. (resource "pause.png"))
+        ricn (ImageIcon. (resource "reload.png"))
+        tbtn (JButton. sicn)
+        istr "APIによる番組情報取得はできません"
+        tstr "APIによる番組情報取得を開始します"
+        pstr "APIによる番組情報取得を中止します"
+        layout (GroupLayout. panel)
+        hgrp (.createSequentialGroup layout)
+        vgrp (.createSequentialGroup layout)]
     (au/add-api-hook :awaiting
                      (fn [] (condp = (au/get-awaiting-status)
                               :need_login (do-swing
@@ -66,13 +66,13 @@
       (add-action-listener (fn [e] (au/start-update-api))))
     (doto hgrp
       (.addGroup (.. layout createParallelGroup
-		     (addComponent status)))
+                     (addComponent ^Component status)))
       (.addGroup (.. layout createParallelGroup
-		     (addComponent tbtn))))
+                     (addComponent ^Component tbtn))))
     (doto vgrp
       (.addGroup (.. layout createParallelGroup
-		     (addComponent status)
-		     (addComponent tbtn))))
+                     (addComponent ^Component status)
+                     (addComponent ^Component tbtn))))
     (doto layout
       (.setHorizontalGroup hgrp)
       (.setVerticalGroup vgrp)

@@ -39,7 +39,7 @@
     (do
       (let [cmds (s/tokenize cmd)]
 	(debug (format "open by %s: %s" (pr-str cmds) url))
-	(.start (ProcessBuilder. (conj cmds url)))))))
+	(.start (ProcessBuilder. ^java.util.List (conj cmds url)))))))
 
 (defn open-url
   "kindで指定されたブラウザでurlを開く。kindに指定できるのは、:firstと:alert。"

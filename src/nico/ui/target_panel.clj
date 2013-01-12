@@ -20,12 +20,12 @@
            [isOK [] boolean]])
 
 (defn- tp-init [targets] [[] (atom {:ok false :gt nil :st nil :al nil})])
-(defn- tp-getTargets [this] (when-let [gt (:gt @(.state this))] (gt)))
-(defn- tp-setTargets [this targets] (when-let [st (:st @(.state this))] (st targets)))
-(defn- tp-isOK [this] (:ok @(.state this)))
-(defn- tp-addListener [this f] (when-let [al (:al @(.state this))] (al f)))
+(defn- tp-getTargets [^nico.ui.TargetPanel this] (when-let [gt (:gt @(.state this))] (gt)))
+(defn- tp-setTargets [^nico.ui.TargetPanel this targets] (when-let [st (:st @(.state this))] (st targets)))
+(defn- tp-isOK [^nico.ui.TargetPanel this] (:ok @(.state this)))
+(defn- tp-addListener [^nico.ui.TargetPanel this f] (when-let [al (:al @(.state this))] (al f)))
 
-(defn- tp-post-init [this targets]
+(defn- tp-post-init [^nico.ui.TargetPanel this targets]
   (let [inner-panel (doto (JPanel.) (.setBorder (BorderFactory/createEmptyBorder 1 1 1 1)))
 	target-border (.getBorder inner-panel)
 	cb-title (JCheckBox. "タイトル"), cb-desc (JCheckBox. "説明"), cb-owner (JCheckBox. "放送主")

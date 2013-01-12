@@ -7,7 +7,7 @@
 
 (def ^{:private true} KEEP-ALIVE 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
 
-(defn periodic-executor
+(defn ^ThreadPoolExecutor periodic-executor
   "size: スレッド数
    unit: 時間単位
    interval: 実行間隔"

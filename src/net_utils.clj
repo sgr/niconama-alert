@@ -6,7 +6,7 @@
   (:require [io-utils :as io])
   (:import [java.io File IOException]
            [java.util.concurrent TimeUnit]
-           [java.net SocketTimeoutException]
+           [java.net SocketTimeoutException HttpURLConnection]
            [org.apache.http.protocol BasicHttpContext]
            [org.apache.http.impl.client DefaultHttpClient]
            [org.apache.http.client.methods HttpGet]
@@ -37,9 +37,9 @@
   "returns an input stream of the URL. When any error occurred (ex. HTTP response 50x), it returns an error stream."
   [^String url]
   (letfn [(url-stream-aux [^String url ^Integer connect-timeout ^Integer read-timeout]
-            (let [conn (doto (.openConnection (java.net.URL. url))
-                         (.setConnectTimeout connect-timeout)
-                         (.setReadTimeout read-timeout))]
+            (let [^HttpURLConnection conn (doto (.openConnection (java.net.URL. url))
+                                            (.setConnectTimeout connect-timeout)
+                                            (.setReadTimeout read-timeout))]
               (try
                 (.getInputStream conn)
                 (catch IOException e
@@ -65,18 +65,18 @@
     []
     (reset! resource-factory nil)
     (reset! cache-dir (File. (str (System/getProperty "java.io.tmpdir") File/separator "nico_cache")))
-    (let [cp (.getCanonicalPath @cache-dir)]
-      (when (.exists @cache-dir)
+    (let [cp (.getCanonicalPath ^File @cache-dir)]
+      (when (.exists ^File @cache-dir)
         (warn (format "clear existing cache directory: %s" cp))
         (clear-cache))
-      (if (.mkdir @cache-dir)
+      (if (.mkdir ^File @cache-dir)
         (do (debug (format "cache directory: %s" cp))
             (reset! resource-factory (FileResourceFactory. @cache-dir)))
         (let [msg (format "failed creating cache direcotry: %s" cp)]
           (error msg)
           (throw (Exception. msg))))))
 
-  (defn url-stream-with-caching
+  (defn ^java.io.InputStream url-stream-with-caching
     [^String url]
     (try
       (trace (format "fetching content from %s" url ))

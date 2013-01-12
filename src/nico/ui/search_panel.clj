@@ -14,9 +14,9 @@
 	   [javax.swing.event DocumentListener]
 	   [javax.swing.text PlainDocument]))
 
-(def ^{:private true} QUERY-PANEL-SIZE (Dimension. 450 110))
-(def ^{:private true} TARGET-PANEL-SIZE (Dimension. 400 30))
-(def ^{:private true} ADDTAB-DLG-SIZE (Dimension. 400 110))
+(def ^{:private true} ^Dimension QUERY-PANEL-SIZE (Dimension. 450 110))
+(def ^{:private true} ^Dimension TARGET-PANEL-SIZE (Dimension. 400 30))
+(def ^{:private true} ^Dimension ADDTAB-DLG-SIZE (Dimension. 400 110))
 
 (gen-class
  :name nico.ui.SearchPanel
@@ -31,10 +31,10 @@
 
 (defn- sp-init [] [[] (atom {:listener (fn [pref])})])
 
-(defn- sp-setAddTabListener [this f]
+(defn- sp-setAddTabListener [^nico.ui.SearchPanel this f]
   (swap! (.state this) assoc :listener f))
 
-(defn- sp-post-init [this]
+(defn- sp-post-init [^nico.ui.SearchPanel this]
   (let [query-panel (nico.ui.QueryPanel. "")
         target-panel (nico.ui.TargetPanel. '())
         btn-search (uu/btn "検索")
@@ -49,7 +49,7 @@
                          (.setEnabled btn-tab    true))
                      (do (.setEnabled btn-search false)
                          (.setEnabled btn-tab    false)))]
-    (defn- sp-repaintTable [this]
+    (defn- sp-repaintTable [^nico.ui.SearchPanel this]
       (doto tbl
         (.revalidate)
         (.repaint)))
@@ -66,14 +66,14 @@
        (fn [e]
          (.setEnabled btn-search false)
          (let [pgms (pgm/search-pgms-by-keywords (.getQuery query-panel) (.getTargets target-panel))]
-           (.setPgms (.getModel tbl) pgms))
+           (.setPgms ^nico.ui.ProgramsTableModel (.getModel tbl) pgms))
          (.setEnabled btn-search true)))
       (.setDefaultCapable true)
       (.setEnabled false))
     (doto btn-tab
       (add-action-listener
        (fn [_]
-         (let [parent (.getTopLevelAncestor this)
+         (let [^java.awt.Frame parent (.getTopLevelAncestor this)
                dlg (JDialog. parent "キーワードタブの追加" true)
                tlabel (JLabel. "タブタイトル") tfield (JTextField.) tdoc (PlainDocument.)
                btn-ok (uu/btn "OK") btn-cancel (uu/btn "キャンセル")
@@ -131,7 +131,7 @@
              (.setLayout dlayout)
              (.add tlabel) (.add tfield) (.add btn-ok) (.add btn-cancel))
            (doto dlg
-             (.setLocation (+ (.x p) (int (/ (- (.getWidth parent) (.getWidth ADDTAB-DLG-SIZE)) 2)))
+             (.setLocation (+ (.x p) (int (/ (- (.getWidth  parent) (.getWidth  ADDTAB-DLG-SIZE)) 2)))
                            (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight ADDTAB-DLG-SIZE)) 2))))
              (.setMinimumSize   ADDTAB-DLG-SIZE)
              (.setPreferredSize ADDTAB-DLG-SIZE)

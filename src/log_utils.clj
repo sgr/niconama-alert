@@ -34,7 +34,7 @@
 		    SEPARATOR)]
     (if-let [e (.getThrown r)] (with-throwable msg e) msg)))
 
-(defn- path-log-props [appname]
+(defn- ^String path-log-props [appname]
   (str (pref-base-path) "." appname "-log.properties"))
 
 (defn- create-log-props [^Properties props ^File file]

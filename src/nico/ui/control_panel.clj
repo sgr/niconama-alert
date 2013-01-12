@@ -10,29 +10,29 @@
 	    [nico.rss :as rss]
 	    [nico.updator :as nu]
 	    [time-utils :as tu])
-  (:import [java.awt BorderLayout Dimension]
+  (:import [java.awt BorderLayout Component Container Dimension]
 	   [javax.swing ImageIcon JPanel JButton JProgressBar JLabel
 			SpringLayout GroupLayout]))
 
 (def ^{:private true} SIZE (Dimension. 500 90))
 
-(defn control-panel []
-  (let [panel (JPanel.)
-	ppanel (pgm-status-panel)
-	apanel (api-panel)
-	rpanel (rss-panel)
+(defn ^JPanel control-panel []
+  (let [^Container panel (JPanel.)
+	^Component ppanel (pgm-status-panel)
+	^Component apanel (api-panel)
+	^Component rpanel (rss-panel)
 	layout (SpringLayout.)]
     (doto layout
-      (.putConstraint SpringLayout/NORTH ppanel 1 SpringLayout/NORTH panel)
+      (.putConstraint SpringLayout/NORTH ppanel  1 SpringLayout/NORTH panel)
       (.putConstraint SpringLayout/SOUTH ppanel -1 SpringLayout/SOUTH panel)
-      (.putConstraint SpringLayout/NORTH apanel 1 SpringLayout/NORTH panel)
+      (.putConstraint SpringLayout/NORTH apanel  1 SpringLayout/NORTH panel)
       (.putConstraint SpringLayout/SOUTH apanel -1 SpringLayout/SOUTH panel)
-      (.putConstraint SpringLayout/NORTH rpanel 1 SpringLayout/NORTH panel)
+      (.putConstraint SpringLayout/NORTH rpanel  1 SpringLayout/NORTH panel)
       (.putConstraint SpringLayout/SOUTH rpanel -1 SpringLayout/SOUTH panel)
-      (.putConstraint SpringLayout/WEST ppanel 1 SpringLayout/WEST panel)
-      (.putConstraint SpringLayout/EAST ppanel -1 SpringLayout/WEST apanel)
-      (.putConstraint SpringLayout/EAST apanel -1 SpringLayout/WEST rpanel)
-      (.putConstraint SpringLayout/EAST rpanel -1 SpringLayout/EAST panel))
+      (.putConstraint SpringLayout/WEST  ppanel  1 SpringLayout/WEST  panel)
+      (.putConstraint SpringLayout/EAST  ppanel -1 SpringLayout/WEST  apanel)
+      (.putConstraint SpringLayout/EAST  apanel -1 SpringLayout/WEST  rpanel)
+      (.putConstraint SpringLayout/EAST  rpanel -1 SpringLayout/EAST  panel))
     (doto panel
       (.setPreferredSize SIZE)
       (.add apanel)

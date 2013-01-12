@@ -13,7 +13,7 @@
             [nico.thumbnail :as thumbnail])
   (:import [clojure.lang Keyword]
            [java.lang.management ManagementFactory]
-           [java.sql Connection DriverManager SQLException Timestamp]
+           [java.sql Connection DriverManager PreparedStatement ResultSet SQLException Timestamp]
            [java.util Calendar Date]
            [java.util.concurrent Callable LinkedBlockingQueue ThreadPoolExecutor TimeUnit]))
 
@@ -116,7 +116,7 @@
         (throw (Exception. msg)))))
   (defn shutdown []
     (run-db-hooks :shutdown)
-    (when-let [conn (:connection @db)]
+    (when-let [^Connection conn (:connection @db)]
       (try
         (.close conn)
         (catch Exception e
@@ -145,8 +145,8 @@
 (let [mbean (ManagementFactory/getMemoryMXBean)
       husage #(.getHeapMemoryUsage mbean)
       nusage #(.getNonHeapMemoryUsage mbean)
-      usage-map (fn [u] {:init (.getInit u) :used (.getUsed u)
-                         :committed (.getCommitted u) :max (.getMax u)})
+      usage-map (fn [^java.lang.management.MemoryUsage u]
+                  {:init (.getInit u) :used (.getUsed u) :committed (.getCommitted u) :max (.getMax u)})
       log-memory-usage #(let [h (usage-map (husage))
                               n (usage-map (nusage))]
                           (debug (format "JVM heap usage:     init(%d), used(%d) ->     heap delta: %d  "
@@ -154,14 +154,14 @@
                           (debug (format "JVM non-heap usage: init(%d), used(%d) -> non-heap delta: %d"
                                          (:init n) (:used n) (- (:used n) (:init n)))))
       listener (proxy [javax.management.NotificationListener][]
-                     (handleNotification [notif handback]
+                     (handleNotification [^javax.management.Notification notif handback]
                        (when (= (.getType notif)
                                 java.lang.management.MemoryNotificationInfo/MEMORY_THRESHOLD_EXCEEDED)
                          (debug "calling GC!")
                          (log-memory-usage)
                          (.gc mbean)
                          (log-memory-usage))))]
-  (.addNotificationListener mbean listener nil nil)
+  (.addNotificationListener ^javax.management.NotificationEmitter mbean listener nil nil)
   (add-pgms-hook :updated log-memory-usage))
 
 (let [total (atom -1)]
@@ -195,7 +195,7 @@
     (nico.pgm.Pgm.
      (keyword (:id row-pgm))
      (:title row-pgm)
-     (Date. (:pubdate row-pgm))
+     (Date. ^long (:pubdate row-pgm))
      (:description row-pgm)
      (:category row-pgm)
      (:link row-pgm)
@@ -206,8 +206,8 @@
      (:comm_name row-comm)
      (keyword (:comm_id row-pgm))
      (condp = (:alerted row-pgm) 0 false 1 true)
-     (Date. (:fetched_at row-pgm))
-     (Date. (:updated_at row-pgm)))))
+     (Date. ^long (:fetched_at row-pgm))
+     (Date. ^long (:updated_at row-pgm)))))
 
 (defn- count-pgms-aux []
   (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT COUNT(*) AS cnt FROM pgms"]
@@ -294,7 +294,7 @@
                [r e]
                (proxy-super afterExecute r e)
                (reset! last-updated (tu/now))
-               (trace (format "added pgm (%d / %d)" (.getActiveCount this) (.size q)))
+               (trace (format "added pgm (%d / %d)" (.getActiveCount ^ThreadPoolExecutor this) (.size q)))
                (when (= 0 (.size q))
                  (future
                    (.sleep TimeUnit/SECONDS INTERVAL-UPDATE)
@@ -417,12 +417,12 @@
 (defn search-pgms-by-keywords [query targets]
   (search-pgms-by-sql (get-sql-kwds query targets)))
 
-(defn search-pgms-by-pstmt [pstmt]
+(defn search-pgms-by-pstmt [^PreparedStatement pstmt]
   (if pstmt
     (locking (.getConnection pstmt)
-      (let [rs (.executeQuery pstmt)]
+      (let [^ResultSet rs (.executeQuery pstmt)]
         (try
           (rs-to-pgms (jdbc/resultset-seq rs))
           (catch Exception e (error e (format "failed rs-to-pgms: %s" pstmt)))
-          (finally (.close rs)))))
+          (finally (.close  rs)))))
     {}))

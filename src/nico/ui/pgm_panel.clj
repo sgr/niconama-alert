@@ -21,13 +21,16 @@
 (defn- pp-init []
   [[] (atom {:tbl nil})])
 
-(defn- pp-setPgms [this pgms]
-  (do-swing (.setPgms (.getModel (:tbl @(.state this))) pgms)))
+(defn- pp-setPgms [^nico.ui.ProgramsPanel this pgms]
+  (do-swing
+   (.setPgms ^nico.ui.ProgramsTableModel
+             (.getModel ^nico.ui.ProgramsTable (:tbl @(.state this)))
+             pgms)))
 
-(defn- pp-post-init [this]
+(defn- pp-post-init [^nico.ui.ProgramsPanel this]
   (let [tbl (doto (upt/pgm-table) (.setSortable true))
-	spane (doto (JScrollPane. tbl) (-> .getViewport (.setBackground Color/WHITE)))
-	layout (SpringLayout.)]
+        spane (doto (JScrollPane. tbl) (-> .getViewport (.setBackground Color/WHITE)))
+        layout (SpringLayout.)]
     (swap! (.state this) assoc :tbl tbl)
     (doto layout
       (.putConstraint SpringLayout/WEST spane 5 SpringLayout/WEST this)
@@ -38,7 +41,7 @@
       (.setLayout layout)
       (.add spane))))
 
-(defn- pp-repaintTable [this]
-  (doto (:tbl @(.state this))
+(defn- pp-repaintTable [^nico.ui.ProgramsPanel this]
+  (doto ^javax.swing.JTable (:tbl @(.state this))
     (.revalidate)
     (.repaint)))

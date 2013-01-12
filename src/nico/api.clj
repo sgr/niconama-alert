@@ -18,7 +18,7 @@
   (assert (vector? bindings)     "with-nico-res: a vector for its binding")
   (assert (= 2 (count bindings)) "with-nico-res: two number of forms in binding vector")
   `(let ~bindings
-     (let [status# (-> ~(first bindings) :attrs :status)]
+     (let [^String status# (-> ~(first bindings) :attrs :status)]
        (if (.equalsIgnoreCase status# "ok")
          (do ~@body)
          (let [err# (dzx/xml-> (zip/xml-zip ~(first bindings)) :error :description dzx/text)]
@@ -80,13 +80,13 @@
       (if (= :chat (-> chat :tag))
 	(let [s (-> chat :content)]
 	  (if s
-	    (.split (first s) ",")
+	    (.split ^String (first s) ",")
 	    nil))
 	nil))
     (catch Exception e (error e (format "parse error: %s" chat-str)) nil)))
 
 (defn listen [alert-status connected-fn create-task-fn]
-  (with-open [sock (doto (java.net.Socket. (:addr alert-status) (:port alert-status))
+  (with-open [sock (doto (java.net.Socket. ^String (:addr alert-status) ^int (:port alert-status))
 		     (.setSoTimeout 60000))
 	      rdr (java.io.BufferedReader.
 		   (java.io.InputStreamReader. (.getInputStream sock) "UTF8"))

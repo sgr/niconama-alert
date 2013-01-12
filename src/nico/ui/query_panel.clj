@@ -26,14 +26,14 @@
            [isOK [] boolean]])
 
 (defn- qp-init [query] [[] (atom {:ok false :rq nil :sq nil})])
-(defn- qp-getQuery [this] (when-let [rq (:rq @(.state this))] (rq)))
-(defn- qp-setQuery [this query] (when-let [sq (:sq @(.state this))] (sq query)))
-(defn- qp-isOK [this] (:ok @(.state this)))
-(defn- qp-addListener [this f] (when-let [al (:al @(.state this))] (al f)))
+(defn- qp-getQuery [^nico.ui.QueryPanel this] (when-let [rq (:rq @(.state this))] (rq)))
+(defn- qp-setQuery [^nico.ui.QueryPanel this query] (when-let [sq (:sq @(.state this))] (sq query)))
+(defn- qp-isOK [^nico.ui.QueryPanel this] (:ok @(.state this)))
+(defn- qp-addListener [^nico.ui.QueryPanel this f] (when-let [al (:al @(.state this))] (al f)))
 
-(defn- qp-post-init [this query]
+(defn- qp-post-init [^nico.ui.QueryPanel this query]
   (let [query-area (JTextArea.), query-doc (PlainDocument.)
-	query-border (.getBorder query-area)]
+        query-border (.getBorder query-area)]
     (letfn [(set-border [b]
               (if b
                 (.setBorder query-area query-border)
@@ -66,12 +66,12 @@
       (swap! (.state this) assoc :rq read-query)
       (swap! (.state this) assoc :sq set-query)
       (doto query-area
-	(.setLineWrap true)
-	(.setDocument query-doc))
+        (.setLineWrap true)
+        (.setDocument query-doc))
       (set-query query)
       (check)
-      (doto this
-	(.setBorder (BorderFactory/createTitledBorder "検索条件"))
-	(.setMinimumSize QUERY-PANEL-SIZE)
-	(.setPreferredSize QUERY-PANEL-SIZE)
-	(uu/do-add-expand (JScrollPane. query-area) 5)))))
+      (doto ^JPanel this
+        (.setBorder (BorderFactory/createTitledBorder "検索条件"))
+        (.setMinimumSize QUERY-PANEL-SIZE)
+        (.setPreferredSize QUERY-PANEL-SIZE)
+        (uu/do-add-expand (JScrollPane. query-area) 5)))))

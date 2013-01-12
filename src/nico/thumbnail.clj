@@ -5,17 +5,18 @@
   (:use [clojure.tools.logging])
   (:require [io-utils :as io]
             [net-utils :as n])
-  (:import [java.awt GraphicsEnvironment RenderingHints]
-	   [java.awt.image BufferedImage]
+  (:import [java.awt GraphicsEnvironment Image RenderingHints]
+	   [java.awt.image BufferedImage RenderedImage]
            [java.io ByteArrayInputStream ByteArrayOutputStream]
-           [javax.imageio ImageIO]
+           [javax.imageio ImageIO ImageReader ImageWriter]
+           [javax.imageio.stream ImageInputStream]
            [javax.swing ImageIcon]))
 
 (def NO-IMAGE (ImageIcon. (clojure.java.io/resource "noimage.png")))
 (def ^{:private true} ICON-WIDTH  64)
 (def ^{:private true} ICON-HEIGHT 64)
 
-(defn adjust-img [^BufferedImage img width height]
+(defn ^BufferedImage adjust-img [^BufferedImage img width height]
   (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
         g2d (.createGraphics nimg)]
     (try
@@ -28,13 +29,13 @@
         (.flush img)))))
 
 (let [use-cache (do (ImageIO/setUseCache false) (ImageIO/getUseCache))
-      jpeg-reader (.next (ImageIO/getImageReadersByFormatName "jpeg"))
-      jpeg-writer (.next (ImageIO/getImageWritersByFormatName "jpeg"))]
-  (defn to-bytes [^java.awt.Image img]
+      ^ImageReader jpeg-reader (.next (ImageIO/getImageReadersByFormatName "jpeg"))
+      ^ImageWriter jpeg-writer (.next (ImageIO/getImageWritersByFormatName "jpeg"))]
+  (defn to-bytes [^Image img]
     (let [baos (ByteArrayOutputStream.)
           ios (ImageIO/createImageOutputStream baos)]
       (try
-        (doto jpeg-writer (.setOutput ios) (.write img))
+        (doto jpeg-writer (.setOutput ios) (.write ^RenderedImage img))
         (.toByteArray baos)
         (finally
           (.flush ios)
@@ -45,11 +46,11 @@
   (defn fetch [url]
     (locking jpeg-reader
       (let [is (n/url-stream-with-caching url)
-            iis (if is (ImageIO/createImageInputStream is) nil)
-            img (if iis
-                  (do (.setInput jpeg-reader iis true true)
-                      (.read jpeg-reader 0))
-                  nil)]
+            ^ImageInputStream iis (if is (ImageIO/createImageInputStream is) nil)
+            ^BufferedImage img (if iis
+                                 (do (.setInput jpeg-reader iis true true)
+                                     (.read jpeg-reader 0))
+                                 nil)]
         (try
           (if img
             (ImageIcon. (adjust-img img ICON-WIDTH ICON-HEIGHT))

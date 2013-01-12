@@ -10,6 +10,7 @@
 	    [time-utils :as tu])
   (:import [java.awt Color Font]
            [java.awt.font TextAttribute]
+           [java.awt.event MouseEvent]
 	   [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
 	   [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]))
 
@@ -65,14 +66,16 @@
  :methods [[setSortable [boolean] void]])
 
 (defn- pr-init [] [[] (atom {})])
-(defn- pr-post-init [this]
+(defn- pr-post-init [^nico.ui.PgmCellRenderer this]
   (let [attrs (doto (.getAttributes (.getFont this))
                 (.put TextAttribute/WEIGHT TextAttribute/WEIGHT_BOLD))]
     (swap! (.state this) assoc :bold-font (Font. attrs))))
-(defn- pr-getTableCellRendererComponent [this tbl val selected focus row col]
+(defn- pr-getTableCellRendererComponent
+  [^nico.ui.PgmCellRenderer this ^JTable tbl val selected focus row col]
   (.gtcrc this tbl val selected focus row col)
-  (when-let [pmdl (let [mdl (.getModel tbl)]
-		    (if (= nico.ui.ProgramsTableModel (class mdl)) mdl nil))]
+  (when-let [^nico.ui.ProgramsTableModel pmdl
+             (let [mdl (.getModel tbl)]
+               (if (= nico.ui.ProgramsTableModel (class mdl)) mdl nil))]
     (let [mr (.convertRowIndexToModel tbl row) pgm (.getPgm pmdl mr)]
       (when (tu/within? (:fetched_at pgm) (tu/now) 60)
         (.setFont this (:bold-font @(.state this))))
@@ -96,9 +99,9 @@
   "番組情報テーブルのカラムモデルを生成する"
   []
   (letfn [(gen-col [i pc]
-		   (doto (TableColumn. i (:width pc))
-		     (.setHeaderValue (:colName pc))
-		     (.setCellRenderer (:renderer pc))))]
+            (doto (TableColumn. i (:width pc))
+              (.setHeaderValue (:colName pc))
+              (.setCellRenderer (:renderer pc))))]
     (let [col-model (DefaultTableColumnModel.)]
       (doseq [[i pc] (map-indexed vector PGM-COLUMNS)] (.addColumn col-model (gen-col i pc)))
       col-model)))
@@ -106,78 +109,79 @@
 (defn- ptm-init [pgms]
   [[] (atom (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))])
 
-(defn- ptm-setPgms [this pgms]
+(defn- ptm-setPgms [^nico.ui.ProgramsTableModel this pgms]
   (reset! (.state this) (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))
   (.fireTableDataChanged this))
 
-(defn- ptm-getUrl [this row]
+(defn- ptm-getUrl [^nico.ui.ProgramsTableModel this row]
   (:link (fnext (nth (seq @(.state this)) row))))
 
-(defn- ptm-getProgramId [this row]
+(defn- ptm-getProgramId [^nico.ui.ProgramsTableModel this row]
   (:id (fnext (nth (seq @(.state this)) row))))
 
-(defn- ptm-getProgramTitle [this row]
+(defn- ptm-getProgramTitle [^nico.ui.ProgramsTableModel this row]
   (:title (fnext (nth (seq @(.state this)) row))))
 
-(defn- ptm-getColumnCount [this]
+(defn- ptm-getColumnCount [^nico.ui.ProgramsTableModel this]
   (count PGM-COLUMNS))
 
-(defn- ptm-getColumnName [this col]
+(defn- ptm-getColumnName [^nico.ui.ProgramsTableModel this col]
   (:colName (nth PGM-COLUMNS col)))
 
-(defn- ptm-getRowCount [this]
+(defn- ptm-getRowCount [^nico.ui.ProgramsTableModel this]
   (count @(.state this)))
 
-(defn- ptm-isNew [this row]
+(defn- ptm-isNew [^nico.ui.ProgramsTableModel this row]
   (tu/within? (:fetched_at (fnext (nth (seq @(.state this)) row))) (tu/now) 60))
 
-(defn- ptm-isMemberOnly [this row]
+(defn- ptm-isMemberOnly [^nico.ui.ProgramsTableModel this row]
   (:member_only (fnext (nth (seq @(.state this)) row))))
 
-(defn- ptm-getValueAt [this row col]
+(defn- ptm-getValueAt [^nico.ui.ProgramsTableModel this row col]
   ((:key (nth PGM-COLUMNS col)) (fnext (nth (seq @(.state this)) row))))
 
-(defn- ptm-getPgm [this row]
+(defn- ptm-getPgm [^nico.ui.ProgramsTableModel this row]
   (fnext (nth (seq @(.state this)) row)))
 
-(defn- ptm-isCellEditable [this row col] false)
+(defn- ptm-isCellEditable [^nico.ui.ProgramsTableModel this row col] false)
 
 (defn- pt-init [ptm pcm]
   [[ptm pcm] nil])
 
-(defn- pt-getToolTipText [this e]
+(defn- pt-getToolTipText [^nico.ui.ProgramsTable this ^MouseEvent e]
   (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))]
     (when (and (<= 0 c) (<= 0 r))
       (let [mc (.convertColumnIndexToModel this c), mr (.convertRowIndexToModel this r)]
-	(if (and (<= 0 mc) (<= 0 mr))
-	  (let [pgm (.getPgm (.getModel this) mr)]
-	    (str (format "<html>番組タイトル: %s<br>" (su/ifstr (:title pgm) ""))
-		 (format "%s: %s<br>"
-			 (if (= "channel" (:type pgm)) "チャンネル" "コミュ名")
-			 (su/ifstr (:comm_name pgm) ""))
-		 (format "放送主: %s<br>" (su/ifstr (:owner_name pgm) ""))
-		 (format "%s<br>" (s/join "<br>" (su/split-by-length
-						  (su/ifstr (:desc pgm) "") DESC-COL)))
-		 (format "カテゴリ: %s<br>" (su/ifstr (:category pgm) ""))
-		 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))))
+        (if (and (<= 0 mc) (<= 0 mr))
+          (let [pgm (.getPgm ^nico.ui.ProgramsTableModel (.getModel this) mr)]
+            (str (format "<html>番組タイトル: %s<br>" (su/ifstr (:title pgm) ""))
+                 (format "%s: %s<br>"
+                         (if (= "channel" (:type pgm)) "チャンネル" "コミュ名")
+                         (su/ifstr (:comm_name pgm) ""))
+                 (format "放送主: %s<br>" (su/ifstr (:owner_name pgm) ""))
+                 (format "%s<br>" (s/join "<br>" (su/split-by-length
+                                                  (su/ifstr (:desc pgm) "") DESC-COL)))
+                 (format "カテゴリ: %s<br>" (su/ifstr (:category pgm) ""))
+                 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))))
 
-(defn- pt-setSortable [this sortability] (.setAutoCreateRowSorter this sortability))
+(defn- pt-setSortable [^nico.ui.ProgramsTable this sortability]
+  (.setAutoCreateRowSorter this sortability))
 
 (defn- pml-init [tbl] [[] (atom tbl)])
-(defn- pml-mouseClicked [this evt]
-  (let [tbl @(.state this)
+(defn- pml-mouseClicked [^nico.ui.PgmMouseListener this ^MouseEvent evt]
+  (let [^nico.ui.ProgramsTable tbl @(.state this)
         c (.columnAtPoint tbl (.getPoint evt))
         r (.rowAtPoint tbl (.getPoint evt))]
     (when (and (<= 0 c) (<= 0 r))
-      (let [mc (.convertColumnIndexToModel tbl c), mr (.convertRowIndexToModel tbl r)]
+      (let [mc (.convertColumnIndexToModel tbl c), mr (.convertRowIndexToModel tbl r)
+            ^nico.ui.ProgramsTableModel mdl (.getModel tbl)]
         (cond (and (= 2 (.getClickCount evt)) (<= 0 mc) (<= 0 mr))
-              (p/open-url :first (.getUrl (.getModel tbl) mr))
+              (p/open-url :first (.getUrl mdl mr))
               (and (SwingUtilities/isRightMouseButton evt) (<= 0 mr))
               (let [pmenu (JPopupMenu.)
-                    pid (.getProgramId (.getModel tbl) mr)
-                    ptitle (.getProgramTitle (.getModel tbl) mr)
-                    url (.getUrl (.getModel tbl) mr)
-                    titem (JMenuItem. (format "%s (%s)" ptitle (name pid)))]
+                    titem (JMenuItem. (format "%s (%s)"
+                                              (.getProgramTitle mdl mr)
+                                              (name (.getProgramId mdl mr))))]
                 (doto titem
                   (.setEnabled false))
                 (doto pmenu
@@ -187,16 +191,16 @@
                   (let [mitem (if (= :default name)
                                 (JMenuItem. "デフォルトブラウザで開く")
                                 (JMenuItem. (str name "で開く")))]
-                    (add-action-listener mitem (fn [e] (ofn url)))
+                    (add-action-listener mitem (fn [e] (ofn (.getUrl mdl mr))))
                     (doto pmenu (.add mitem))))
                 (.show pmenu tbl (.getX evt) (.getY evt))))))))
 
-(defn pgm-table-model
+(defn ^nico.ui.ProgramsTableModel pgm-table-model
   "ProgramsTableModelを生成する。"
   [pgms]
   (nico.ui.ProgramsTableModel. pgms))
 
-(defn pgm-table
+(defn ^nico.ui.ProgramsTable pgm-table
   "番組情報テーブルを生成する"
   []
   (let [tbl (nico.ui.ProgramsTable. (nico.ui.ProgramsTableModel. {}) (pgm-column-model))]
