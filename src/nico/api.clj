@@ -5,13 +5,13 @@
   nico.api
   (:use [clojure.tools.logging])
   (:require [nico.pgm :as pgm]
-	    [net-utils :as n]
-	    [str-utils :as s]
-	    [time-utils :as tu]
-	    [clojure.xml :as xml]
-	    [clojure.zip :as zip]
-	    [clojure.data.zip.xml :as dzx]
-	    [clj-http.client :as client])
+            [net-utils :as n]
+            [str-utils :as s]
+            [time-utils :as tu]
+            [clojure.xml :as xml]
+            [clojure.zip :as zip]
+            [clojure.data.zip.xml :as dzx]
+            [clj-http.client :as client])
   (:import [java.util Date]))
 
 (defmacro ^{:private true} with-nico-res [bindings & body]
@@ -78,30 +78,30 @@
   (try
     (let [chat (-> chat-str s/utf8stream xml/parse)]
       (if (= :chat (-> chat :tag))
-	(let [s (-> chat :content)]
-	  (if s
-	    (.split ^String (first s) ",")
-	    nil))
-	nil))
+        (let [s (-> chat :content)]
+          (if s
+            (.split ^String (first s) ",")
+            nil))
+        nil))
     (catch Exception e (error e (format "parse error: %s" chat-str)) nil)))
 
 (defn listen [alert-status connected-fn create-task-fn]
   (with-open [sock (doto (java.net.Socket. ^String (:addr alert-status) ^int (:port alert-status))
-		     (.setSoTimeout 60000))
-	      rdr (java.io.BufferedReader.
-		   (java.io.InputStreamReader. (.getInputStream sock) "UTF8"))
-	      wtr (java.io.OutputStreamWriter. (.getOutputStream sock))]
+                     (.setSoTimeout 60000))
+              rdr (java.io.BufferedReader.
+                   (java.io.InputStreamReader. (.getInputStream sock) "UTF8"))
+              wtr (java.io.OutputStreamWriter. (.getOutputStream sock))]
     ;; res_fromを-1200にすると、全ての番組を取得するらしい。
     (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
-		    (:thrd alert-status))]
+                    (:thrd alert-status))]
       (doto wtr (.write q) (.flush))
       (connected-fn)
       (loop [c (.read rdr) s nil]
-	(condp = c
-	    -1 (info "******* Connection closed *******")
-	    0  (let [received (tu/now)]
-		 (if-let [[id cid uid] (parse-chat-str s)]
-		   (create-task-fn (str "lv" id) cid uid received)
-		   (warn (format "couldn't parse the chat str: %s" s)))
-		 (recur (.read rdr) nil))
-	    (recur (.read rdr) (str s (char c))))))))
+        (condp = c
+          -1 (info "******* Connection closed *******")
+          0  (let [received (tu/now)]
+               (if-let [[id cid uid] (parse-chat-str s)]
+                 (create-task-fn (str "lv" id) cid uid received)
+                 (warn (format "couldn't parse the chat str: %s" s)))
+               (recur (.read rdr) nil))
+          (recur (.read rdr) (str s (char c))))))))
