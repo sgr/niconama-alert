@@ -17,14 +17,17 @@
 
 (defn cleanup
   "絵文字など制御文字扱いになる文字を削除する"
-  ([^String s type]
-     (when s
-       (.replaceAll s "[\\00-\\x1f\\x7f]" "")
-       (condp = type
-         :html (StringEscapeUtils/unescapeHtml4 s)
-         :xml  (StringEscapeUtils/unescapeXml  s)
-         s)))
-  ([^String s] (cleanup s nil)))
+  [^String s]
+  (when s
+    (.replaceAll s "\\p{Cntrl}" "")))
+
+(defn unescape
+  [^String s type]
+  (when s
+    (condp = type
+      :html (StringEscapeUtils/unescapeHtml4 s)
+      :xml  (StringEscapeUtils/unescapeXml   s)
+      s)))
 
 (defn utf8stream
   "translate from String to Stream."
