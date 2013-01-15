@@ -2,13 +2,15 @@
 (ns #^{:author "sgr"
        :doc "タブに閉じるボタンと種別アイコンがついたJTabbedPane"}
   nico.ui.ext-tabbed-pane
-  (:use [clojure.tools.swing-utils :only [do-swing do-swing-and-wait add-action-listener]])
+  (:use [clojure.tools.swing-utils :only [do-swing do-swing-and-wait add-action-listener]]
+        [clojure.tools.logging])
   (:require [clojure.java.jdbc :as jdbc]
             [concurrent-utils :as c]
             [time-utils :as tu]
             [nico.alert :as al]
             [nico.api :as api]
             [nico.api-updator :as nau]
+            [nico.db :as db]
             [nico.pgm :as pgm]
             [nico.rss-updator :as nr]
             [nico.ui.key-val-dlg :as ukvd]
@@ -18,7 +20,7 @@
             [nico.ui.tab-component])
   (:import [java.awt.event MouseEvent MouseListener]
            [java.sql PreparedStatement]
-           [java.util.concurrent ThreadPoolExecutor TimeUnit]
+           [java.util.concurrent LinkedBlockingQueue ThreadPoolExecutor TimeUnit]
            [javax.swing JCheckBoxMenuItem JMenuItem JOptionPane JPopupMenu SwingUtilities]))
 
 (gen-class
@@ -32,14 +34,13 @@
  :exposes-methods {addTab addTabSuper}
  :methods [[addTab [clojure.lang.PersistentArrayMap] void]
            [addTabs [clojure.lang.IPersistentVector] void]
-           [getTabMenuItems [int] clojure.lang.IPersistentVector]
+           [getTabMenuItems [long] clojure.lang.IPersistentVector]
            [getTabPrefs [] clojure.lang.IPersistentVector]])
 
 (defn- etp-init []
   [[] (atom {:tab-prefs {}
              :tab-titles {}
-             :conn (delay (pgm/get-conn))
-             :pstmts {}})])
+             :queries {}})])
 
 (defn- confirm-rem-tab-fn [^nico.ui.ExtTabbedPane tpane ^nico.ui.TabComponent tab]
   (fn [e]
@@ -49,12 +50,10 @@
               JOptionPane/OK_CANCEL_OPTION JOptionPane/WARNING_MESSAGE))
       (.removeTabAt tpane (.indexOfTabComponent tpane tab))
       (let [tprefs (:tab-prefs @(.state tpane))
+            queries (:queries @(.state tpane))
             id-tab (.hashCode tab)]
         (swap! (.state tpane) assoc :tab-prefs (dissoc tprefs id-tab))
-        (when-let [^PreparedStatement pstmt (get-in @(.state tpane) [:pstmts id-tab])]
-          (.close pstmt)
-          (let [pstmts (:pstmts @(.state tpane))]
-            (swap! (.state tpane) assoc :pstmts (dissoc pstmts id-tab))))))))
+        (swap! (.state tpane) assoc :queries (dissoc queries id-tab))))))
 
 (defn- login [pref]
   (if-let [as (api/get-alert-status (:email pref) (:passwd pref))]
@@ -68,28 +67,21 @@
         ^nico.ui.TabComponent tab (.getTabComponentAt tpane idx)
         ^nico.ui.ProgramsPanel content (.getComponentAt tpane idx)
         title (get-in @(.state tpane) [:tab-titles id-tab])
-        pstmt (get-in @(.state tpane) [:pstmts id-tab])]
-    (if pstmt
-      (let [npgms (pgm/search-pgms-by-pstmt pstmt)]
+        query (get-in @(.state tpane) [:queries id-tab])]
+    (if query
+      (let [npgms (pgm/search-pgms-by-pstmt query)]
         (when (get-in @(.state tpane) [:tab-prefs id-tab :alert])
-          (future
-            (doseq [[id npgm] npgms] (when-not (:alerted npgm) (al/alert-pgm id)))))
+          (.execute ^ThreadPoolExecutor (:pool @(.state tpane))
+                    #(doseq [[id npgm] npgms] (when-not (:alerted npgm) (al/alert-pgm id (:thumbnail npgm))))))
         (.setPgms content npgms)
         (.setTitle tab (format "%s (%d)" title (count npgms))))
       (.setTitle tab (format "%s (-)" title)))))
 
-(defn- update-tabs [^nico.ui.ExtTabbedPane tpane]
-  (when (< 0 (pgm/count-pgms))
-    (doseq [idx (range 1 (.getTabCount tpane))]
-      (update-tab tpane idx))))
-
 (defn- set-tab-statement [^nico.ui.ExtTabbedPane tpane ^nico.ui.TabComponent tab sql]
-  (let [id-tab (.hashCode tab) conn @(:conn @(.state tpane))]
-    (when-let [^PreparedStatement old-pstmt (get-in @(.state tpane) [:pstmts id-tab])]
-      (.close old-pstmt))
-    (when conn
-      (let [pstmt (jdbc/prepare-statement conn sql :concurrency :read-only)]
-        (swap! (.state tpane) assoc-in [:pstmts id-tab] pstmt)))))
+  (let [id-tab (.hashCode tab)]
+    (when-let [old-query (get-in @(.state tpane) [:queries id-tab])]
+      (pgm/remove-pstmt old-query))
+    (swap! (.state tpane) assoc-in [:queries id-tab] sql)))
 
 (defn- update-tab-title [^nico.ui.ExtTabbedPane tpane ^nico.ui.TabComponent tab title]
   (swap! (.state tpane) update-in [:tab-titles (.hashCode tab)] (fn [_] title)))
@@ -163,11 +155,6 @@
              [aitem eitem])
       nil)))
 
-(defn- close-statements [^nico.ui.ExtTabbedPane tpane]
-  (doseq [^PreparedStatement pstmt (vals (:pstmts @(.state tpane)))]
-    (.close pstmt))
-  (swap! (.state tpane) assoc :pstmts {}))
-
 (defn- etp-getTabMenuItems [^nico.ui.ExtTabbedPane this ^long idx]
   (when-not (= 0 idx)
     (let [tab     (.getTabComponentAt this idx)
@@ -218,11 +205,18 @@
          (mouseExited [e])
          (mousePressed [e])
          (mouseReleased [e])))))
-  (let [[queue pool] (c/periodic-executor 1 TimeUnit/SECONDS 3)]
-    (swap! (.state this) assoc :queue queue :pool pool))
-  (pgm/add-pgms-hook :updated (fn [] (.execute ^ThreadPoolExecutor (:pool @(.state this)) #(update-tabs this))))
+  (let [pool (proxy [ThreadPoolExecutor] [0 1 3 TimeUnit/SECONDS (LinkedBlockingQueue.)]
+               (submit [f]
+                 (let [^Callable c (proxy [Callable] []
+                                     (call []
+                                       (try
+                                         (f)
+                                         (catch Exception e
+                                           (error e (format "failed execution in ext-tabbed-pane: %s" (pr-str f)))))))]
+                   (proxy-super submit c))))]
+    (swap! (.state this) assoc :pool pool))
+  (db/add-db-hook :updated #(doseq [idx (range 1 (.getTabCount this))] (update-tab this idx)))
   (nr/add-rss-hook :countdown (fn [count max]
                                 (when (= 0 (rem count 3))
-                                  (.repaintTable (.getSelectedComponent this)))))
-  (pgm/add-db-hook :shutdown (fn [] (close-statements this))))
+                                  (.repaintTable (.getSelectedComponent this))))))
 

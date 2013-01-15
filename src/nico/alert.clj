@@ -13,7 +13,7 @@
   (:import [java.awt GraphicsEnvironment]
            [java.awt.event WindowEvent]
            [javax.swing JDialog ImageIcon]
-           [java.util.concurrent ThreadPoolExecutor TimeUnit]))
+           [java.util.concurrent Future ThreadPoolExecutor TimeUnit]))
 
 (def ^{:private true} DISPLAY-TIME 20) ; アラートウィンドウの表示時間(秒)
 (def ^{:private true} KEEP-ALIVE 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
@@ -82,9 +82,10 @@
         (l/with-trace (str "waiting plats.." (:id pgm))
           (.sleep TimeUnit/SECONDS 5)
           (recur pgm thumbicn)))))
-  (defn alert-pgm [id]
-    (if-let [pgm (pgm/not-alerted id)]
-      (let [thumbnail (pgm/get-comm-thumbnail (:comm_id pgm))]
-        (trace (str "alert: " id))
-        (.execute ^ThreadPoolExecutor pool #(display-alert pgm thumbnail)))
-      (trace (str "already alerted: " id)))))
+  (defn alert-pgm [id thumb-url]
+    (let [^Future ftr (pgm/not-alerted id)
+          thumbnail (pgm/get-comm-thumbnail thumb-url)]
+      (if-let [pgm (.get ftr)]
+        (l/with-trace (str "alert: " id)
+          (.execute ^ThreadPoolExecutor pool #(display-alert pgm thumbnail)))
+        (trace (str "already alerted: " id))))))
