@@ -75,7 +75,8 @@
    (get-child-content :description item)
    (get-child-content :category item)
    (get-child-content :link item)
-   (first (clojure.string/split (get-child-attr :media:thumbnail :url item) #"\?"))
+   (get-child-attr :media:thumbnail :url item)
+;;   (first (clojure.string/split (get-child-attr :media:thumbnail :url item) #"\?"))
    (get-child-content :nicolive:owner_name item)
    (Boolean/parseBoolean (get-child-content :nicolive:member_only item))
    (if-let [type-str (get-child-content :nicolive:type item)]

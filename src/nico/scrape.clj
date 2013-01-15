@@ -79,8 +79,8 @@
                                 (html/select comm [:div.shosai (html/attr= :itemprop "name") :> html/text-node]))
                                :html)
                      nil)
-        thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src
-                               (clojure.string/split #"\?") first)]
+        thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src)]
+;;                               (clojure.string/split #"\?") first)]
                     (if (= type :community) bn (str base bn)))
         now (tu/now)]
     (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts h))]
