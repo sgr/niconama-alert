@@ -203,3 +203,11 @@
         (catch Exception e
           (error e (format "failed closing conn: %s" (pr-str @conn))))))
     (delete-db-file db-path)))
+
+(defn pragma-freelist-count []
+  (req-ro #(let [{:keys [freelist_count]}
+                 (jdbc/with-query-results rs [{:concurrency :read-only}"PRAGMA freelist_count"]
+                   (first rs))]
+             (debug (format "freelist_count: %d" freelist_count)))))
+
+(add-db-hook :updated pragma-freelist-count)
