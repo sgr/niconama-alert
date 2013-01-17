@@ -5,14 +5,14 @@
   (:use [clojure.tools.swing-utils :only [add-action-listener]]
         [nico.ui.util])
   (:require [clojure.string :as s]
-	    [nico.prefs :as p]
-	    [str-utils :as su]
-	    [time-utils :as tu])
+            [nico.prefs :as p]
+            [str-utils :as su]
+            [time-utils :as tu])
   (:import [java.awt Color Font]
            [java.awt.font TextAttribute]
            [java.awt.event MouseEvent]
-	   [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
-	   [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]))
+           [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
+           [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]))
 
 (def ^{:private true} DESC-COL 64)
 
@@ -38,12 +38,13 @@
  :state state
  :init init
  :methods [[isNew [int] boolean]
-	   [isMemberOnly [int] boolean]
-	   [getUrl [int] String]
-	   [getProgramId [int] clojure.lang.Keyword]
-	   [getProgramTitle [int] String]
-	   [setPgms [clojure.lang.IPersistentMap] void]
-	   [getPgm [int] nico.pgm.Pgm]])
+           [isMemberOnly [int] boolean]
+           [getUrl [int] String]
+           [getProgramId [int] clojure.lang.Keyword]
+           [getProgramTitle [int] String]
+           [setPgms [clojure.lang.IPersistentMap] void]
+           [getPgms [] clojure.lang.IPersistentMap]
+           [getPgm [int] nico.pgm.Pgm]])
 
 (gen-class
  :name nico.ui.PgmMouseListener
@@ -60,7 +61,7 @@
  :extends javax.swing.JTable
  :prefix "pt-"
  :constructors {[nico.ui.ProgramsTableModel javax.swing.table.TableColumnModel]
-		[javax.swing.table.TableModel javax.swing.table.TableColumnModel]}
+                [javax.swing.table.TableModel javax.swing.table.TableColumnModel]}
  :state state
  :init init
  :methods [[setSortable [boolean] void]])
@@ -112,6 +113,9 @@
 (defn- ptm-setPgms [^nico.ui.ProgramsTableModel this pgms]
   (reset! (.state this) (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))
   (.fireTableDataChanged this))
+
+(defn- ptm-getPgms [^nico.ui.ProgramsTableModel this]
+  (reduce (fn [m [k v]] (assoc m k v)) {} @(.state this)))
 
 (defn- ptm-getUrl [^nico.ui.ProgramsTableModel this row]
   (:link (fnext (nth (seq @(.state this)) row))))

@@ -41,25 +41,18 @@
 
 (let [mbean (ManagementFactory/getMemoryMXBean)
       husage #(.getHeapMemoryUsage mbean)
-      nusage #(.getNonHeapMemoryUsage mbean)
-      usage-map (fn [^java.lang.management.MemoryUsage u]
-                  {:init (.getInit u) :used (.getUsed u) :committed (.getCommitted u) :max (.getMax u)})
-      log-memory-usage #(let [h (usage-map (husage))
-                              n (usage-map (nusage))]
-                          (debug (format "JVM heap usage:     init(%d), used(%d) ->     heap delta: %d  "
-                                         (:init h) (:used h) (- (:used h) (:init h))))
-                          (debug (format "JVM non-heap usage: init(%d), used(%d) -> non-heap delta: %d"
-                                         (:init n) (:used n) (- (:used n) (:init n)))))
-      listener (proxy [javax.management.NotificationListener][]
-                     (handleNotification [^javax.management.Notification notif handback]
-                       (when (= (.getType notif)
-                                java.lang.management.MemoryNotificationInfo/MEMORY_THRESHOLD_EXCEEDED)
-                         (debug "calling GC!")
-                         (log-memory-usage)
-                         (.gc mbean)
-                         (log-memory-usage))))]
-;;  (.addNotificationListener ^javax.management.NotificationEmitter mbean listener nil nil)
-  (db/add-db-hook :updated (fn []
-                             (log-memory-usage)
-                             (.gc mbean)
-                             (log-memory-usage))))
+      nusage #(.getNonHeapMemoryUsage mbean)]
+  (letfn [(usage-map [^java.lang.management.MemoryUsage u]
+            {:init (.getInit u) :used (.getUsed u) :committed (.getCommitted u) :max (.getMax u)})
+          (log-memory-usage [level]
+            (let [h (usage-map (husage))
+                  n (usage-map (nusage))]
+              (log level (format "JVM heap usage:     init(%d), used(%d) ->     heap delta: %d  "
+                                 (:init h) (:used h) (- (:used h) (:init h))))
+              (log level (format "JVM non-heap usage: init(%d), used(%d) -> non-heap delta: %d"
+                                 (:init n) (:used n) (- (:used n) (:init n))))))
+          (force-gc [level]
+            (log-memory-usage level)
+            (.gc mbean)
+            (log-memory-usage level))]
+    (db/add-db-hook :updated #(force-gc :trace))))

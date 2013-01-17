@@ -73,25 +73,17 @@
      (Date. ^long (:updated_at row-pgm)))))
 
 (defn- count-pgms-aux []
-  (try
-    (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT COUNT(*) AS cnt FROM pgms"]
-      (let [cnt (:cnt (first rs))]
-        (trace (format "count-pgms-aux: %d" cnt))
-        cnt))
-    (catch Exception e
-      (error e "failed count-pgms-aux")
-      -1)))
+  (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT COUNT(*) AS cnt FROM pgms"]
+    (let [cnt (:cnt (first rs))]
+      (trace (format "count-pgms-aux: %d" cnt))
+      cnt)))
 
 (defn count-pgms [] (db/req-ro count-pgms-aux))
 
 (defn- get-pgm-aux [^String id]
-  (try
-    (jdbc/with-query-results rs
-      [{:concurrency :read-only} "SELECT * FROM pgms WHERE pgms.id=?" id]
-      (first rs))
-    (catch Exception e
-      (error e (format "failed get-pgms-aux: %s" id))
-      nil)))
+  (jdbc/with-query-results rs
+    [{:concurrency :read-only} "SELECT * FROM pgms WHERE pgms.id=?" id]
+    (first rs)))
 
 (defn get-pgm [^Keyword id]
   (db/req-ro
@@ -101,7 +93,7 @@
   "Futureを返す。このFutureは、まだアラートを出してない番組なら番組情報を返す。アラート済みならnilを返す。"
   [^Keyword id]
   (letfn [(update-alerted-aux [^String id]
-            (debug (format "called update-alerted-aux: %s" id))
+            (trace (format "called update-alerted-aux: %s" id))
             (try
               (jdbc/transaction
                (let [result (jdbc/update-values :pgms ["id=? AND alerted=0" id] {:alerted true})]
@@ -112,7 +104,7 @@
     (db/enqueue (fn []
                   (trace (format "called not-alerted: %s" (name id)))
                   (let [nid (name id), result (update-alerted-aux nid)]
-                    (trace (format "update-alerted-aux result: %s" (pr-str result)))
+                    (debug (format "update-alerted-aux result: %s" (pr-str result)))
                     (if result
                       (if-let [row-pgm (get-pgm-aux nid)]
                         (l/with-trace (format "row-pgm: %s" (pr-str row-pgm))
@@ -245,7 +237,7 @@
             (jdbc/transaction
              (doseq [pgm pgms] (add2 pgm)))
             (catch Exception e
-              (error e (format "failed adding programs: [%s]" (pr-str pgms))))))]
+              (error e (format "failed adding programs, *db*: %s, pgms: [%s]" (pr-str (var-get (find-var '*db*))) (pr-str pgms))))))]
   (defn add [^Pgm pgm] (db/enqueue #(add1 pgm)))
   (defn add-pgms [pgms] (db/enqueue #(add1-pgms pgms))))
 
