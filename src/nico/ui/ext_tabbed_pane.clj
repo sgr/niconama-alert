@@ -73,12 +73,10 @@
         (when (get-in @(.state tpane) [:tab-prefs id-tab :alert])
           (let [old-pgms (.getPgms content)]
             (trace (format "old-pgms: %s" (pr-str (keys old-pgms))))
-            (doseq [[id npgm] npgms]
-              (when-not (or (:alerted npgm) (contains? old-pgms id))
-                (.execute ^ThreadPoolExecutor (:pool @(.state tpane))
-                          #(al/alert-pgm id (:thumbnail npgm)))))))
-          ;; (.execute ^ThreadPoolExecutor (:pool @(.state tpane))
-          ;;           #(doseq [[id npgm] npgms] (when-not (:alerted npgm) (al/alert-pgm id (:thumbnail npgm))))))
+            (.execute ^ThreadPoolExecutor (:pool @(.state tpane))
+                      #(doseq [[id npgm] npgms]
+                         (when-not (or (:alerted npgm) (contains? old-pgms id))
+                           (al/alert-pgm id (:thumbnail npgm)))))))
         (.setPgms content npgms)
         (.setTitle tab (format "%s (%d)" title (count npgms))))
       (.setTitle tab (format "%s (-)" title)))))

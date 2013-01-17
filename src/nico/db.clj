@@ -137,9 +137,7 @@
         (.interrupt (Thread/currentThread))))
     (error t (format "An error is occurred: %s" (pr-str r))))
   (swap! (.state this) assoc :last-updated (tu/now))
-  (when (= 0 (.size (.getQueue this)))
-    (.sleep TimeUnit/SECONDS INTERVAL-UPDATE)
-    (call-hook-updated)))
+  (call-hook-updated))
 
 (defn- dq-shutdown [^nico.db.Queue this]
   (debug "shutting down the thread pool...")
