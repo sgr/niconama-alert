@@ -73,7 +73,7 @@
         (when (get-in @(.state tpane) [:tab-prefs id-tab :alert])
           (let [old-pgms (.getPgms content)]
             (trace (format "old-pgms: %s" (pr-str (keys old-pgms))))
-            (.execute ^ThreadPoolExecutor (:pool @(.state tpane))
+            (.execute ^ThreadPoolExecutor (:queue @(.state tpane))
                       #(doseq [[id npgm] npgms]
                          (when-not (or (:alerted npgm) (contains? old-pgms id))
                            (al/alert-pgm id (:thumbnail npgm)))))))
@@ -105,7 +105,7 @@
                 (update-tab-title tpane tab (:title pref))
                 (let [sql (pgm/get-sql-kwds (:query pref) (:target pref))]
                   (set-tab-statement tpane tab sql))))
-    (.execute ^ThreadPoolExecutor (:pool @(.state tpane)) #(update-tab tpane idx))))
+    (.execute ^ThreadPoolExecutor (:queue @(.state tpane)) #(update-tab tpane idx))))
 
 (defn- etp-addTab [^nico.ui.ExtTabbedPane this pref]
   (when (or (= :kwd (:type pref)) (= :comm (:type pref)))
@@ -209,16 +209,8 @@
          (mouseExited [e])
          (mousePressed [e])
          (mouseReleased [e])))))
-  (let [pool (proxy [ThreadPoolExecutor] [0 1 3 TimeUnit/SECONDS (LinkedBlockingQueue.)]
-               (submit [f]
-                 (let [^Callable c (proxy [Callable] []
-                                     (call []
-                                       (try
-                                         (f)
-                                         (catch Exception e
-                                           (error e (format "failed execution in ext-tabbed-pane: %s" (pr-str f)))))))]
-                   (proxy-super submit c))))]
-    (swap! (.state this) assoc :pool pool))
+  (let [q (ThreadPoolExecutor. 0 1 3 TimeUnit/SECONDS (LinkedBlockingQueue.))]
+    (swap! (.state this) assoc :queue q))
   (db/add-db-hook :updated #(doseq [idx (range 1 (.getTabCount this))] (update-tab this idx)))
   (nr/add-rss-hook :countdown (fn [count max]
                                 (when (= 0 (rem count 3))

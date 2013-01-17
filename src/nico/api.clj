@@ -25,27 +25,28 @@
            (error (format "returned failure from server: %s" err#))
            nil)))))
 
-;; 認証APIでチケットを得る
-(defn- get-ticket [email passwd]
-  (n/with-http-res [raw-res (client/post "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
-                                         (assoc n/HTTP-OPTS :form-params {:mail email :password passwd}))]
-    (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
-      (dzx/xml1-> (zip/xml-zip res) :ticket dzx/text))))
-
-(defn- get-alert-status1 [ticket]
-  (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
-                                        n/HTTP-OPTS)]
-    (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
-      (let [xz (zip/xml-zip res)]
-        {:user_id (dzx/xml1-> xz :user_id dzx/text)
-         :user_name (dzx/xml1-> xz :user_name dzx/text)
-         :comms (dzx/xml-> xz :communities :community_id dzx/text)
-         :addr (dzx/xml1-> xz :ms :addr dzx/text)
-         :port (Integer/parseInt (dzx/xml1-> xz :ms :port dzx/text))
-         :thrd (dzx/xml1-> xz :ms :thread dzx/text)}))))
 
 (defn get-alert-status [email passwd]
-  (get-alert-status1 (get-ticket email passwd)))
+  (letfn [(get-ticket [email passwd] ;; 認証APIでチケットを得る
+            (n/with-http-res [raw-res (client/post "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
+                                                   (assoc n/HTTP-OPTS :form-params {:mail email :password passwd}))]
+              (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
+                (dzx/xml1-> (zip/xml-zip res) :ticket dzx/text))))
+          (get-alert-status1 [ticket]
+            (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
+                                                  n/HTTP-OPTS)]
+              (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
+                (let [xz (zip/xml-zip res)]
+                  {:user_id (dzx/xml1-> xz :user_id dzx/text)
+                   :user_name (dzx/xml1-> xz :user_name dzx/text)
+                   :comms (dzx/xml-> xz :communities :community_id dzx/text)
+                   :addr (dzx/xml1-> xz :ms :addr dzx/text)
+                   :port (Integer/parseInt (dzx/xml1-> xz :ms :port dzx/text))
+                   :thrd (dzx/xml1-> xz :ms :thread dzx/text)}))))]
+    (try
+      (get-alert-status1 (get-ticket email passwd))
+      (catch Exception e
+        (error e "failed login: %s" email)))))
 
 (defn- get-stream-info [pid]
   (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
@@ -74,34 +75,32 @@
      fetched_at
      fetched_at)))
 
-(defn- parse-chat-str [^String chat-str]
-  (try
-    (let [chat (-> chat-str s/utf8stream xml/parse)]
-      (if (= :chat (-> chat :tag))
-        (let [s (-> chat :content)]
-          (if s
-            (.split ^String (first s) ",")
-            nil))
-        nil))
-    (catch Exception e (error e (format "parse error: %s" chat-str)) nil)))
-
 (defn listen [alert-status connected-fn create-task-fn]
-  (with-open [sock (doto (java.net.Socket. ^String (:addr alert-status) ^int (:port alert-status))
-                     (.setSoTimeout 60000))
-              rdr (java.io.BufferedReader.
-                   (java.io.InputStreamReader. (.getInputStream sock) "UTF8"))
-              wtr (java.io.OutputStreamWriter. (.getOutputStream sock))]
-    ;; res_fromを-1200にすると、全ての番組を取得するらしい。
-    (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
-                    (:thrd alert-status))]
-      (doto wtr (.write q) (.flush))
-      (connected-fn)
-      (loop [c (.read rdr) s nil]
-        (condp = c
-          -1 (info "******* Connection closed *******")
-          0  (let [received (tu/now)]
-               (if-let [[id cid uid] (parse-chat-str s)]
-                 (create-task-fn (str "lv" id) cid uid received)
-                 (warn (format "couldn't parse the chat str: %s" s)))
-               (recur (.read rdr) nil))
-          (recur (.read rdr) (str s (char c))))))))
+  (letfn [(parse-chat-str [^String chat-str]
+            (try
+              (let [chat (-> chat-str s/utf8stream xml/parse)]
+                (when (= :chat (-> chat :tag))
+                  (let [s (-> chat :content)]
+                    (when s
+                      (.split ^String (first s) ",")))))
+              (catch Exception e
+                (error e (format "parse error: %s" chat-str)) nil)))]
+    (with-open [sock (doto (java.net.Socket. ^String (:addr alert-status) ^int (:port alert-status))
+                       (.setSoTimeout 60000))
+                rdr (java.io.BufferedReader.
+                     (java.io.InputStreamReader. (.getInputStream sock) "UTF8"))
+                wtr (java.io.OutputStreamWriter. (.getOutputStream sock))]
+      ;; res_fromを-1200にすると、全ての番組を取得するらしい。
+      (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
+                      (:thrd alert-status))]
+        (doto wtr (.write q) (.flush))
+        (connected-fn)
+        (loop [c (.read rdr) s nil]
+          (condp = c
+            -1 (info "******* Connection closed *******")
+            0  (let [received (tu/now)]
+                 (if-let [[id cid uid] (parse-chat-str s)]
+                   (create-task-fn (str "lv" id) cid uid received)
+                   (warn (format "couldn't parse the chat str: %s" s)))
+                 (recur (.read rdr) nil))
+            (recur (.read rdr) (str s (char c)))))))))
