@@ -23,11 +23,13 @@
            "clojure.math.numeric-tower 0.0.2"
            "clojure.tools.logging 0.2.4 Copyright (c) 2009 Alex Taggart"
            "clj-http 0.6 authored by mmcgrana and dakrone"
+           "Apache Commons Lang library 3.1"
+           "Apache HttpComponents 4.2"
            "HtmlCleaner 2.2 Copyright (c) 2006-2012, HtmlCleaner team. All rights reserved."
            "swing-utils 0.2.0 Copyright (c) Stephen C. Gilardi and Meikel Brandmeyer. All rights reserved."
            "Enlive 1.0 Copyright (c) Christophe Grand, 2012. All rights reserved."
-           "c3p0 0.9 Copyright (c) 2012 Machinery For Change, Inc."
-           "H2 Database Engine 1.3"
+           "SQLite JDBC developed by Taro L. Saito"
+           "The original Zentus's SQLite JDBC driver Copyright (c) 2006, David Crawshaw."
            "... and great dependencies"]))
 
 (defn- ^JPanel about-panel []
