@@ -72,7 +72,7 @@
    (get-child-content :title item)
    (.parse (SimpleDateFormat. "EEE, dd MMM yyyy HH:mm:ss Z" Locale/ENGLISH)
 	   (get-child-content :pubDate item))
-   (get-child-content :description item)
+   (if-let [s (get-child-content :description item)] (s/remove-tag s) "")
    (get-child-content :category item)
    (get-child-content :link item)
    (get-child-attr :media:thumbnail :url item)

@@ -31,8 +31,9 @@
         base (-> (html/select h [:base]) first :attrs :href)
         infobox (first (html/select h [:div.infobox]))
         title (s/unescape (first (html/select infobox [:h2 (html/attr= :itemprop "name") :> html/text-node])) :html)
-        desc (cs/join " " (for [n (html/select infobox [:div.bgm :> :div :> html/text-node])]
-                            (s/unescape n :html)))
+        desc (if-let [str (cs/join " " (for [n (html/select infobox [:div.bgm :> :div :> html/text-node])]
+                                         (s/unescape n :html)))]
+               (s/remove-tag str) "")
         pubdate (let [[^String sday ^String sopen ^String sstart] ; 開始日 開場時刻 開演時刻
                       (html/select infobox
                                    [:div.kaijo :> :strong :> html/text-node])]

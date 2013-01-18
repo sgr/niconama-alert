@@ -4,7 +4,8 @@
   str-utils
   (:require [clojure.string :as s])
   (:import [java.io ByteArrayInputStream]
-           [org.apache.commons.lang3 StringEscapeUtils]))
+           [org.apache.commons.lang3 StringEscapeUtils]
+           [org.htmlcleaner CompactXmlSerializer HtmlCleaner TagNode]))
 
 (defn longer [^String x ^String y]
   (cond (and x y) (if (> (.length x) (.length y)) x y)
@@ -35,6 +36,10 @@
   (when s (ByteArrayInputStream. (.getBytes s "UTF-8"))))
 
 (defn ifstr [s es] (if s s es))
+
+(defn remove-tag [^String s]
+  (let [^TagNode node (.clean (HtmlCleaner.) s)]
+    (clojure.string/join (map #(-> % .getText .toString) (.getAllElements node true)))))
 
 (defn split-by-length
   "split string by given length"
