@@ -39,6 +39,7 @@
  :init init
  :methods [[isNew [int] boolean]
            [isMemberOnly [int] boolean]
+           [getColumnClass [int] Class]
            [getUrl [int] String]
            [getProgramId [int] clojure.lang.Keyword]
            [getProgramTitle [int] String]
@@ -85,11 +86,11 @@
 
 (def ^{:private true} PGM-COLUMNS
   (list
-   {:key :title, :colName "タイトル", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
-   {:key :comm_name, :colName "コミュ名", :width 300, :renderer (nico.ui.PgmCellRenderer.)}
-   {:key :pubdate, :colName "開始", :width 50,
+   {:key :title, :colName "タイトル", :class String :width 300, :renderer (nico.ui.PgmCellRenderer.)}
+   {:key :comm_name, :colName "コミュ名", :class String :width 300, :renderer (nico.ui.PgmCellRenderer.)}
+   {:key :pubdate, :colName "開始", :class java.util.Date :width 50,
     :renderer (doto (nico.ui.PgmCellRenderer.) (.setHorizontalAlignment JLabel/CENTER))}
-   {:key :owner_name, :colName "放送主", :width 60, :renderer (nico.ui.PgmCellRenderer.)}))
+   {:key :owner_name, :colName "放送主", :class String :width 60, :renderer (nico.ui.PgmCellRenderer.)}))
 
 (defn- pgm-colnum
   "PGM-COLUMNS の中から、指定されたキーのカラム番号を得る"
@@ -128,6 +129,9 @@
 
 (defn- ptm-getColumnCount [^nico.ui.ProgramsTableModel this]
   (count PGM-COLUMNS))
+
+(defn- ptm-getColumnClass [^nico.ui.ProgramsTableModel this col]
+  (:class (nth PGM-COLUMNS col)))
 
 (defn- ptm-getColumnName [^nico.ui.ProgramsTableModel this col]
   (:colName (nth PGM-COLUMNS col)))
