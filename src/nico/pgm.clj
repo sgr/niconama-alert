@@ -237,7 +237,7 @@
             (jdbc/transaction
              (doseq [pgm pgms] (add2 pgm)))
             (catch Exception e
-              (error e (format "failed adding programs, *db*: %s, pgms: [%s]" (pr-str (var-get (find-var '*db*))) (pr-str pgms))))))]
+              (error e (format "failed adding programs: [%s]" (pr-str pgms))))))]
   (defn add [^Pgm pgm] (db/enqueue #(add1 pgm)))
   (defn add-pgms [pgms] (db/enqueue #(add1-pgms pgms))))
 

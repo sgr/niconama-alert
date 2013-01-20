@@ -17,6 +17,7 @@
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
 (def ^{:private true} INTERVAL-UPDATE 3) ;; 更新フック呼び出し間隔
 (def ^{:private true} INTERVAL-RETRY  1) ;; SQLiteデータベースロック時のリトライ間隔
+(def ^{:private true} THRESHOLD-FREELIST 1000) ;; SQLiteのフリーリスト閾値
 
 (def ^{:private true} LEN_COMM_ID        10)
 (def LEN_COMM_NAME      64)
@@ -69,8 +70,6 @@
                     "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"))
 
 (defn- create-db []
-  (jdbc/do-commands "PRAGMA auto_vacuum=2")
-  (jdbc/do-commands "PRAGMA incremental_vacuum(64)")
   (create-pgms)
   (create-comms))
 
@@ -175,8 +174,7 @@
                           (do (warn result (format "retry requesting..."))
                               (.sleep TimeUnit/SECONDS INTERVAL-RETRY)
                               (recur f))
-                          (error result (format "failed req-ro *db*: %s, Cause: %s"
-                                                (pr-str (var-get (find-var '*db*))) msg))))
+                          (error result (format "failed req-ro: %s" msg))))
             result)))))
   (defn ro-pstmt [^String sql] (jdbc/prepare-statement @conn sql :concurrency :read-only))
   (defn init []
@@ -204,10 +202,23 @@
           (error e (format "failed closing conn: %s" (pr-str @conn))))))
     (delete-db-file db-path)))
 
-(defn pragma-freelist-count []
-  (req-ro #(let [{:keys [freelist_count]}
-                 (jdbc/with-query-results rs [{:concurrency :read-only}"PRAGMA freelist_count"]
-                   (first rs))]
-             (debug (format "freelist_count: %d" freelist_count)))))
+(defn- maintenance-db []
+  (letfn [(pragma-page-count []
+            (req-ro #(let [{:keys [page_count]}
+                           (jdbc/with-query-results rs [{:concurrency :read-only} "PRAGMA page_count"]
+                             (first rs))]
+                       page_count)))
+          (pragma-freelist-count []
+            (req-ro #(let [{:keys [freelist_count]}
+                           (jdbc/with-query-results rs [{:concurrency :read-only} "PRAGMA freelist_count"]
+                             (first rs))]
+                       freelist_count)))]
+    (let [page_count (pragma-page-count)
+          freelist_count (pragma-freelist-count)]
+      (debug (format "page_count: %d, freelist_count: %d" page_count freelist_count))
+      (when (< THRESHOLD-FREELIST freelist_count)
+        (enqueue #((debug "do vacuum!")
+                   (jdbc/do-commands "PRAGMA vacuum")
+                   (debug (format "page_count: %d, freelist_count: %d" (pragma-page-count) (pragma-freelist-count)))))))))
 
-(add-db-hook :updated pragma-freelist-count)
+(add-db-hook :updated maintenance-db)
