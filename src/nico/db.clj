@@ -17,11 +17,13 @@
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
 (def ^{:private true} INTERVAL-UPDATE 3) ;; 更新フック呼び出し間隔
 (def ^{:private true} INTERVAL-RETRY  1) ;; SQLiteデータベースロック時のリトライ間隔
-(def ^{:private true} THRESHOLD-FREELIST 1000) ;; SQLiteのフリーリスト閾値
+(def ^{:private true} THRESHOLD-FREELIST 500) ;; SQLiteのフリーリスト閾値
 
 (def ^{:private true} LEN_COMM_ID        10)
 (def LEN_COMM_NAME      64)
 (def ^{:private true} LEN_COMM_THUMBNAIL 64)
+
+(hu/defhook db :shutdown :updated)      ;; データベース関連フック
 
 (defn- varchar [len] (format "varchar(%d)" len))
 
@@ -75,14 +77,6 @@
 
 (defn- delete-db-file [path] (io/delete-all-files path))
 
-(let [called_at (atom (tu/now))]
-  (hu/defhook db :shutdown :updated)
-  (defn- call-hook-updated []
-    (let [now (tu/now)]
-      (when-not (tu/within? @called_at now INTERVAL-UPDATE)
-        (run-db-hooks :updated)
-        (reset! called_at now)))))
-
 (defn ^Callable wrap-conn-callable [f db-spec]
   (proxy [Callable] []
     (call []
@@ -108,7 +102,10 @@
  :methods [[lastUpdated [] java.util.Date]])
 
 (defn- dq-init [^clojure.lang.IPersistentMap db-spec]
-  [[0 1 KEEP-ALIVE TimeUnit/SECONDS (LinkedBlockingQueue.)] (atom {:db-spec db-spec :last-updated (tu/now)})])
+  [[0 1 KEEP-ALIVE TimeUnit/SECONDS (LinkedBlockingQueue.)]
+   (atom {:db-spec          db-spec
+          :last-hook-called (tu/now)
+          :last-updated     (tu/now)})])
 
 (defn- dq-post-init [^nico.db.Queue this db-spec]
   (.setRejectedExecutionHandler this (ThreadPoolExecutor$DiscardPolicy.)))
@@ -126,7 +123,15 @@
   (if (and (nil? t) (instance? Future r))
     (try
       (when (.isDone ^Future r)
-        (trace (format "afterExecute result: %s" (pr-str (.get ^Future r)))))
+        (trace (format "afterExecute result: %s" (pr-str (.get ^Future r))))
+        (let [now (tu/now)
+              last-hook-called (get @(.state this) :last-hook-called)]
+          (swap! (.state this) assoc :last-updated now)
+          ;; DB更新フックの実行
+          (when (or (= 0 (-> this .getQueue .size))
+                    (not (tu/within? last-hook-called now INTERVAL-UPDATE)))
+            (run-db-hooks :updated)
+            (swap! (.state this) assoc :last-hook-called now))))
       (catch CancellationException ce
         (error ce "!!!   CancellationException"))
       (catch ExecutionException ee
@@ -134,9 +139,7 @@
       (catch InterruptedException ie
         (error ie "!!!!! InterruptedException")
         (.interrupt (Thread/currentThread))))
-    (error t (format "An error is occurred: %s" (pr-str r))))
-  (swap! (.state this) assoc :last-updated (tu/now))
-  (call-hook-updated))
+    (error t (format "An error is occurred: %s" (pr-str r)))))
 
 (defn- dq-shutdown [^nico.db.Queue this]
   (debug "shutting down the thread pool...")
@@ -158,6 +161,10 @@
   (defn last-updated [] (when @queue (.lastUpdated @queue)))
   (defn queue-size [] (when @queue (.size (.getQueue @queue))))
   (defn- create-conn [] (DriverManager/getConnection (format "jdbc:%s:%s" subprotocol db-path)))
+  (defn- vacuum []
+    (when @conn
+      (debug "VACUUM!")
+      (doto (.createStatement @conn) (.execute "VACUUM") (.execute "REINDEX"))))
   (defn enqueue [f]
     (when @queue
       (.submit @queue f)))
@@ -217,8 +224,10 @@
           freelist_count (pragma-freelist-count)]
       (debug (format "page_count: %d, freelist_count: %d" page_count freelist_count))
       (when (< THRESHOLD-FREELIST freelist_count)
-        (enqueue #((debug "do vacuum!")
-                   (jdbc/do-commands "PRAGMA vacuum")
-                   (debug (format "page_count: %d, freelist_count: %d" (pragma-page-count) (pragma-freelist-count)))))))))
+        (enqueue (fn []
+                   (vacuum)
+                   (debug (format "page_count: %d, freelist_count: %d"
+                                  (pragma-page-count)
+                                  (pragma-freelist-count)))))))))
 
 (add-db-hook :updated maintenance-db)
