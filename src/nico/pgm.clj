@@ -80,6 +80,12 @@
 
 (defn count-pgms [] (db/req-ro count-pgms-aux))
 
+(defn- count-comms-aux []
+  (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT COUNT(*) AS cnt FROM comms"]
+    (let [cnt (:cnt (first rs))]
+      (trace (format "count-comms-aux: %d" cnt))
+      cnt)))
+
 (defn- get-pgm-aux [^String id]
   (jdbc/with-query-results rs
     [{:concurrency :read-only} "SELECT * FROM pgms WHERE pgms.id=?" id]
@@ -161,21 +167,21 @@
             ;; sqliteはtimestamp値をミリ秒longで保持するのでこの値でそのまま比較できるはず。
             (let [start (.getTimeInMillis (doto (Calendar/getInstance) (.add Calendar/MINUTE -30)))]
               (jdbc/transaction
-               (jdbc/delete-rows :pgms ["id IN (SELECT id FROM pgms WHERE pubdate < ? ORDER BY updated_at LIMIT ?)"
-                                        start num]))
+               (jdbc/delete-rows :comms ["id IN (SELECT comm_id FROM pgms WHERE pubdate < ? ORDER BY updated_at LIMIT ?)" start num])
+               (jdbc/delete-rows :pgms  ["id IN (SELECT id FROM pgms WHERE pubdate < ? ORDER BY updated_at LIMIT ?)" start num]))
               (reset! last-cleaned (tu/now))))
           (clean-old1 []
-            (trace "called clean-old1")
             (try
               (when-not (tu/within? @last-cleaned (tu/now) INTERVAL-CLEAN)
                 (let [total (get-total)
-                      cnt (count-pgms-aux)
+                      cnt-pgms (count-pgms-aux)
+                      cnt-comms (count-comms-aux)
                       threshold (int (* SCALE total))] ;; 総番組数のscale倍までは許容
-                  (when (and (< 0 total) (< threshold cnt))
+                  (when (and (< 0 total) (< threshold cnt-pgms))
                     ;; 更新時刻の古い順に多すぎる番組を削除する。
-                    (debug (format "cleaning old: %d -> %d" cnt threshold))
-                    (clean-old2 (- cnt threshold))
-                    (debug (format "cleaned old: %d -> %d" cnt (count-pgms-aux))))))
+                    (debug (format "cleaning old: %d -> %d, %d" cnt-pgms threshold cnt-comms))
+                    (clean-old2 (- cnt-pgms threshold))
+                    (debug (format "cleaned old: %d -> %d, %d" cnt-pgms (count-pgms-aux) (count-comms-aux))))))
               (catch Exception e
                 (error e (format "failed cleaning old programs: %s" (.getMessage e))))))]
     (defn clean-old [] (db/enqueue clean-old1))))
