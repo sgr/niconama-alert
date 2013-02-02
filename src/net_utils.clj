@@ -55,7 +55,7 @@
 
 (let [cache-dir (atom nil)
       resource-factory (atom nil)
-      cache-config (CacheConfig.)
+      cache-config (doto (CacheConfig.) (.setHeuristicCachingEnabled true))
       cache-storage (BasicHttpCacheStorage. cache-config)]
   (defn clear-cache []
     (when @cache-dir (io/delete-all-files @cache-dir)))
@@ -86,13 +86,14 @@
             response (.execute client request context)
             status-code (-> response .getStatusLine .getStatusCode)
             cache-status (.getAttribute context CachingHttpClient/CACHE_RESPONSE_STATUS)]
-        (debug (format "cache status (%s) -> %s" url
+        (debug (format "%s: (%s)"
                        (condp = cache-status
                          CacheResponseStatus/CACHE_HIT  "CACHE_HIT"
                          CacheResponseStatus/CACHE_MISS "CACHE_MISS"
                          CacheResponseStatus/CACHE_MODULE_RESPONSE "CACHE_MODULE_RESPONSE"
                          CacheResponseStatus/VALIDATED  "VALIDATED"
-                         (format "unknown cache status (%s)" (pr-str cache-status)))))
+                         (format "unknown cache status (%s)" (pr-str cache-status)))
+                        url))
         (condp = status-code
           200 (-> response .getEntity .getContent)
           (do (debug (format "status code (%d) is returned" status-code))
