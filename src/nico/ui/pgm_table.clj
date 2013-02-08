@@ -39,7 +39,6 @@
  :init init
  :methods [[isNew [int] boolean]
            [isMemberOnly [int] boolean]
-           [getColumnClass [int] Class]
            [getUrl [int] String]
            [getProgramId [int] clojure.lang.Keyword]
            [getProgramTitle [int] String]
