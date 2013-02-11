@@ -26,9 +26,7 @@
  :name nico.ui.PgmCellRenderer
  :extends nico.ui.StripeRenderer
  :exposes-methods {getTableCellRendererComponent gtcrc}
- :prefix "pr-"
- :constructors {[] []}
- :init init)
+ :prefix "pr-")
 
 ;; ProgramsTableModelは、pgmsを開始時刻でソートしたものを表示するTableModel。
 ;; 拡張メソッドgetUrlにより、番組URLを返す。
@@ -66,32 +64,30 @@
                 [javax.swing.table.TableModel javax.swing.table.TableColumnModel]}
  :state state
  :init init
+ :post-init post-init
  :methods [[setSortable [boolean] void]])
 
-(defn- pr-init [] [[] (atom {})])
 (let [attrs (doto (.getAttributes DEFAULT-FONT)
               (.put TextAttribute/WEIGHT TextAttribute/WEIGHT_BOLD))
       BOLD-FONT (.deriveFont DEFAULT-FONT attrs)]
   (defn- pr-getTableCellRendererComponent [^nico.ui.PgmCellRenderer this ^JTable tbl val selected focus row col]
     (.gtcrc this tbl val selected focus row col)
-    (.setRowHeight tbl row THUMBNAIL-HEIGHT)
-    (when-let [^nico.ui.ProgramsTableModel pmdl
-               (let [mdl (.getModel tbl)]
-                 (if (= nico.ui.ProgramsTableModel (class mdl)) mdl nil))]
-      (let [mr (.convertRowIndexToModel tbl row) pgm (.getPgm pmdl mr)]
-        (if (tu/within? (:fetched_at pgm) (tu/now) 60)
-          (.setFont this BOLD-FONT)
-          (.setFont this DEFAULT-FONT))
-        (when (:member_only pgm) (.setForeground this Color/BLUE))))
+    (let [mr (.convertRowIndexToModel tbl row)
+          pgm (.getPgm ^nico.ui.ProgramsTableModel (.getModel tbl) mr)]
+      (if (tu/within? (:fetched_at pgm) (tu/now) 60)
+        (.setFont this BOLD-FONT)
+        (.setFont this DEFAULT-FONT))
+      (when (:member_only pgm) (.setForeground this Color/BLUE)))
     this))
 
-(def ^{:private true} PGM-COLUMNS
-  (list
-   {:key :thumbnail, :colName "", :class javax.swing.ImageIcon, :width THUMBNAIL-WIDTH, :renderer (nico.ui.StripeImageCellRenderer.)}
-   {:key :title, :colName "タイトル", :class String :width 300, :renderer (nico.ui.PgmCellRenderer.)}
-   {:key :comm_name, :colName "コミュ名", :class String :width 250, :renderer (nico.ui.PgmCellRenderer.)}
-   {:key :pubdate, :colName "開始", :class java.util.Date :width 80, :renderer (nico.ui.PgmCellRenderer.)}
-   {:key :owner_name, :colName "放送主", :class String :width 80, :renderer (nico.ui.PgmCellRenderer.)}))
+(let [text-renderer (nico.ui.PgmCellRenderer.)]
+  (def ^{:private true} PGM-COLUMNS
+    (list
+     {:key :thumbnail, :colName "", :class javax.swing.ImageIcon, :width THUMBNAIL-WIDTH, :renderer (nico.ui.StripeImageCellRenderer.)}
+     {:key :title, :colName "タイトル", :class String :width 300, :renderer text-renderer}
+     {:key :comm_name, :colName "コミュ名", :class String :width 250, :renderer text-renderer}
+     {:key :pubdate, :colName "開始", :class java.util.Date :width 80, :renderer text-renderer}
+     {:key :owner_name, :colName "放送主", :class String :width 80, :renderer text-renderer})))
 
 (defn- pgm-colnum
   "PGM-COLUMNS の中から、指定されたキーのカラム番号を得る"
@@ -167,6 +163,9 @@
 
 (defn- pt-init [ptm pcm]
   [[ptm pcm] nil])
+
+(defn- pt-post-init [^nico.ui.ProgramsTable this ptm pcm]
+  (.setRowHeight this (+ THUMBNAIL-HEIGHT 4)))
 
 (defn- pt-getToolTipText [^nico.ui.ProgramsTable this ^MouseEvent e]
   (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))]

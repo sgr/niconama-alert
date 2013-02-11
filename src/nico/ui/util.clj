@@ -4,7 +4,7 @@
   nico.ui.util
   (:require [time-utils :as tu])
   (:import [java.awt Color Component Container Dimension Font]
-	   [javax.swing JButton JLabel JTable JTextArea SpringLayout]
+	   [javax.swing JButton JLabel JTable JTextArea SpringLayout SwingConstants]
            [javax.swing.table DefaultTableCellRenderer]))
 
 (def ^Font DEFAULT-FONT (Font. "Default" Font/PLAIN 12))
@@ -60,7 +60,6 @@
       java.util.Date (.setText this (tu/format-time-short val))
       (.setText this (.toString val)))
     (.setText this ""))
-  (.setRowHeight tbl 32)
   this)
 
 (defn- mr-invalidate [^nico.ui.MultiLineRenderer this])
@@ -96,40 +95,30 @@
 (defn- sr-init [] [[] nil])
 (defn- sr-getTableCellRendererComponent [^nico.ui.StripeRenderer this ^JTable tbl val selected focus row col]
   (.superGtcrc this tbl val selected focus row col)
-;;  (set-row-color this tbl selected row)
-  (if selected
-    (doto this
-      (.setForeground (.getSelectionForeground tbl))
-      (.setBackground (.getSelectionBackground tbl)))
-    (doto this
-      (.setForeground (.getForeground tbl))
-      (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl)))))
+  (set-row-color this tbl selected row)
   this)
 
 (gen-class
  :name nico.ui.StripeImageCellRenderer
  :extends javax.swing.table.DefaultTableCellRenderer
  :exposes-methods {getTableCellRendererComponent superGtcrc}
- :prefix "sicr-")
+ :prefix "sicr-"
+ :constructors {[] []}
+ :post-init post-init)
 
-(defn- sicr-init [] [[] nil])
+(defn- sicr-post-init [^nico.ui.StripeImageCellRenderer this]
+  (.setHorizontalTextPosition this SwingConstants/CENTER)
+  (.setHorizontalAlignment this SwingConstants/CENTER))
+
 (defn- sicr-getTableCellRendererComponent [^nico.ui.StripeImageCellRenderer this ^JTable tbl val selected focus row col]
   (.superGtcrc this tbl val selected focus row col)
-;;  (set-row-color this tbl selected row)
-  (if selected
-    (doto this
-      (.setForeground (.getSelectionForeground tbl))
-      (.setBackground (.getSelectionBackground tbl)))
-    (doto this
-      (.setForeground (.getForeground tbl))
-      (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl)))))
+  (set-row-color this tbl selected row)
   this)
 
 (defn- sicr-setValue [^nico.ui.StripeImageCellRenderer this ^Object val]
   (if val
     (condp = (class val)
       javax.swing.ImageIcon (.setIcon this val)
-      java.util.Date (do (.setHorizontalTextPosition this DefaultTableCellRenderer/CENTER)
-                         (.setText this (tu/format-time-short val)))
+      java.util.Date (.setText this (tu/format-time-short val))
       (.setText this (.toString val)))
     (.setText this "")))
