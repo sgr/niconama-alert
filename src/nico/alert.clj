@@ -3,7 +3,8 @@
        :doc "Alert management functions."}
   nico.alert
   (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
-        [clojure.tools.logging])
+        [clojure.tools.logging]
+        [nico.thumbnail :only [fetch]])
   (:require [concurrent-utils :as c]
             [log-utils :as l]
             [time-utils :as tu]
@@ -18,6 +19,9 @@
 (def ^{:private true} DISPLAY-TIME 20) ; アラートウィンドウの表示時間(秒)
 (def ^{:private true} KEEP-ALIVE 5) ; コアスレッド数を超えた処理待ちスレッドを保持する時間(秒)
 (def ^{:private true} INTERVAL-DISPLAY 500) ; アラートウィンドウ表示処理の実行間隔(ミリ秒)
+
+(def ^{:private true} ICON-WIDTH  64)
+(def ^{:private true} ICON-HEIGHT 64)
 
 (defn- divide-plats []
   (let [r (.getMaximumWindowBounds (GraphicsEnvironment/getLocalGraphicsEnvironment))
@@ -61,9 +65,6 @@
           [i plat] (if (tu/within? @last-modified now 5) (reserve-plat-A) (reserve-plat-B))]
       (if i
         (let [release-fn (fn []
-                           (if (not= thumbicn thumbnail/NO-IMAGE)
-                             (.flush (.getImage thumbicn))
-                             (debug "NO-IMAGE, no flush"))
                            (release-plat i plat))
               ^JDialog adlg (uad/alert-dlg pgm thumbicn release-fn)
               worker (proxy [javax.swing.SwingWorker][]
@@ -84,7 +85,7 @@
           (recur pgm thumbicn)))))
   (defn alert-pgm [id thumb-url]
     (let [^Future ftr (pgm/not-alerted id)
-          thumbnail (pgm/get-comm-thumbnail thumb-url)]
+          thumbnail (fetch thumb-url ICON-WIDTH ICON-HEIGHT)]
       (if-let [pgm (.get ftr)]
         (l/with-trace (str "alert: " id)
           (.execute ^ThreadPoolExecutor pool #(display-alert pgm thumbnail)))

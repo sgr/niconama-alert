@@ -12,9 +12,7 @@
            [javax.imageio.stream ImageInputStream]
            [javax.swing ImageIcon]))
 
-(def NO-IMAGE (ImageIcon. (clojure.java.io/resource "noimage.png")))
-(def ^{:private true} ICON-WIDTH  64)
-(def ^{:private true} ICON-HEIGHT 64)
+(def ^{:private true} NO-IMAGE (ImageIO/read (clojure.java.io/resource "noimage.png")))
 
 (defn ^BufferedImage adjust-img [^BufferedImage img width height]
   (let [nimg (BufferedImage. width height BufferedImage/TYPE_INT_ARGB)
@@ -43,7 +41,7 @@
           (.close ios)
           (.close baos)))))
 
-  (defn fetch [url]
+  (defn fetch [url width height]
     (locking jpeg-reader
       (let [is (n/url-stream-with-caching url)
             ^ImageInputStream iis (if is (ImageIO/createImageInputStream is) nil)
@@ -52,12 +50,10 @@
                                      (.read jpeg-reader 0))
                                  nil)]
         (try
-          (if img
-            (ImageIcon. (adjust-img img ICON-WIDTH ICON-HEIGHT))
-            NO-IMAGE)
+          (ImageIcon. (adjust-img (or img NO-IMAGE) width height))
           (catch Exception e
             (error e (format "failed fetching image: %s" url))
-            NO-IMAGE)
+            (ImageIcon. NO-IMAGE))
           (finally (when img (.flush img))
                    (when jpeg-reader (.reset jpeg-reader))
                    (when iis (.close iis))

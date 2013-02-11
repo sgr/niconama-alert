@@ -45,14 +45,6 @@
       [{:concurrency :read-only} "SELECT * FROM comms WHERE id=?" comm_id]
       (first rs))))
 
-(defn get-comm-thumbnail [^String url]
-  (debug (format "getting community's thumbnail: %s" url))
-  (try
-    (thumbnail/fetch url)
-    (catch Exception e
-      (error e (format "failed getting community's thumbnail: %s" url))
-      thumbnail/NO-IMAGE)))
-
 (defn- row-to-pgm [row-pgm]
   (let [row-comm (get-row-comm (:comm_id row-pgm))]
     (nico.pgm.Pgm.
