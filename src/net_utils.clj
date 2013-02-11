@@ -55,7 +55,7 @@
 
 (let [cache-dir (atom nil)
       resource-factory (atom nil)
-      cache-config (doto (CacheConfig.) (.setHeuristicCachingEnabled true))
+      cache-config (CacheConfig.)
       cache-storage (BasicHttpCacheStorage. cache-config)]
   (defn clear-cache []
     (when @cache-dir (io/delete-all-files @cache-dir)))
