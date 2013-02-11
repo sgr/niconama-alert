@@ -11,12 +11,11 @@
 (defn date-to-timestamp [^Date d] (Timestamp. (.getTime d)))
 (defn sql-now [] (date-to-timestamp (now)))
 
-(defn format-time [date fmt]
-  (if (instance? java.util.Date date)
-    (.format (SimpleDateFormat. fmt) date)
-    date))
-(defn format-time-long [date] (format-time date "yyyy/MM/dd HH:mm:ss"))
-(defn format-time-short [date] (format-time date "MM/dd HH:mm"))
+(let [fmt (SimpleDateFormat. "yyyy/MM/dd HH:mm:ss")]
+  (defn format-time-long [^Date d] (.format fmt d)))
+
+(let [fmt (SimpleDateFormat. "MM/dd HH:mm")]
+  (defn format-time-short [^Date d] (.format fmt d)))
 
 (defn later? [^Date this ^Date that] (pos? (.compareTo this that)))
 (defn earlier? [^Date this ^Date that] (neg? (.compareTo this that)))
