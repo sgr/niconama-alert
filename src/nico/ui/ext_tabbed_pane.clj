@@ -71,11 +71,10 @@
     (if query
       (let [npgms (pgm/search-pgms-by-pstmt query)]
         (when (get-in @(.state tpane) [:tab-prefs id-tab :alert])
-          (let [old-pgms (.getPgms content)]
-            (trace (format "old-pgms: %s" (pr-str (keys old-pgms))))
+          (let [old-ids (.getIds content)]
             (.execute ^ThreadPoolExecutor (:queue @(.state tpane))
                       #(doseq [[id npgm] npgms]
-                         (when-not (or (:alerted npgm) (contains? old-pgms id))
+                         (when-not (or (:alerted npgm) (contains? old-ids id))
                            (al/alert-pgm id (:thumbnail npgm)))))))
         (.setPgms content npgms)
         (.setTitle tab (format "%s (%d)" title (count npgms))))

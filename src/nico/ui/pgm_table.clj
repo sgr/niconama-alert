@@ -2,7 +2,9 @@
 (ns #^{:author "sgr"
        :doc "番組情報表示テーブル。"}
   nico.ui.pgm-table
-  (:use [clojure.tools.swing-utils :only [add-action-listener]]
+  (:use [clojure.set :only [difference]]
+        [clojure.tools.swing-utils :only [add-action-listener]]
+        [nico.thumbnail :only [fetch]]
         [nico.ui.util])
   (:require [clojure.string :as s]
             [nico.prefs :as p]
@@ -15,6 +17,8 @@
            [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]))
 
 (def ^{:private true} DESC-COL 64)
+(def ^{:private true} THUMBNAIL-WIDTH 32)
+(def ^{:private true} THUMBNAIL-HEIGHT 32)
 
 ;; PgmCellRendererは、番組表のセルレンダラー。
 ;; 新着の番組をボールド、コミュ限の番組を青字で表示する。
@@ -24,9 +28,7 @@
  :exposes-methods {getTableCellRendererComponent gtcrc}
  :prefix "pr-"
  :constructors {[] []}
- :state state
- :init init
- :post-init post-init)
+ :init init)
 
 ;; ProgramsTableModelは、pgmsを開始時刻でソートしたものを表示するTableModel。
 ;; 拡張メソッドgetUrlにより、番組URLを返す。
@@ -43,7 +45,7 @@
            [getProgramId [int] clojure.lang.Keyword]
            [getProgramTitle [int] String]
            [setPgms [clojure.lang.IPersistentMap] void]
-           [getPgms [] clojure.lang.IPersistentMap]
+           [getIds [] clojure.lang.IPersistentSet]
            [getPgm [int] nico.pgm.Pgm]])
 
 (gen-class
@@ -67,29 +69,29 @@
  :methods [[setSortable [boolean] void]])
 
 (defn- pr-init [] [[] (atom {})])
-(defn- pr-post-init [^nico.ui.PgmCellRenderer this]
-  (let [attrs (doto (.getAttributes (.getFont this))
-                (.put TextAttribute/WEIGHT TextAttribute/WEIGHT_BOLD))]
-    (swap! (.state this) assoc :bold-font (Font. attrs))))
-(defn- pr-getTableCellRendererComponent
-  [^nico.ui.PgmCellRenderer this ^JTable tbl val selected focus row col]
-  (.gtcrc this tbl val selected focus row col)
-  (when-let [^nico.ui.ProgramsTableModel pmdl
-             (let [mdl (.getModel tbl)]
-               (if (= nico.ui.ProgramsTableModel (class mdl)) mdl nil))]
-    (let [mr (.convertRowIndexToModel tbl row) pgm (.getPgm pmdl mr)]
-      (when (tu/within? (:fetched_at pgm) (tu/now) 60)
-        (.setFont this (:bold-font @(.state this))))
-      (when (:member_only pgm) (.setForeground this Color/BLUE))))
-  this)
+(let [attrs (doto (.getAttributes DEFAULT-FONT)
+              (.put TextAttribute/WEIGHT TextAttribute/WEIGHT_BOLD))
+      BOLD-FONT (.deriveFont DEFAULT-FONT attrs)]
+  (defn- pr-getTableCellRendererComponent [^nico.ui.PgmCellRenderer this ^JTable tbl val selected focus row col]
+    (.gtcrc this tbl val selected focus row col)
+    (.setRowHeight tbl row THUMBNAIL-HEIGHT)
+    (when-let [^nico.ui.ProgramsTableModel pmdl
+               (let [mdl (.getModel tbl)]
+                 (if (= nico.ui.ProgramsTableModel (class mdl)) mdl nil))]
+      (let [mr (.convertRowIndexToModel tbl row) pgm (.getPgm pmdl mr)]
+        (if (tu/within? (:fetched_at pgm) (tu/now) 60)
+          (.setFont this BOLD-FONT)
+          (.setFont this DEFAULT-FONT))
+        (when (:member_only pgm) (.setForeground this Color/BLUE))))
+    this))
 
 (def ^{:private true} PGM-COLUMNS
   (list
+   {:key :thumbnail, :colName "", :class javax.swing.ImageIcon, :width THUMBNAIL-WIDTH, :renderer (nico.ui.StripeImageCellRenderer.)}
    {:key :title, :colName "タイトル", :class String :width 300, :renderer (nico.ui.PgmCellRenderer.)}
-   {:key :comm_name, :colName "コミュ名", :class String :width 300, :renderer (nico.ui.PgmCellRenderer.)}
-   {:key :pubdate, :colName "開始", :class java.util.Date :width 50,
-    :renderer (doto (nico.ui.PgmCellRenderer.) (.setHorizontalAlignment JLabel/CENTER))}
-   {:key :owner_name, :colName "放送主", :class String :width 60, :renderer (nico.ui.PgmCellRenderer.)}))
+   {:key :comm_name, :colName "コミュ名", :class String :width 250, :renderer (nico.ui.PgmCellRenderer.)}
+   {:key :pubdate, :colName "開始", :class java.util.Date :width 80, :renderer (nico.ui.PgmCellRenderer.)}
+   {:key :owner_name, :colName "放送主", :class String :width 80, :renderer (nico.ui.PgmCellRenderer.)}))
 
 (defn- pgm-colnum
   "PGM-COLUMNS の中から、指定されたキーのカラム番号を得る"
@@ -107,24 +109,24 @@
       (doseq [[i pc] (map-indexed vector PGM-COLUMNS)] (.addColumn col-model (gen-col i pc)))
       col-model)))
 
-(defn- ptm-init [pgms]
-  [[] (atom (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))])
+(letfn [(sort-pgms [pgms] (sort-by :pubdate #(compare %2 %1) pgms))]
+  (defn- ptm-init [pgms]
+    [[] (atom (sort-pgms pgms))])
 
-(defn- ptm-setPgms [^nico.ui.ProgramsTableModel this pgms]
-  (reset! (.state this) (sort-by #(:pubdate (val %)) #(compare %2 %1) pgms))
-  (.fireTableDataChanged this))
+  (defn- ptm-setPgms [^nico.ui.ProgramsTableModel this pgms]
+    (let [old-pgms (reduce (fn [m pgm] (assoc m (:id pgm) pgm)) {} @(.state this))
+          oks (apply hash-set (keys old-pgms))
+          nks (apply hash-set (keys pgms))
+          del-ids (difference oks nks)
+          add-ids (difference nks oks)
+          add-pgms (map #(when-let [pgm (get pgms %)]
+                           (assoc pgm :thumbnail (fetch (:thumbnail pgm) THUMBNAIL-WIDTH THUMBNAIL-HEIGHT)))
+                        add-ids)]
+      (reset! (.state this) (sort-pgms (concat (vals (apply dissoc old-pgms del-ids)) add-pgms)))
+      (.fireTableDataChanged this))))
 
-(defn- ptm-getPgms [^nico.ui.ProgramsTableModel this]
-  (reduce (fn [m [k v]] (assoc m k v)) {} @(.state this)))
-
-(defn- ptm-getUrl [^nico.ui.ProgramsTableModel this row]
-  (:link (fnext (nth (seq @(.state this)) row))))
-
-(defn- ptm-getProgramId [^nico.ui.ProgramsTableModel this row]
-  (:id (fnext (nth (seq @(.state this)) row))))
-
-(defn- ptm-getProgramTitle [^nico.ui.ProgramsTableModel this row]
-  (:title (fnext (nth (seq @(.state this)) row))))
+(defn- ptm-getIds [^nico.ui.ProgramsTableModel this]
+  (apply hash-set (map :id @(.state this))))
 
 (defn- ptm-getColumnCount [^nico.ui.ProgramsTableModel this]
   (count PGM-COLUMNS))
@@ -138,19 +140,30 @@
 (defn- ptm-getRowCount [^nico.ui.ProgramsTableModel this]
   (count @(.state this)))
 
-(defn- ptm-isNew [^nico.ui.ProgramsTableModel this row]
-  (tu/within? (:fetched_at (fnext (nth (seq @(.state this)) row))) (tu/now) 60))
-
-(defn- ptm-isMemberOnly [^nico.ui.ProgramsTableModel this row]
-  (:member_only (fnext (nth (seq @(.state this)) row))))
-
-(defn- ptm-getValueAt [^nico.ui.ProgramsTableModel this row col]
-  ((:key (nth PGM-COLUMNS col)) (fnext (nth (seq @(.state this)) row))))
-
-(defn- ptm-getPgm [^nico.ui.ProgramsTableModel this row]
-  (fnext (nth (seq @(.state this)) row)))
-
 (defn- ptm-isCellEditable [^nico.ui.ProgramsTableModel this row col] false)
+
+(letfn [(get-pgm [this row] (nth @(.state this) row))]
+  (defn- ptm-getUrl [^nico.ui.ProgramsTableModel this row]
+    (:link (get-pgm this row)))
+
+  (defn- ptm-getProgramId [^nico.ui.ProgramsTableModel this row]
+    (:id (get-pgm this row)))
+
+  (defn- ptm-getProgramTitle [^nico.ui.ProgramsTableModel this row]
+    (:title (get-pgm this row)))
+
+  (defn- ptm-isNew [^nico.ui.ProgramsTableModel this row]
+    (tu/within? (:fetched_at (get-pgm this row)) (tu/now) 60))
+
+  (defn- ptm-isMemberOnly [^nico.ui.ProgramsTableModel this row]
+    (:member_only (get-pgm this row)))
+
+  (defn- ptm-getValueAt [^nico.ui.ProgramsTableModel this row col]
+    (let [k (:key (nth PGM-COLUMNS col))]
+      (get (get-pgm this row) k)))
+
+  (defn- ptm-getPgm [^nico.ui.ProgramsTableModel this row]
+    (get-pgm this row)))
 
 (defn- pt-init [ptm pcm]
   [[ptm pcm] nil])

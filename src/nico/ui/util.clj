@@ -5,7 +5,7 @@
   (:require [time-utils :as tu])
   (:import [java.awt Color Component Container Dimension Font]
 	   [javax.swing JButton JLabel JTable JTextArea SpringLayout]
-	   [javax.swing.table DefaultTableCellRenderer]))
+           [javax.swing.table DefaultTableCellRenderer]))
 
 (def ^Font DEFAULT-FONT (Font. "Default" Font/PLAIN 12))
 (def ^{:private true} BTN-HEIGHT 25)
@@ -42,18 +42,61 @@
      (doto ^Component (mlabel text) (.setPreferredSize size))))
 
 (gen-class
+ :name nico.ui.MultiLineRenderer
+ :extends javax.swing.JTextArea
+ :implements [javax.swing.table.TableCellRenderer]
+;; :exposes-methods {isOpaque superIsOpaque}
+ :prefix "mr-"
+ :post-init post-init)
+
+(defn- mr-post-init [^nico.ui.MultiLineRenderer this]
+  (.setEditable this false)
+  (.setLineWrap this true)
+  (.setWrapStyleWord this true))
+
+(defn- mr-getTableCellRendererComponent [^nico.ui.MultiLineRenderer this ^JTable tbl ^Object val selected focus row col]
+  (if val
+    (condp = (class val)
+      java.util.Date (.setText this (tu/format-time-short val))
+      (.setText this (.toString val)))
+    (.setText this ""))
+  (.setRowHeight tbl 32)
+  this)
+
+(defn- mr-invalidate [^nico.ui.MultiLineRenderer this])
+(defn- mr-validate [^nico.ui.MultiLineRenderer this])
+(defn- mr-revalidate [^nico.ui.MultiLineRenderer this])
+(defn- mr-firePropertyChange [^nico.ui.MultiLineRenderer this propertyName oldValue newValue])
+(defn- mr-repaint
+  ([^nico.ui.MultiLineRenderer this tm x y width height])
+  ([^nico.ui.MultiLineRenderer this x y width height])
+  ([^nico.ui.MultiLineRenderer this r])
+  ([^nico.ui.MultiLineRenderer this]))
+;; (defn- mr-isOpaque [^nico.ui.MultiLineRenderer this]
+;;   (let [back (.getBackground this)
+;;         p (when-let [p1 (.getParent this)] (.getParent p1))]
+;;     (and (not (and back p (.getBackground p) (.isOpaque p)))
+;;          (.superIsOpaque this))))
+
+(defn- set-row-color [this ^JTable tbl selected row]
+  (if selected
+    (doto this
+      (.setForeground (.getSelectionForeground tbl))
+      (.setBackground (.getSelectionBackground tbl)))
+    (doto this
+      (.setForeground (.getForeground tbl))
+      (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl))))))
+
+(gen-class
  :name nico.ui.StripeRenderer
- :extends javax.swing.table.DefaultTableCellRenderer
+ :extends nico.ui.MultiLineRenderer
  :exposes-methods {getTableCellRendererComponent superGtcrc}
- :prefix "sr-"
- :constructors {[] []}
- :state state
- :init init)
+ :prefix "sr-")
 
 (defn- sr-init [] [[] nil])
-(defn- sr-getTableCellRendererComponent
-  [^nico.ui.StripeRenderer this ^JTable tbl val selected focus row col]
+(defn- sr-getTableCellRendererComponent [^nico.ui.StripeRenderer this ^JTable tbl val selected focus row col]
   (.superGtcrc this tbl val selected focus row col)
+;;  (set-row-color this tbl selected row)
   (if selected
     (doto this
       (.setForeground (.getSelectionForeground tbl))
@@ -62,12 +105,31 @@
       (.setForeground (.getForeground tbl))
       (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl)))))
   this)
-(defn- sr-setValue [^nico.ui.StripeRenderer this ^Object val]
-  (.setText
-   this
-   (if val
-     (condp = (class val)
-       java.util.Date (do (.setHorizontalTextPosition this DefaultTableCellRenderer/CENTER)
-                          (tu/format-time-short val))
-       (.toString val))
-     "")))
+
+(gen-class
+ :name nico.ui.StripeImageCellRenderer
+ :extends javax.swing.table.DefaultTableCellRenderer
+ :exposes-methods {getTableCellRendererComponent superGtcrc}
+ :prefix "sicr-")
+
+(defn- sicr-init [] [[] nil])
+(defn- sicr-getTableCellRendererComponent [^nico.ui.StripeImageCellRenderer this ^JTable tbl val selected focus row col]
+  (.superGtcrc this tbl val selected focus row col)
+;;  (set-row-color this tbl selected row)
+  (if selected
+    (doto this
+      (.setForeground (.getSelectionForeground tbl))
+      (.setBackground (.getSelectionBackground tbl)))
+    (doto this
+      (.setForeground (.getForeground tbl))
+      (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl)))))
+  this)
+
+(defn- sicr-setValue [^nico.ui.StripeImageCellRenderer this ^Object val]
+  (if val
+    (condp = (class val)
+      javax.swing.ImageIcon (.setIcon this val)
+      java.util.Date (do (.setHorizontalTextPosition this DefaultTableCellRenderer/CENTER)
+                         (.setText this (tu/format-time-short val)))
+      (.setText this (.toString val)))
+    (.setText this "")))

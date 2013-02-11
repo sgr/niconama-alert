@@ -16,15 +16,15 @@
  :init init
  :post-init post-init
  :methods [[repaintTable [] void]
-           [getPgms [] clojure.lang.IPersistentMap]
+           [getIds [] clojure.lang.IPersistentSet]
            [setPgms [clojure.lang.IPersistentMap] void]])
 
 (defn- pp-init []
   [[] (atom {:tbl nil})])
 
-(defn- pp-getPgms [^nico.ui.ProgramsPanel this]
-  (.getPgms ^nico.ui.ProgramsTableModel
-            (.getModel ^nico.ui.ProgramsTable (:tbl @(.state this)))))
+(defn- pp-getIds [^nico.ui.ProgramsPanel this]
+  (.getIds ^nico.ui.ProgramsTableModel
+           (.getModel ^nico.ui.ProgramsTable (:tbl @(.state this)))))
 
 (defn- pp-setPgms [^nico.ui.ProgramsPanel this pgms]
   (do-swing
