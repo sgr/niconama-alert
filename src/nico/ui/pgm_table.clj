@@ -173,15 +173,12 @@
       (let [mc (.convertColumnIndexToModel this c), mr (.convertRowIndexToModel this r)]
         (if (and (<= 0 mc) (<= 0 mr))
           (let [pgm (.getPgm ^nico.ui.ProgramsTableModel (.getModel this) mr)]
-            (str (format "<html>番組タイトル: %s<br>" (su/ifstr (:title pgm) ""))
-                 (format "%s: %s<br>"
-                         (if (= "channel" (:type pgm)) "チャンネル" "コミュ名")
-                         (su/ifstr (:comm_name pgm) ""))
-                 (format "放送主: %s<br>" (su/ifstr (:owner_name pgm) ""))
+            (str "<html>"
                  (format "%s<br>" (s/join "<br>" (su/split-by-length
                                                   (su/ifstr (:desc pgm) "") DESC-COL)))
                  (format "カテゴリ: %s<br>" (su/ifstr (:category pgm) ""))
-                 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))))))))
+                 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now))))
+                 "</html>")))))))
 
 (defn- pt-setSortable [^nico.ui.ProgramsTable this sortability]
   (.setAutoCreateRowSorter this sortability))
