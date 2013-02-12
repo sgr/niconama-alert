@@ -108,8 +108,9 @@
           (let [now (tu/now) pgm (create-pgm item now)]
             (if (some nil? (list (:id pgm) (:title pgm) (:pubdate pgm)))
               (l/with-trace (format "Some nil properties found in: %s" (pr-str item))
-                (when-not (pgm/get-pgm (:id pgm))
-                  (api/request-fetch (name (:id pgm)) (name (:comm_id pgm)) now)))
+                (if (and (:id pgm) (:comm_id pgm) (nil? (pgm/get-pgm (:id pgm))))
+                  (api/request-fetch (name (:id pgm)) (name (:comm_id pgm)) now)
+                  (debug (format "abondoned fetching pgm for lack of ids: %s" (pr-str item)))))
               pgm))))))])
 
 (defn get-programs-from-rss [page]
