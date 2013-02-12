@@ -174,7 +174,7 @@
     (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))]
       (when (and (<= 0 c) (<= 0 r))
         (let [mc (.convertColumnIndexToModel this c), mr (.convertRowIndexToModel this r)]
-          (if (and (<= 0 mc) (<= 0 mr))
+          (when (and (<= 0 mc) (<= 0 mr))
             (let [pgm (.getPgm ^nico.ui.ProgramsTableModel (.getModel this) mr)
                   now (tu/now)]
               (str "<html>"
