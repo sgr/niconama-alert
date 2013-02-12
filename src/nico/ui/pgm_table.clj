@@ -167,18 +167,27 @@
 (defn- pt-post-init [^nico.ui.ProgramsTable this ptm pcm]
   (.setRowHeight this (+ THUMBNAIL-HEIGHT 4)))
 
-(defn- pt-getToolTipText [^nico.ui.ProgramsTable this ^MouseEvent e]
-  (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))]
-    (when (and (<= 0 c) (<= 0 r))
-      (let [mc (.convertColumnIndexToModel this c), mr (.convertRowIndexToModel this r)]
-        (if (and (<= 0 mc) (<= 0 mr))
-          (let [pgm (.getPgm ^nico.ui.ProgramsTableModel (.getModel this) mr)]
-            (str "<html>"
-                 (format "%s<br>" (s/join "<br>" (su/split-by-length
-                                                  (su/ifstr (:desc pgm) "") DESC-COL)))
-                 (format "カテゴリ: %s<br>" (su/ifstr (:category pgm) ""))
-                 (format "（%d分前に開始）" (tu/minute (tu/interval (:pubdate pgm) (tu/now))))
-                 "</html>")))))))
+(letfn [(ago [t n]
+          (let [intvl (tu/interval t n)]
+            (if (> 60000 intvl) (format "%d秒前" (int (/ intvl 1000))) (format "%d分前" (tu/minute intvl)))))]
+  (defn- pt-getToolTipText [^nico.ui.ProgramsTable this ^MouseEvent e]
+    (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))]
+      (when (and (<= 0 c) (<= 0 r))
+        (let [mc (.convertColumnIndexToModel this c), mr (.convertRowIndexToModel this r)]
+          (if (and (<= 0 mc) (<= 0 mr))
+            (let [pgm (.getPgm ^nico.ui.ProgramsTableModel (.getModel this) mr)
+                  now (tu/now)]
+              (str "<html>"
+                   (format "<table><tr><th>説明</th><td>%s</td></tr>"
+                           (s/join "<br/>" (su/split-by-length (su/ifstr (:desc pgm) "") DESC-COL)))
+                   (format "<tr><th>カテゴリ</th><td>%s</td></tr>" (su/ifstr (:category pgm) ""))
+                   (format "<tr><th>取得</th><td>%s (%s)</td></tr>"
+                           (ago (:fetched_at pgm) now) (tu/format-time-short (:fetched_at pgm)))
+                   (format "<tr><th>更新</th><td>%s (%s)</td></tr>"
+                           (ago (:updated_at pgm) now) (tu/format-time-short (:updated_at pgm)))
+                   (format "<tr><th>開始</th><td>%s (%s)</td></tr></table>"
+                           (ago (:pubdate pgm) now) (tu/format-time-short (:pubdate pgm)))
+                   "</html>"))))))))
 
 (defn- pt-setSortable [^nico.ui.ProgramsTable this sortability]
   (.setAutoCreateRowSorter this sortability))
