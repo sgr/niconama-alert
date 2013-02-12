@@ -65,17 +65,11 @@
 (defn- mr-invalidate [^nico.ui.MultiLineRenderer this])
 (defn- mr-validate [^nico.ui.MultiLineRenderer this])
 (defn- mr-revalidate [^nico.ui.MultiLineRenderer this])
-(defn- mr-firePropertyChange [^nico.ui.MultiLineRenderer this propertyName oldValue newValue])
 (defn- mr-repaint
   ([^nico.ui.MultiLineRenderer this tm x y width height])
   ([^nico.ui.MultiLineRenderer this x y width height])
   ([^nico.ui.MultiLineRenderer this r])
   ([^nico.ui.MultiLineRenderer this]))
-;; (defn- mr-isOpaque [^nico.ui.MultiLineRenderer this]
-;;   (let [back (.getBackground this)
-;;         p (when-let [p1 (.getParent this)] (.getParent p1))]
-;;     (and (not (and back p (.getBackground p) (.isOpaque p)))
-;;          (.superIsOpaque this))))
 
 (defn- set-row-color [this ^JTable tbl selected row]
   (if selected
