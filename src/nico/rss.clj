@@ -110,7 +110,7 @@
               (l/with-trace (format "Some nil properties found in: %s" (pr-str item))
                 (if (and (:id pgm) (:comm_id pgm) (nil? (pgm/get-pgm (:id pgm))))
                   (api/request-fetch (name (:id pgm)) (name (:comm_id pgm)) now)
-                  (debug (format "abondoned fetching pgm for lack of ids or fetched already: %s" (pr-str item)))))
+                  (debug (format "abondoned fetching pgm for lack of ids or fetched already: %s" (pr-str pgm)))))
               pgm))))))])
 
 (defn get-programs-from-rss [page]
