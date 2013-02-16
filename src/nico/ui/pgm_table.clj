@@ -105,7 +105,7 @@
       (doseq [[i pc] (map-indexed vector PGM-COLUMNS)] (.addColumn col-model (gen-col i pc)))
       col-model)))
 
-(letfn [(sort-pgms [pgms] (sort-by :pubdate #(compare %2 %1) pgms))]
+(letfn [(sort-pgms [pgms] (sort-by (juxt :pubdate :title :id) #(compare %2 %1) pgms))]
   (defn- ptm-init [pgms]
     [[] (atom (sort-pgms pgms))])
 
