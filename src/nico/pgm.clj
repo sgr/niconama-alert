@@ -97,12 +97,12 @@
                (let [result (jdbc/update-values :pgms ["id=? AND alerted=0" id] {:alerted true})]
                  (if (= 1 (first result)) true false)))
               (catch Exception e
-                (debug e (format "failed updating for " id))
+                (error e (format "failed updating for " id))
                 false)))]
     (db/enqueue (fn []
                   (trace (format "called not-alerted: %s" (name id)))
                   (let [nid (name id), result (update-alerted-aux nid)]
-                    (debug (format "update-alerted-aux result: %s" (pr-str result)))
+                    (trace (format "update-alerted-aux result: %s" (pr-str result)))
                     (if result
                       (if-let [row-pgm (get-pgm-aux nid)]
                         (l/with-trace (format "row-pgm: %s" (pr-str row-pgm))

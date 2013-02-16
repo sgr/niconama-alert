@@ -222,9 +222,10 @@
                        freelist_count)))]
     (let [page_count (pragma-page-count)
           freelist_count (pragma-freelist-count)]
-      (debug (format "page_count: %d, freelist_count: %d" page_count freelist_count))
+      (trace (format "page_count: %d, freelist_count: %d" page_count freelist_count))
       (when (< THRESHOLD-FREELIST freelist_count)
         (enqueue (fn []
+                   (debug (format "page_count: %d, freelist_count: %d" page_count freelist_count))
                    (vacuum)
                    (debug (format "page_count: %d, freelist_count: %d"
                                   (pragma-page-count)
