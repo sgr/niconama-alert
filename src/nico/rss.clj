@@ -98,20 +98,20 @@
 (defn- get-programs-from-rss-aux [rss]
   [(get-programs-count rss)
    (let [nodes-child (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
-         items (for [x nodes-child :when (= :item (:tag (first x)))] (first x))]
-     (if (= 0 (count items))
-       (l/with-trace (format "no items in rss: %s" (pr-str nodes-child))
-         nil)
+         items (for [x nodes-child :when (= :item (:tag (first x)))] (first x))
+         now (tu/now)]
+     (if (< 0 (count items))
        (remove
         nil?
         (for [item items]
-          (let [now (tu/now) pgm (create-pgm item now)]
+          (when-let [pgm (create-pgm item now)]
             (if (some nil? (list (:id pgm) (:title pgm) (:pubdate pgm)))
-              (l/with-trace (format "Some nil properties found in: %s" (pr-str item))
+              (l/with-debug (format "Some nil properties found in: %s" (pr-str item))
                 (if (and (:id pgm) (:comm_id pgm) (nil? (pgm/get-pgm (:id pgm))))
                   (api/request-fetch (name (:id pgm)) (name (:comm_id pgm)) now)
                   (debug (format "abondoned fetching pgm for lack of ids or fetched already: %s" (pr-str pgm)))))
-              pgm))))))])
+              pgm))))
+       (trace (format "no items in rss: %s" (pr-str nodes-child)))))])
 
 (defn get-programs-from-rss [page]
   (loop [c RETRY
