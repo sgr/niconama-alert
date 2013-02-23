@@ -72,7 +72,9 @@
                     "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"))
 
 (defn- create-db []
+  (info "CREATE DB: PGMS")
   (create-pgms)
+  (info "CREATE DB: COMMS")
   (create-comms))
 
 (defn- delete-db-file [path] (io/delete-all-files path))
@@ -102,7 +104,7 @@
  :methods [[lastUpdated [] java.util.Date]])
 
 (defn- dq-init [^clojure.lang.IPersistentMap db-spec]
-  [[0 1 KEEP-ALIVE TimeUnit/SECONDS (LinkedBlockingQueue.)]
+  [[1 1 KEEP-ALIVE TimeUnit/SECONDS (LinkedBlockingQueue.)]
    (atom {:db-spec          db-spec
           :last-hook-called (tu/now)
           :last-updated     (tu/now)})])
@@ -111,15 +113,16 @@
   (.setRejectedExecutionHandler this (ThreadPoolExecutor$DiscardPolicy.)))
 
 (defn- dq-submit [^nico.db.Queue this ^clojure.lang.IFn f]
+  (trace (format "submitted queue: %d, %s" (-> this .getQueue .size) (pr-str f)))
   (.submitSuper this (wrap-conn-callable f (:db-spec @(.state this)))))
 
 (defn- dq-beforeExecute [^nico.db.Queue this ^Thread t ^Runnable r]
-  (trace (format "beforeExecute queue: %d, %s" (.size (.getQueue this)) (pr-str r)))
+  (trace (format "beforeExecute queue: %d, %s, %s" (-> this .getQueue .size) (pr-str (:db-spec @(.state this))) (pr-str r)))
   (.beforeExecuteSuper this t r))
 
 (defn- dq-afterExecute [^nico.db.Queue this ^Runnable r ^Throwable t]
   (.afterExecuteSuper this r t)
-  (trace (format "afterExecute queue: %d, %s" (.size (.getQueue this)) (pr-str r)))
+  (trace (format "afterExecute queue: %d, %s" (-> this .getQueue .size) (pr-str r)))
   (if (and (nil? t) (instance? Future r))
     (try
       (when (.isDone ^Future r)
@@ -157,10 +160,16 @@
                :subprotocol subprotocol
                :subname db-path}
       queue (atom nil)
-      conn (atom nil)]
+      conn (atom nil)
+      ro-conn (atom nil)]
   (defn last-updated [] (when @queue (.lastUpdated @queue)))
   (defn queue-size [] (when @queue (.size (.getQueue @queue))))
   (defn- create-conn [] (DriverManager/getConnection (format "jdbc:%s:%s" subprotocol db-path)))
+  (defn- create-ro-conn [] (DriverManager/getConnection (format "jdbc:%s:%s" subprotocol db-path)
+                                                        (.toProperties
+                                                         (doto (org.sqlite.SQLiteConfig.)
+                                                           (.setSharedCache true)
+                                                           (.setReadOnly true)))))
   (defn- vacuum []
     (when @conn
       (debug "VACUUM!")
@@ -173,8 +182,8 @@
               (try
                 (jdbc/with-connection (assoc db-spec :connection conn) (f))
                 (catch Exception e e)))]
-      (when @conn
-        (when-let [result (req-ro-aux f @conn)]
+      (when @ro-conn
+        (when-let [result (req-ro-aux f @ro-conn)]
           (condp instance? result
             Exception (let [msg (.getMessage result)]
                         (if (re-find #"\[SQLITE_BUSY\]*" msg)
@@ -183,7 +192,7 @@
                               (recur f))
                           (error result (format "failed req-ro: %s" msg))))
             result)))))
-  (defn ro-pstmt [^String sql] (jdbc/prepare-statement @conn sql :concurrency :read-only))
+  (defn ro-pstmt [^String sql] (jdbc/prepare-statement @ro-conn sql :concurrency :read-only))
   (defn init []
     (Class/forName DB-CLASSNAME)
     (if (io/delete-all-files db-path)
@@ -191,22 +200,25 @@
         (info (format "initialize Database: %s" db-path))
         (reset! queue (nico.db.Queue. (assoc db-spec :connection c)))
         (.get ^Future (enqueue create-db))
-        (reset! conn c))
+        (reset! conn c)
+        (reset! ro-conn (create-ro-conn)))
       (let [msg (format "failed initializing Database: %s" db-path)]
         (error msg)
         (throw (Exception. msg)))))
+  (defn- close-conn [conn]
+    (try
+      (.close @conn)
+      (reset! conn nil)
+      (catch Exception e
+        (error e (format "failed closing conn: %s" (pr-str @conn))))))
   (defn shutdown []
     (debug "called shutdown database!!!")
     (let [q @queue]
       (reset! queue nil)
       (.shutdown q))
     (run-db-hooks :shutdown)
-    (when @conn
-      (try
-        (.close @conn)
-        (reset! conn nil)
-        (catch Exception e
-          (error e (format "failed closing conn: %s" (pr-str @conn))))))
+    (when @ro-conn (close-conn ro-conn))
+    (when @conn (close-conn conn))
     (delete-db-file db-path)))
 
 (defn- maintenance-db []
