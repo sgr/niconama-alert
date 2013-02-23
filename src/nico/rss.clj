@@ -75,7 +75,7 @@
        (.parse (SimpleDateFormat. "EEE, dd MMM yyyy HH:mm:ss Z" Locale/ENGLISH) pubdate-str)
        (catch Exception e
          (error e (format "failed parsing str as date: %s" pubdate-str))))
-     (error "pubdate is nil"))
+     (trace "pubdate is nil"))
    (if-let [s (get-child-content :description item)] (s/remove-tag s) "")
    (get-child-content :category item)
    (get-child-content :link item)
@@ -106,10 +106,10 @@
         (for [item items]
           (when-let [pgm (create-pgm item now)]
             (if (some nil? (list (:id pgm) (:title pgm) (:pubdate pgm)))
-              (l/with-debug (format "Some nil properties found in: %s" (pr-str item))
+              (l/with-trace (format "Some nil properties found in: %s" (pr-str item))
                 (if (and (:id pgm) (:comm_id pgm) (nil? (pgm/get-pgm (:id pgm))))
                   (api/request-fetch (name (:id pgm)) (name (:comm_id pgm)) now)
-                  (debug (format "abondoned fetching pgm for lack of ids or fetched already: %s" (pr-str pgm)))))
+                  (trace (format "abondoned fetching pgm for lack of ids or fetched already: %s" (pr-str pgm)))))
               pgm))))
        (trace (format "no items in rss: %s" (pr-str nodes-child)))))])
 
