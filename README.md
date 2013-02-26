@@ -1,7 +1,7 @@
-# ニコ生アラート (J)
+# ニコ生アラート CLJ
 
 ニコニコ生放送 (http://live.nicovideo.jp/) で現在放送中の番組一覧を表示します。
-JRE (Java SE Runtime Environment) 上で動作します。
+Clojure で作成されており、 JRE (Java SE Runtime Environment) 上で動作します。
 
 もしニコニコ動画のアカウントをお持ちの場合は、そのアカウントの所属する
 コミュニティの放送中の番組一覧を、また指定された条件を満たす放送中の番組一覧を
@@ -11,7 +11,7 @@ JRE (Java SE Runtime Environment) 上で動作します。
 ## Download
 
 [こちら](https://docs.google.com/open?id=0BwIJLE1B4O3mV0RaZTdSekRKREk) より、
-nicoalert-1.5.4-standalone.jar を取得してください。
+nicoalert-1.6.0-standalone.jar を取得してください。
 
 ## Usage
 
@@ -28,6 +28,7 @@ JREをインストールし、次のコマンドラインで起動します。
 
 ## Old Releases
 
+* [1.5.4](https://docs.google.com/open?id=0BwIJLE1B4O3mV0RaZTdSekRKREk)
 * [1.5.3](https://docs.google.com/open?id=0BwIJLE1B4O3mdHhqd2RSMV96SU0)
 
 ## License

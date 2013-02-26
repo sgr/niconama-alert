@@ -24,7 +24,7 @@
   (doseq [k F-KEYS] (UIManager/put k (Font. "Default" Font/PLAIN 12)))
   (let [appicn (ImageIcon. (clojure.java.io/resource "dempakun.png"))
         pref @(p/get-pref)
-        frame (JFrame. "NicoNama Alert (J)")
+        frame (JFrame. "NicoNama Alert CLJ")
         tabbed-pane (nico.ui.ExtTabbedPane.)
         mbar (m/menu-bar frame tabbed-pane)
         tm (ToolTipManager/sharedInstance)

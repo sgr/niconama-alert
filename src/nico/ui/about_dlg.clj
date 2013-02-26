@@ -35,7 +35,7 @@
 
 (defn- ^JPanel about-panel []
   (let [cr-panel (JPanel.) lib-panel (JPanel.)]
-    (let [lapp (JLabel. "NicoNama Alert (J)")
+    (let [lapp (JLabel. "NicoNama Alert CLJ")
           lauthor (JLabel. "Copyright (C) Shigeru Fujiwara All Rights Reserved.")
           layout (SpringLayout.)]
       (doto lapp (.setFont APP-NAME-FONT))
