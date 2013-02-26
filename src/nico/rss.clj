@@ -12,7 +12,7 @@
             [clj-http.client :as client]
             [nico.pgm :as pgm]
             [nico.api-updator :as api]
-            [log-utils :as l]
+            [nico.log :as l]
             [net-utils :as n]
             [str-utils :as s]
             [time-utils :as tu])

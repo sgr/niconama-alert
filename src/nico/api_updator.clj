@@ -7,7 +7,7 @@
   (:require [nico.pgm :as pgm]
 	    [nico.api :as api]
 	    [nico.scrape :as ns]
-            [log-utils :as l]
+            [nico.log :as l]
 	    [hook-utils :as hu]
 	    [time-utils :as tu])
   (:import [java.util.concurrent Callable CountDownLatch LinkedBlockingQueue

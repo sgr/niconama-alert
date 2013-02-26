@@ -5,6 +5,44 @@
   (:use [clojure.java.io :only [writer]])
   (:import [java.io File]))
 
+(defn system []
+  (let [sys (.toLowerCase (System/getProperty "os.name"))]
+    (condp re-find sys
+      #"windows" :windows
+      #"mac"     :mac
+      #"linux"   :linux
+      #"bsd"     :bsd
+      #"solaris" :solaris
+      :other)))
+
+(defn- pref-base-path-unix [uhome]
+  (str uhome File/separator))
+
+(defn- pref-base-path-macosx [uhome]
+  (str uhome File/separator "Library"))
+
+(defn- pref-base-path-windows [uhome]
+  (if-let [appdata (System/getenv "AppData")]
+    (str appdata File/separator)
+    (str uhome File/separator)))
+
+(defn ^String pref-base-path []
+  (let [uhome (System/getProperty "user.home")]
+    (condp = (system)
+      :windows (pref-base-path-windows uhome)
+      :mac     (pref-base-path-macosx uhome)
+      :linux   (pref-base-path-unix uhome)
+      :bsd     (pref-base-path-unix uhome)
+      :solaris (pref-base-path-unix uhome)
+      (pref-base-path-unix uhome))))
+
+(defn load-pref [^File pfile]
+  (if (and (.exists pfile) (.isFile pfile))
+    (read-string (slurp pfile))
+    nil))
+
+(defn- ^File old-pref-file [^File pfile] (File. (str (.getCanonicalPath pfile) ".old")))
+
 (defmacro with-out-writer
   "Opens a writer on f, binds it to *out*, and evalutes body.
   Anything printed within body will be written to f.
@@ -14,42 +52,7 @@
      (binding [*out* stream#]
        ~@body)))
 
-(defn- pref-dir-unix [uhome]
-  (str uhome File/separator))
-(defn- pref-dir-macosx [uhome]
-  (str uhome File/separator "Library/Application Support/"))
-(defn- pref-dir-windows [uhome]
-  (if-let [appdata (System/getenv "AppData")]
-    (str appdata File/separator)
-    (str uhome File/separator)))
-
-(defn pref-base-path []
-  (let [uhome (System/getProperty "user.home")
-	sys (.toLowerCase (System/getProperty "os.name"))]
-    (str (condp re-find sys
-	   #"windows" (pref-dir-windows uhome)
-	   #"mac" (pref-dir-macosx uhome)
-	   #"linux" (pref-dir-unix uhome)
-	   #"bsd" (pref-dir-unix uhome)
-	   #"solaris" (pref-dir-unix uhome)
-	   (pref-dir-unix uhome)))))
-
-(defn- ^String pref-path [appname]
-  (str (pref-base-path) "." appname ".clj"))
-
-(defn- ^String old-pref-path [appname] (str (pref-path appname) ".old"))
-
-(defn- ^File pref-file [appname] (File. (pref-path appname)))
-(defn- ^File old-pref-file [appname] (File. (old-pref-path appname)))
-
-(defn load-pref [appname]
-  (let [pfile (pref-file appname)]
-    (if (and (.exists pfile) (.isFile pfile))
-      (read-string (slurp pfile))
-      nil)))
-
-(defn store-pref [pref appname]
-  (let [pfile (pref-file appname)]
-    (when (and (.exists pfile) (.isFile pfile))
-      (.renameTo pfile (old-pref-file appname)))
-    (with-out-writer pfile (prn pref))))
+(defn store-pref [pref ^File pfile]
+  (when (and (.exists pfile) (.isFile pfile))
+    (.renameTo pfile (old-pref-file pfile)))
+  (with-out-writer pfile (prn pref)))

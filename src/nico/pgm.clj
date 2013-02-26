@@ -4,11 +4,11 @@
   nico.pgm
   (:use [clojure.tools.logging])
   (:require [clojure.java.jdbc :as jdbc]
-            [log-utils :as l]
             [query-utils :as q]
             [str-utils :as s]
 	    [time-utils :as tu]
             [nico.db :as db]
+            [nico.log :as l]
             [nico.thumbnail :as thumbnail])
   (:import [clojure.lang Keyword]
            [java.sql Connection PreparedStatement ResultSet SQLException Timestamp]
@@ -235,7 +235,8 @@
             (jdbc/transaction
              (doseq [pgm pgms] (add2 pgm)))
             (catch Exception e
-              (error e (format "failed adding programs: [%s]" (pr-str pgms))))))]
+              (error e (format "failed adding programs: [%s]" (pr-str pgms)))
+              (System/exit 1))))]
   (defn add [^Pgm pgm] (db/enqueue #(add1 pgm)))
   (defn add-pgms [pgms] (db/enqueue #(add1-pgms pgms))))
 

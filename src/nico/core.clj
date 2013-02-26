@@ -22,9 +22,10 @@
 
   ;; call start-up functions
   (try
+    (p/check-pref-dir)
     (l/load-log-props)
     (p/load-pref)
-    (n/init-cache)
+    (n/init-cache (p/cache-dir))
     (db/init)
     ;; invoke main frame
     (let [frame (main-frame (fn [f] (add-main-hook :shutdown f))
@@ -35,7 +36,7 @@
       (error e (format "failed starting up"))
       (JOptionPane/showMessageDialog
        nil
-       (format "Failed start-up procedure.\nCause: %s\nShutting down..." (.getMessage e))
+       (format "Failed start-up procedure.\nCause: %s\nShutting down..." (pr-str e));(.getMessage e))
        "initializing error" JOptionPane/ERROR_MESSAGE)
       (run-main-hooks :shutdown))))
 

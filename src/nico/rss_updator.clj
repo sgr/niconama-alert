@@ -5,8 +5,8 @@
   (:use [clojure.tools.logging])
   (:require [nico.pgm :as pgm]
 	    [nico.rss :as rss]
+            [nico.log :as l]
 	    [hook-utils :as hu]
-            [log-utils :as l]
 	    [time-utils :as tu])
   (:import [clojure.lang Keyword]
            [java.util.concurrent CountDownLatch TimeUnit]))

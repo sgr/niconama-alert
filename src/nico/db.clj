@@ -6,8 +6,8 @@
   (:require [clojure.java.jdbc :as jdbc]
             [hook-utils :as hu]
             [io-utils :as io]
-            [log-utils :as l]
-	    [time-utils :as tu])
+	    [time-utils :as tu]
+            [nico.prefs :as prefs])
   (:import [java.sql Connection DriverManager PreparedStatement ResultSet SQLException Timestamp]
            [java.util Calendar Date]
            [java.util.concurrent Callable Future FutureTask LinkedBlockingQueue ThreadPoolExecutor TimeUnit
@@ -154,7 +154,7 @@
   (:last-updated @(.state this)))
 
 
-(let [db-path (io/temp-file-name "nico-" ".db")
+(let [db-path (prefs/db-path)
       subprotocol "sqlite"
       db-spec {:classname DB-CLASSNAME
                :subprotocol subprotocol

@@ -6,11 +6,11 @@
         [clojure.tools.logging]
         [nico.thumbnail :only [fetch]])
   (:require [concurrent-utils :as c]
-            [log-utils :as l]
             [time-utils :as tu]
+            [nico.pgm :as pgm]
             [nico.thumbnail :as thumbnail]
-            [nico.ui.alert-dlg :as uad]
-            [nico.pgm :as pgm])
+            [nico.log :as l]
+            [nico.ui.alert-dlg :as uad])
   (:import [java.awt GraphicsEnvironment]
            [java.awt.event WindowEvent]
            [javax.swing JDialog ImageIcon]

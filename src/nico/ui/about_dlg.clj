@@ -26,6 +26,7 @@
            "Apache Commons Lang library 3.1"
            "Apache HttpComponents 4.2"
            "HtmlCleaner 2.2 Copyright (c) 2006-2012, HtmlCleaner team. All rights reserved."
+           "logutil 0.2.0 Copyright (C) Shigeru Fujiwara All Rights Reserved."
            "swing-utils 0.2.0 Copyright (c) Stephen C. Gilardi and Meikel Brandmeyer. All rights reserved."
            "Enlive 1.0 Copyright (c) Christophe Grand, 2012. All rights reserved."
            "SQLite JDBC developed by Taro L. Saito"

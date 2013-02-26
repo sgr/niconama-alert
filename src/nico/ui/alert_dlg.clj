@@ -6,7 +6,6 @@
         [clojure.tools.logging])
   (:require [nico.prefs :as p]
             [nico.ui.util :as uu]
-            [log-utils :as l]
             [net-utils :as n]
             [str-utils :as su]
             [time-utils :as tu])

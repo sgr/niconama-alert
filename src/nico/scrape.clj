@@ -3,12 +3,12 @@
        :doc "ニコ生のページから情報を取得する。"}
     nico.scrape
   (:use [clojure.tools.logging])
-  (:require [net.cgrand.enlive-html :as html]
-            [log-utils :as l]
+  (:require [clojure.string :as cs]
+            [net.cgrand.enlive-html :as html]
 	    [net-utils :as n]
 	    [str-utils :as s]
 	    [time-utils :as tu]
-	    [clojure.string :as cs])
+            [nico.log :as l])
   (:import [java.io InputStream]
            [java.util Calendar Date GregorianCalendar Locale TimeZone]
            [java.util.concurrent TimeUnit]

@@ -4,7 +4,6 @@
   io-utils
   (:use [clojure.java.io :only [file delete-file]]
         [clojure.tools.logging])
-  (:require [log-utils :as l])
   (:import [java.io ByteArrayOutputStream File IOException]))
 
 (defn- byte-buf [len] (byte-array len (repeat len (byte 0))))
@@ -21,11 +20,15 @@
             (recur (.read is buf 0 buf-size)))))))
 
 (defn temp-file-name
-  ([prefix suffix]
+  ([^String prefix ^String suffix ^File dir]
+     (let [f (File/createTempFile prefix suffix dir)]
+       (.delete f)
+       (.getCanonicalPath f)))
+  ([^String prefix ^String suffix]
      (let [f (File/createTempFile prefix suffix)]
        (.delete f)
        (.getCanonicalPath f)))
-  ([prefix] (temp-file-name prefix nil)))
+  ([^String prefix] (temp-file-name prefix nil)))
 
 (defn- delete [^File f]
   (if (.delete f)
@@ -38,11 +41,10 @@
   [path]
   (letfn [(delete-all-files-aux [^File f]
             (when (.exists f)
-              (if (.isDirectory f)
-                (l/with-debug (format "deleting all children of %s"  path)
-                  (doseq [c (.listFiles f)] (delete-all-files-aux c))
-                  (delete f))
-                (delete f))))]
+              (when (.isDirectory f)
+                (debug (format "deleting all children of %s"  path))
+                (doseq [c (.listFiles f)] (delete-all-files-aux c)))
+              (delete f)))]
     (let [f (file path)]
       (try
         (delete-all-files-aux f)

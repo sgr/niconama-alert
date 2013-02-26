@@ -5,6 +5,7 @@
                  [org.clojure/java.jdbc "0.2.3"]
                  [org.clojure/math.numeric-tower "0.0.2"]
                  [org.clojure/tools.logging "0.2.4"]
+                 [logutil "0.2.0"]
                  [clj-http "[0.6,)"]
                  [org.apache.httpcomponents/httpclient-cache "4.2.2"]
                  [swing-utils "0.2.0"]

@@ -62,9 +62,9 @@
 
   (defn init-cache
     "This function must be called before using url-stream-with-caching"
-    []
+    [^File cdir]
     (reset! resource-factory nil)
-    (reset! cache-dir (File. (str (System/getProperty "java.io.tmpdir") File/separator "nico_cache")))
+    (reset! cache-dir cdir)
     (let [cp (.getCanonicalPath ^File @cache-dir)]
       (when (.exists ^File @cache-dir)
         (warn (format "clear existing cache directory: %s" cp))
