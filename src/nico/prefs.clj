@@ -50,13 +50,17 @@
 (let [p (atom nil)]
   (defn get-pref [] p)
   (defn load-pref []
-    (let [opf (old-pref-file)]
-      (when (.exists opf)
-        (info (format "loading old pref: %s" (.getCanonicalPath opf)))
-        (reset! p (when-let [op (pu/load-pref opf)] op))
-        (.deleteOnExit opf)))
     (when-not @p
-      (reset! p (if-let [lp (pu/load-pref (pref-file))] lp (gen-initial-pref))))
+      (reset! p
+              (if-let [lp (pu/load-pref (pref-file))]
+                lp
+                (let [opf (old-pref-file)]
+                  (if (.exists opf)
+                    (do (info (format "loading old pref: %s" (.getCanonicalPath opf)))
+                        (if-let [op (pu/load-pref opf)]
+                          op
+                          (gen-initial-pref)))
+                    (gen-initial-pref))))))
     @p)
   (defn store-pref [] (pu/store-pref @p (pref-file))))
 
