@@ -10,6 +10,8 @@
            [java.io File IOException]
 	   [java.net URI URL]))
 
+(def APP-TITLE "niconama-alert.clj")
+
 (def ^{:private true} DEFAULT-FRAME-WIDTH 895)
 (def ^{:private true} DEFAULT-FRAME-HEIGHT 560)
 
@@ -61,7 +63,7 @@
                           op
                           (gen-initial-pref)))
                     (gen-initial-pref))))))
-    @p)
+    p)
   (defn store-pref [] (pu/store-pref @p (pref-file))))
 
 (defn db-path []

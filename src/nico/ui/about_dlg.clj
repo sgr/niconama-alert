@@ -4,6 +4,7 @@
   nico.ui.about-dlg
   (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
   (:require [clojure.string :as s]
+            [nico.prefs :as p]
             [nico.ui.util :as uu]
             [nico.ui.env-panel :as ue])
   (:import [java.awt BorderLayout Dimension Font Frame]
@@ -35,7 +36,7 @@
 
 (defn- ^JPanel about-panel []
   (let [cr-panel (JPanel.) lib-panel (JPanel.)]
-    (let [lapp (JLabel. "NicoNama Alert CLJ")
+    (let [lapp (JLabel. p/APP-TITLE)
           lauthor (JLabel. "Copyright (C) Shigeru Fujiwara All Rights Reserved.")
           layout (SpringLayout.)]
       (doto lapp (.setFont APP-NAME-FONT))
