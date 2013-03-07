@@ -10,7 +10,7 @@ Clojure で作成されており、 JRE (Java SE Runtime Environment) 上で動�
 
 ## Download
 
-[こちら](https://docs.google.com/file/d/0BwIJLE1B4O3mT2ZReGlnay12SDA) より、
+[こちら](https://docs.google.com/file/d/0BwIJLE1B4O3mT2ZReGlnay12SDA/edit?usp=sharing) より、
 nicoalert-1.6.0-standalone.jar を取得してください。
 
 ## Usage
