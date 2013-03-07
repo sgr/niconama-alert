@@ -16,7 +16,7 @@
   :exclusions [org.apache.ant/ant]
   :debug false
   :profiles {:dev
-             {:dependencies [[org.clojure/tools.nrepl "0.2.0-RC1"]]
+             {:dependencies [[org.clojure/tools.nrepl "[0.2,)"]]
               :debug true
               :warn-on-reflection true}
              :debug
