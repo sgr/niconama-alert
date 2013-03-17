@@ -27,17 +27,21 @@
 
 (defn- varchar [len] (format "varchar(%d)" len))
 
-(defn- create-comms []
-  (jdbc/create-table
-   :comms
-   [:id (varchar LEN_COMM_ID) "PRIMARY KEY"]
-   [:comm_name (varchar LEN_COMM_NAME)]
-   [:thumbnail (varchar LEN_COMM_THUMBNAIL)]
-   [:fetched_at :timestamp]
-   [:updated_at :timestamp])
-  (jdbc/do-commands "CREATE INDEX idx_comms_id ON comms(id)"
-                    "CREATE INDEX idx_comms_name ON comms(comm_name)"
-                    "CREATE INDEX idx_comms_updated_at ON comms(updated_at)"))
+(defn- create-comms [db]
+  (jdbc/db-do-commands
+   db true
+   (jdbc/create-table-ddl
+    :comms
+    [:id (varchar LEN_COMM_ID) "PRIMARY KEY"]
+    [:comm_name (varchar LEN_COMM_NAME)]
+    [:thumbnail (varchar LEN_COMM_THUMBNAIL)]
+    [:fetched_at :timestamp]
+    [:updated_at :timestamp]))
+  (jdbc/db-do-commands
+   db true
+   "CREATE INDEX idx_comms_id ON comms(id)"
+   "CREATE INDEX idx_comms_name ON comms(comm_name)"
+   "CREATE INDEX idx_comms_updated_at ON comms(updated_at)"))
 
 (def ^{:private true} LEN_PGM_ID          12)
 (def LEN_PGM_TITLE       64)
@@ -46,36 +50,40 @@
 (def ^{:private true} LEN_PGM_LINK        42)
 (def LEN_PGM_OWNER_NAME  64)
 
-(defn- create-pgms []
-  (jdbc/create-table
-   :pgms
-   [:id (varchar LEN_PGM_ID) "PRIMARY KEY"]
-   [:title (varchar LEN_PGM_TITLE)]
-   [:pubdate :timestamp]
-   [:description (varchar LEN_PGM_DESCRIPTION)]
-   [:category (varchar LEN_PGM_CATEGORY)]
-   [:link (varchar LEN_PGM_LINK)]
-   [:owner_name (varchar LEN_PGM_OWNER_NAME)]
-   [:member_only :boolean]
-   [:type :smallint] ;; 0: community 1: channel 2: official
-   [:comm_id (varchar LEN_COMM_ID)]
-   [:alerted :boolean]
-   [:fetched_at :timestamp]
-   [:updated_at :timestamp])
-  (jdbc/do-commands "CREATE INDEX idx_pgms_id ON pgms(id)"
-                    "CREATE INDEX idx_pgms_title ON pgms(title)"
-                    "CREATE INDEX idx_pgms_pubdate ON pgms(pubdate)"
-                    "CREATE INDEX idx_pgms_description ON pgms(description)"
-                    "CREATE INDEX idx_pgms_category ON pgms(category)"
-                    "CREATE INDEX idx_pgms_owner_name ON pgms(owner_name)"
-                    "CREATE INDEX idx_pgms_comm_id ON pgms(comm_id)"
-                    "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"))
+(defn- create-pgms [db]
+  (jdbc/db-do-commands
+   db true
+   (jdbc/create-table-ddl
+    :pgms
+    [:id (varchar LEN_PGM_ID) "PRIMARY KEY"]
+    [:title (varchar LEN_PGM_TITLE)]
+    [:pubdate :timestamp]
+    [:description (varchar LEN_PGM_DESCRIPTION)]
+    [:category (varchar LEN_PGM_CATEGORY)]
+    [:link (varchar LEN_PGM_LINK)]
+    [:owner_name (varchar LEN_PGM_OWNER_NAME)]
+    [:member_only :boolean]
+    [:type :smallint] ;; 0: community 1: channel 2: official
+    [:comm_id (varchar LEN_COMM_ID)]
+    [:alerted :boolean]
+    [:fetched_at :timestamp]
+    [:updated_at :timestamp]))
+  (jdbc/db-do-commands
+   db true
+   "CREATE INDEX idx_pgms_id ON pgms(id)"
+   "CREATE INDEX idx_pgms_title ON pgms(title)"
+   "CREATE INDEX idx_pgms_pubdate ON pgms(pubdate)"
+   "CREATE INDEX idx_pgms_description ON pgms(description)"
+   "CREATE INDEX idx_pgms_category ON pgms(category)"
+   "CREATE INDEX idx_pgms_owner_name ON pgms(owner_name)"
+   "CREATE INDEX idx_pgms_comm_id ON pgms(comm_id)"
+   "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"))
 
-(defn- create-db []
+(defn- create-db [db]
   (info "CREATE DB: PGMS")
-  (create-pgms)
+  (create-pgms db)
   (info "CREATE DB: COMMS")
-  (create-comms))
+  (create-comms db))
 
 (defn- delete-db-file [path] (io/delete-all-files path))
 
@@ -83,7 +91,7 @@
   (proxy [Callable] []
     (call []
       (try
-        (jdbc/with-connection db-spec (f))
+        (f db-spec)
         (catch Exception e
           (error e (format "failed execute f: %s" (pr-str f)))
           e)))))
@@ -154,22 +162,17 @@
   (:last-updated @(.state this)))
 
 
-(let [db-path (prefs/db-path)
-      subprotocol "sqlite"
-      db-spec {:classname DB-CLASSNAME
-               :subprotocol subprotocol
-               :subname db-path}
+(let [db-spec {:classname DB-CLASSNAME
+               :subprotocol "sqlite"
+               :subname ":memory:"}
       queue (atom nil)
       conn (atom nil)
       ro-conn (atom nil)]
   (defn last-updated [] (when @queue (.lastUpdated @queue)))
   (defn queue-size [] (when @queue (.size (.getQueue @queue))))
-  (defn- create-conn [] (DriverManager/getConnection (format "jdbc:%s:%s" subprotocol db-path)))
-  (defn- create-ro-conn [] (DriverManager/getConnection (format "jdbc:%s:%s" subprotocol db-path)
-                                                        (.toProperties
-                                                         (doto (org.sqlite.SQLiteConfig.)
-                                                           (.setSharedCache true)
-                                                           (.setReadOnly true)))))
+  (defn- create-conn []
+    (DriverManager/getConnection (format "jdbc:%s:%s" (:subprotocol db-spec) (:subname db-spec))))
+  (defn db [] (if @conn {:connection @conn} db-spec))
   (defn- vacuum []
     (when @conn
       (debug "VACUUM!")
@@ -180,7 +183,7 @@
   (defn req-ro [f]
     (letfn [(req-ro-aux [f conn]
               (try
-                (jdbc/with-connection (assoc db-spec :connection conn) (f))
+                (f {:connection conn})
                 (catch Exception e e)))]
       (when @ro-conn
         (when-let [result (req-ro-aux f @ro-conn)]
@@ -192,19 +195,16 @@
                               (recur f))
                           (error result (format "failed req-ro: %s" msg))))
             result)))))
-  (defn ro-pstmt [^String sql] (jdbc/prepare-statement @ro-conn sql :concurrency :read-only))
+  (defn ro-pstmt [^String sql]
+    (jdbc/prepare-statement @ro-conn sql :concurrency :read-only))
   (defn init []
     (Class/forName DB-CLASSNAME)
-    (if (io/delete-all-files db-path)
-      (let [c (create-conn)]
-        (info (format "initialize Database: %s" db-path))
-        (reset! queue (nico.db.Queue. (assoc db-spec :connection c)))
-        (.get ^Future (enqueue create-db))
-        (reset! conn c)
-        (reset! ro-conn (create-ro-conn)))
-      (let [msg (format "failed initializing Database: %s" db-path)]
-        (error msg)
-        (throw (Exception. msg)))))
+    (let [c (create-conn)]
+      (reset! conn c)
+      (reset! ro-conn c)
+      (info (format "initialized Database: %s" (pr-str c)))
+      (reset! queue (nico.db.Queue. {:connection c}));(assoc db-spec :connection c)))
+      (.get ^Future (enqueue create-db))))
   (defn- close-conn [conn]
     (try
       (.close @conn)
@@ -218,29 +218,23 @@
       (.shutdown q))
     (run-db-hooks :shutdown)
     (when @ro-conn (close-conn ro-conn))
-    (when @conn (close-conn conn))
-    (delete-db-file db-path)))
+    (when @conn (close-conn conn))))
 
 (defn- maintenance-db []
   (letfn [(pragma-page-count []
             (req-ro #(let [{:keys [page_count]}
-                           (jdbc/with-query-results rs [{:concurrency :read-only} "PRAGMA page_count"]
-                             (first rs))]
+                           (jdbc/query %1 ["PRAGMA page_count"] :result-set-fn first)]
                        page_count)))
           (pragma-freelist-count []
             (req-ro #(let [{:keys [freelist_count]}
-                           (jdbc/with-query-results rs [{:concurrency :read-only} "PRAGMA freelist_count"]
-                             (first rs))]
+                           (jdbc/query %1 ["PRAGMA freelist_count"] :result-set-fn first)]
                        freelist_count)))]
-    (let [page_count (pragma-page-count)
-          freelist_count (pragma-freelist-count)]
+    (let [page_count (pragma-page-count) freelist_count (pragma-freelist-count)]
       (trace (format "page_count: %d, freelist_count: %d" page_count freelist_count))
       (when (< THRESHOLD-FREELIST freelist_count)
-        (enqueue (fn []
-                   (debug (format "page_count: %d, freelist_count: %d" page_count freelist_count))
+        (enqueue (fn [db]
+                   (info (format "page_count: %d, freelist_count: %d" page_count freelist_count))
                    (vacuum)
-                   (debug (format "page_count: %d, freelist_count: %d"
-                                  (pragma-page-count)
-                                  (pragma-freelist-count)))))))))
+                   (info (format "page_count: %d, freelist_count: %d" (pragma-page-count) (pragma-freelist-count)))))))))
 
 (add-db-hook :updated maintenance-db)

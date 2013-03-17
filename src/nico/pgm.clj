@@ -4,6 +4,7 @@
   nico.pgm
   (:use [clojure.tools.logging])
   (:require [clojure.java.jdbc :as jdbc]
+            [clojure.java.jdbc.sql :as sql]
             [query-utils :as q]
             [str-utils :as s]
 	    [time-utils :as tu]
@@ -41,9 +42,8 @@
 
 (defn- get-row-comm [^String comm_id]
   (db/req-ro
-   #(jdbc/with-query-results rs
-      [{:concurrency :read-only} "SELECT * FROM comms WHERE id=?" comm_id]
-      (first rs))))
+   (fn [db]
+     (jdbc/query db ["SELECT * FROM comms WHERE id=?" comm_id] :result-set-fn first))))
 
 (defn- row-to-pgm [row-pgm]
   (let [row-comm (get-row-comm (:comm_id row-pgm))]
@@ -64,60 +64,52 @@
      (Date. ^long (:fetched_at row-pgm))
      (Date. ^long (:updated_at row-pgm)))))
 
-(defn- count-pgms-aux []
-  (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT COUNT(*) AS cnt FROM pgms"]
-    (let [cnt (:cnt (first rs))]
-      (trace (format "count-pgms-aux: %d" cnt))
-      cnt)))
+(defn- count-pgms-aux [db]
+  (jdbc/query db ["SELECT COUNT(*) AS cnt FROM pgms"] :result-set-fn first :row-fn :cnt))
 
 (defn count-pgms [] (db/req-ro count-pgms-aux))
 
-(defn- count-comms-aux []
-  (jdbc/with-query-results rs [{:concurrency :read-only} "SELECT COUNT(*) AS cnt FROM comms"]
-    (let [cnt (:cnt (first rs))]
-      (trace (format "count-comms-aux: %d" cnt))
-      cnt)))
+(defn- count-comms-aux [db]
+  (jdbc/query db ["SELECT COUNT(*) AS cnt FROM comms"] :result-set-fn first :row-fn :cnt))
 
-(defn- get-pgm-aux [^String id]
-  (jdbc/with-query-results rs
-    [{:concurrency :read-only} "SELECT * FROM pgms WHERE pgms.id=?" id]
-    (first rs)))
+(defn- get-pgm-aux [^String id db]
+  (jdbc/query db ["SELECT * FROM pgms WHERE pgms.id=?" id] :result-set-fn first))
 
 (defn get-pgm [^Keyword id]
-  (db/req-ro
-   #(if-let [row-pgm (get-pgm-aux (name id))] (row-to-pgm row-pgm) nil)))
+  (letfn [(get-pgm-1 [db] (if-let [row-pgm (get-pgm-aux (name id) db)] (row-to-pgm row-pgm) nil))]
+    (db/req-ro get-pgm-1)))
 
 (defn not-alerted
-  "Futureを返す。このFutureは、まだアラートを出してない番組なら番組情報を返す。アラート済みならnilを返す。"
+  "Futureを返す。このFutureは、まだアラートを出してない番組ならアラート済みに更新した上で番組情報を返す。アラート済みならnilを返す。"
   [^Keyword id]
-  (letfn [(update-alerted-aux [^String id]
+  (letfn [(update-alerted-aux [^String id db]
             (trace (format "called update-alerted-aux: %s" id))
             (try
-              (jdbc/transaction
-               (let [result (jdbc/update-values :pgms ["id=? AND alerted=0" id] {:alerted true})]
+              (jdbc/db-transaction
+               [db db]
+               (let [result (jdbc/update! db :pgms {:alerted true} (sql/where {:id id :alerted 0}))]
+                 (trace (format "updating alerted (%s) result: %s" id result))
                  (if (= 1 (first result)) true false)))
               (catch Exception e
                 (error e (format "failed updating for " id))
                 false)))]
-    (db/enqueue (fn []
+    (db/enqueue (fn [db]
                   (trace (format "called not-alerted: %s" (name id)))
-                  (let [nid (name id), result (update-alerted-aux nid)]
+                  (let [nid (name id), result (update-alerted-aux nid db)]
                     (trace (format "update-alerted-aux result: %s" (pr-str result)))
                     (if result
-                      (if-let [row-pgm (get-pgm-aux nid)]
+                      (if-let [row-pgm (get-pgm-aux nid db)]
                         (l/with-trace (format "row-pgm: %s" (pr-str row-pgm))
                           (row-to-pgm row-pgm))
                         (l/with-error (format "failed get-pgm: %s" nid)
                           nil))
                       nil))))))
 
-(defn- rem-pgm-by-id [^String pid]
-  (jdbc/delete-rows :pgms ["id=?" pid]))
+(defn- rem-pgm-by-id [^String pid db]
+  (jdbc/delete! db :pgms (sql/where {:id pid})))
 
-(defn- get-row-pgm-by-comm-id [^String comm_id]
-  (jdbc/with-query-results rs
-    [{:concurrency :read-only} "SELECT * FROM pgms WHERE comm_id=?" comm_id]
-    (first rs)))
+(defn- get-row-pgm-by-comm-id [^String comm_id db]
+  (jdbc/query db ["SELECT * FROM pgms WHERE comm_id=?" comm_id] :result-set-fn first))
 
 (defn- merge-pgm [row-pgm ^Pgm pgm]
   (letfn [(longer-for [k x ^Pgm y]
@@ -155,89 +147,93 @@
    :updated_at (tu/date-to-timestamp (:updated_at pgm))})
 
 (let [last-cleaned (atom (tu/now))]
-  (letfn [(clean-old2 [num]
+  (letfn [(clean-old2 [num db]
             ;; sqliteはtimestamp値をミリ秒longで保持するのでこの値でそのまま比較できるはず。
             (let [start (.getTimeInMillis (doto (Calendar/getInstance) (.add Calendar/MINUTE -30)))]
-              (jdbc/transaction
-               (jdbc/delete-rows :comms ["id IN (SELECT comm_id FROM pgms WHERE pubdate < ? ORDER BY updated_at LIMIT ?)" start num])
-               (jdbc/delete-rows :pgms  ["id IN (SELECT id FROM pgms WHERE pubdate < ? ORDER BY updated_at LIMIT ?)" start num]))
+              (jdbc/db-transaction
+               [db db]
+               (jdbc/delete! db :comms ["id IN (SELECT comm_id FROM pgms WHERE pubdate < ? ORDER BY updated_at LIMIT ?)" start num])
+               (jdbc/delete! db :pgms  ["id IN (SELECT id FROM pgms WHERE pubdate < ? ORDER BY updated_at LIMIT ?)" start num]))
               (reset! last-cleaned (tu/now))))
-          (clean-old1 []
+          (clean-old1 [db]
             (try
               (when-not (tu/within? @last-cleaned (tu/now) INTERVAL-CLEAN)
                 (let [total (get-total)
-                      cnt-pgms (count-pgms-aux)
-                      cnt-comms (count-comms-aux)
+                      cnt-pgms (count-pgms-aux db)
+                      cnt-comms (count-comms-aux db)
                       threshold (int (* SCALE total))] ;; 総番組数のscale倍までは許容
                   (when (and (< 0 total) (< threshold cnt-pgms))
                     ;; 更新時刻の古い順に多すぎる番組を削除する。
                     (debug (format "cleaning old: %d -> %d, %d" cnt-pgms threshold cnt-comms))
-                    (clean-old2 (- cnt-pgms threshold))
-                    (debug (format "cleaned old: %d -> %d, %d" cnt-pgms (count-pgms-aux) (count-comms-aux))))))
+                    (clean-old2 (- cnt-pgms threshold) db)
+                    (debug (format "cleaned old: %d -> %d, %d" cnt-pgms (count-pgms-aux db) (count-comms-aux db))))))
               (catch Exception e
                 (error e (format "failed cleaning old programs: %s" (.getMessage e))))))]
     (defn clean-old [] (db/enqueue clean-old1))))
 
-(letfn [(add3 [^Pgm pgm]
+(letfn [(add3 [^Pgm pgm db]
           (let [comm_id (if-let [cid (:comm_id pgm)] (name cid) nil)
                 row-comm (if comm_id (get-row-comm comm_id) nil)
                 now (tu/sql-now)]
             (trace (format "add pgm: %s" (name (:id pgm))))
             (try ; 番組情報を追加する
               (let [row (pgm-to-row pgm)]
-                (jdbc/insert-record :pgms row))
+                (jdbc/insert! db :pgms row))
+                ;; (jdbc/insert-record :pgms row))
               (catch Exception e (error e (format "failed to insert pgm: %s" (prn-str pgm)))))
             (try ; コミュニティ情報を更新または追加する
               (if row-comm
-                (jdbc/update-values :comms ["id=?" comm_id]
-                                    {:comm_name (s/trim-to (:comm_name pgm) db/LEN_COMM_NAME)
-                                     :thumbnail (:thumbnail pgm)
-                                     :updated_at now})
+                (jdbc/update! db :comms {:comm_name (s/trim-to (:comm_name pgm) db/LEN_COMM_NAME)
+                                         :thumbnail (:thumbnail pgm)
+                                         :updated_at now}
+                              (sql/where {:id comm_id}))
                 (when comm_id
-                  (jdbc/insert-record :comms
-                                      {:id comm_id
-                                       :comm_name (s/trim-to (:comm_name pgm) db/LEN_COMM_NAME)
-                                       :thumbnail (:thumbnail pgm)
-                                       :fetched_at now :updated_at now})))
+                  (jdbc/insert! db :comms
+                                {:id comm_id
+                                 :comm_name (s/trim-to (:comm_name pgm) db/LEN_COMM_NAME)
+                                 :thumbnail (:thumbnail pgm)
+                                 :fetched_at now :updated_at now})))
               (catch Exception e (error e "failed updating or inserting comm info")))))
-        (add2 [^Pgm pgm]
+        (add2 [^Pgm pgm db]
           (let [pid (name (:id pgm))
-                row-pgm (get-pgm-aux pid)
+                row-pgm (get-pgm-aux pid db)
                 comm_id (if-let [cid (:comm_id pgm)] (name cid) nil)
-                row-comm-pgm (if comm_id (get-row-pgm-by-comm-id comm_id) nil)]
+                row-comm-pgm (if comm_id (get-row-pgm-by-comm-id comm_id db) nil)]
             (if row-pgm
-              (jdbc/transaction ; 番組情報が既にある場合は更新する
-               (let [diff-pgm (merge-pgm row-pgm pgm)]
-                 (trace (format "update pgm %s (%s) with %s" pid (:title pgm) (pr-str diff-pgm)))
-                 (jdbc/update-values :pgms ["id=?" pid] diff-pgm)))
+              (jdbc/db-transaction ; 番組情報が既にある場合は更新する
+               [db db]
+               (jdbc/update! db :pgms (merge-pgm row-pgm pgm) (sql/where {:id pid})))
               (if row-comm-pgm ; 同じコミュニティの番組があったらどちらが新しいかを確認する
                 (when (> (.getTime ^Date (:pubdate pgm)) (:pubdate row-comm-pgm))
-                  (jdbc/transaction ; 自分のほうが新しければ古いのを削除してから追加する
-                   (let [old-pid (name (:id row-comm-pgm))
-                         old-title (:title row-comm-pgm)]
-                     (trace (format "replace pgm from %s (%s) to %s (%s)" pid (:title pgm) old-pid old-title)))
-                   (rem-pgm-by-id (:id row-comm-pgm))
-                   (add3 pgm)))
-                (jdbc/transaction
+                  (let [old-pid (name (:id row-comm-pgm)) ; 自分のほうが新しければ古いのを削除してから追加する
+                        old-title (:title row-comm-pgm)]
+                    (trace (format "replace pgm from %s (%s) to %s (%s)" pid (:title pgm) old-pid old-title))
+                    (jdbc/db-transaction
+                     [db db]
+                     (rem-pgm-by-id (:id row-comm-pgm) db)
+                     (add3 pgm db))))
+                (jdbc/db-transaction
+                 [db db]
                  (trace (format "add pgm %s (%s)" pid (:title pgm)))
-                 (add3 pgm))))))
+                 (add3 pgm db))))))
         ;; add2はadd1とadd1-pgms双方から呼ばれる。違いはadd1が一つずつ追加するのに対し、
         ;; add1-pgmsは複数を一度で追加する。add1から呼ばれた場合はadd2の中のトランザクションが有効となる。
         ;; add1-pgmsから呼ばれた場合は外側(add1-pgms内)でくくられたトランザクションが有効となる。
         ;; jdbc/transactionはネストされると外側のトランザクションのみが有効となることを利用している。
-        (add1 [^Pgm pgm]
+        (add1 [^Pgm pgm db]
           (try
-            (add2 pgm)
+            (add2 pgm db)
             (catch Exception e
               (error e (format "failed adding program (%s) %s" (name (:id pgm)) (:title pgm))))))
-        (add1-pgms [pgms]
+        (add1-pgms [pgms db]
           (try
-            (jdbc/transaction
-             (doseq [pgm pgms] (add2 pgm)))
+            (jdbc/db-transaction
+             [db db]
+             (doseq [pgm pgms] (add2 pgm db)))
             (catch Exception e
               (error e (format "failed adding programs: [%s]" (pr-str pgms))))))]
-  (defn add [^Pgm pgm] (db/enqueue #(add1 pgm)))
-  (defn add-pgms [pgms] (db/enqueue #(add1-pgms pgms))))
+  (defn add [^Pgm pgm] (db/enqueue (fn [db] (add1 pgm db))))
+  (defn add-pgms [pgms] (db/enqueue (fn [db] (add1-pgms pgms db)))))
 
 (defn- rs-to-pgms [rs]
   (let [pgms (atom {})]
@@ -288,10 +284,10 @@
                      (reset! pstmts nil)
                      (doseq [^PreparedStatement pstmt (vals ps)] (.close pstmt)))))
 
-(defn search-pgms-by-sql [sql]
+(defn search-pgms-by-sql [sql-str]
   (db/req-ro
-   #(jdbc/with-query-results rs [{:concurrency :read-only} sql]
-      (rs-to-pgms rs))))
+   (fn [db]
+     (jdbc/query db [sql-str] :result-set-fn rs-to-pgms))))
 
 (defn search-pgms-by-comm-id [comm_ids]
   (search-pgms-by-sql (get-sql-comm-id comm_ids)))
