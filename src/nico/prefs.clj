@@ -66,15 +66,6 @@
     p)
   (defn store-pref [] (pu/store-pref @p (pref-file))))
 
-(defn db-path []
-  (condp = (pu/system)
-    :windows (io/temp-file-name "nico-" ".db")
-    :mac     (.getCanonicalPath (File. (pref-dir) "pgm.db"))
-    :linux   (io/temp-file-name "nico-" ".db")
-    :bsd     (io/temp-file-name "nico-" ".db")
-    :solaris (io/temp-file-name "nico-" ".db")
-    (io/temp-file-name "nico-" ".db")))
-
 (defn cache-dir [] (File. (pref-dir) "thumbnail"))
 
 (defn gen-initial-user-tpref []
