@@ -168,18 +168,18 @@
       queue (atom nil)
       conn (atom nil)
       ro-conn (atom nil)]
-  (defn last-updated [] (when @queue (.lastUpdated @queue)))
-  (defn queue-size [] (when @queue (.size (.getQueue @queue))))
+  (defn last-updated [] (when @queue (.lastUpdated ^nico.db.Queue @queue)))
+  (defn queue-size [] (when @queue (.size (.getQueue ^nico.db.Queue @queue))))
   (defn- create-conn []
     (DriverManager/getConnection (format "jdbc:%s:%s" (:subprotocol db-spec) (:subname db-spec))))
   (defn db [] (if @conn {:connection @conn} db-spec))
   (defn- vacuum []
     (when @conn
       (debug "VACUUM!")
-      (doto (.createStatement @conn) (.execute "VACUUM") (.execute "REINDEX"))))
+      (doto (.createStatement ^java.sql.Connection @conn) (.execute "VACUUM") (.execute "REINDEX"))))
   (defn enqueue [f]
     (when @queue
-      (.submit @queue f)))
+      (.submit ^nico.db.Queue @queue f)))
   (defn req-ro [f]
     (letfn [(req-ro-aux [f conn]
               (try

@@ -39,7 +39,7 @@
 
 (defn remove-tag [^String s]
   (let [^TagNode node (.clean (HtmlCleaner.) s)]
-    (clojure.string/join (map #(-> % .getText .toString) (.getAllElements node true)))))
+    (clojure.string/join (map #(-> ^TagNode % .getText .toString) (.getAllElements node true)))))
 
 (defn split-by-length
   "split string by given length"

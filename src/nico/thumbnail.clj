@@ -53,7 +53,7 @@
           (ImageIcon. (adjust-img (or img NO-IMAGE) width height))
           (catch Exception e
             (error e (format "failed fetching image: %s" url))
-            (ImageIcon. NO-IMAGE))
+            (ImageIcon. ^Image NO-IMAGE))
           (finally (when img (.flush img))
                    (when jpeg-reader (.reset jpeg-reader))
                    (when iis (.close iis))
