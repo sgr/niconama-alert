@@ -233,7 +233,8 @@
             (catch Exception e
               (error e (format "failed adding programs: [%s]" (pr-str pgms))))))]
   (defn add [^Pgm pgm] (db/enqueue (fn [db] (add1 pgm db))))
-  (defn add-pgms [pgms] (db/enqueue (fn [db] (add1-pgms pgms db)))))
+  (defn add-pgms [pgms] (doseq [pgm pgms] (db/enqueue (fn [db] (add1 pgm db)))))
+  (defn add-pgms-old [pgms] (db/enqueue (fn [db] (add1-pgms pgms db)))))
 
 (defn- rs-to-pgms [rs]
   (let [pgms (atom {})]
