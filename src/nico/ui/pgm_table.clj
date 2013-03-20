@@ -3,7 +3,8 @@
        :doc "番組情報表示テーブル。"}
   nico.ui.pgm-table
   (:use [clojure.set :only [difference]]
-        [clojure.tools.swing-utils :only [add-action-listener]]
+        [clojure.tools.swing-utils :only [do-swing add-action-listener]]
+        [clojure.tools.logging]
         [nico.thumbnail :only [fetch]]
         [nico.ui.util])
   (:require [clojure.string :as s]
@@ -13,12 +14,12 @@
   (:import [java.awt Color Font]
            [java.awt.font TextAttribute]
            [java.awt.event MouseEvent]
-           [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
-           [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]))
+           [javax.swing JLabel JMenuItem JPopupMenu JTable JTextArea ListSelectionModel SwingUtilities]
+           [javax.swing.event TableModelEvent]
+           [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn TableRowSorter]
+           [javax.swing.text JTextComponent View]))
 
 (def ^{:private true} DESC-COL 64)
-(def ^{:private true} THUMBNAIL-WIDTH 32)
-(def ^{:private true} THUMBNAIL-HEIGHT 32)
 
 ;; PgmCellRendererは、番組表のセルレンダラー。
 ;; 新着の番組をボールド、コミュ限の番組を青字で表示する。
@@ -62,6 +63,8 @@
  :prefix "pt-"
  :constructors {[nico.ui.ProgramsTableModel javax.swing.table.TableColumnModel]
                 [javax.swing.table.TableModel javax.swing.table.TableColumnModel]}
+ :exposes-methods {columnMarginChanged superColumnMarginChanged
+                   tableChanged superTableChanged}
  :state state
  :init init
  :post-init post-init
@@ -105,24 +108,43 @@
       (doseq [[i pc] (map-indexed vector PGM-COLUMNS)] (.addColumn col-model (gen-col i pc)))
       col-model)))
 
-(letfn [(sort-pgms [pgms] (sort-by (juxt :pubdate :title :id) #(compare %2 %1) pgms))]
-  (defn- ptm-init [pgms]
-    [[] (atom (sort-pgms pgms))])
-
-  (defn- ptm-setPgms [^nico.ui.ProgramsTableModel this pgms]
-    (let [old-pgms (reduce (fn [m pgm] (assoc m (:id pgm) pgm)) {} @(.state this))
-          oks (apply hash-set (keys old-pgms))
+(defn- ptm-init [pgms] [[] (java.util.Vector.)])
+(defn- ptm-setPgms [^nico.ui.ProgramsTableModel this pgms]
+  (letfn [(to-ranges [lst]
+            (reduce (fn [rs itm]
+                      (if-let [litm (-> rs last last)]
+                        (if (= (dec litm) itm)
+                          (conj (subvec rs 0 (dec (count rs)))
+                                (conj (last rs) itm))
+                          (conj rs [itm]))
+                        [[itm]]))
+                    [] lst))]
+    (let [rev-idx (reduce (fn [m [idx pgm]] (assoc m (:id pgm) idx)) {} (map-indexed vector (.state this)))
+          oks (apply hash-set (keys rev-idx))
           nks (apply hash-set (keys pgms))
           del-ids (difference oks nks)
           add-ids (difference nks oks)
+          del-idxes (sort #(> %1 %2) (map #(get rev-idx %) del-ids)) ; 逆順にしないと削除時によろしくない
+          del-idxes-ranges (to-ranges del-idxes)
           add-pgms (map #(when-let [pgm (get pgms %)]
                            (assoc pgm :thumbnail (fetch (:thumbnail pgm) THUMBNAIL-WIDTH THUMBNAIL-HEIGHT)))
                         add-ids)]
-      (reset! (.state this) (sort-pgms (concat (vals (apply dissoc old-pgms del-ids)) add-pgms)))
-      (.fireTableDataChanged this))))
+      (doseq [r del-idxes-ranges]
+        (let [osize (.size (.state this))]
+          (doseq [idx r] (.removeElementAt (.state this) idx))
+          (trace (format "fireTableRowsDeleted(%d): %d - %d (%d -> %d)" (count r) (last r) (first r) osize (.size (.state this)))))
+        (.fireTableRowsDeleted this (last r) (first r)))
+      (when (< 0 (count add-pgms))
+        (let [fidx (.size (.state this))]
+          (doseq [pgm add-pgms] (when pgm (.add (.state this) pgm)))
+          (trace (format "fireTableRowsInserted(%d): %d - %d" (count add-pgms) fidx (dec (.size (.state this)))))
+          (.fireTableRowsInserted this fidx (dec (.size (.state this)))))))))
 
 (defn- ptm-getIds [^nico.ui.ProgramsTableModel this]
-  (apply hash-set (map :id @(.state this))))
+  (apply hash-set (map :id (.state this))))
+
+(defn- ptm-getRowCount [^nico.ui.ProgramsTableModel this]
+  (.size (.state this)))
 
 (defn- ptm-getColumnCount [^nico.ui.ProgramsTableModel this]
   (count PGM-COLUMNS))
@@ -133,12 +155,10 @@
 (defn- ptm-getColumnName [^nico.ui.ProgramsTableModel this col]
   (:colName (nth PGM-COLUMNS col)))
 
-(defn- ptm-getRowCount [^nico.ui.ProgramsTableModel this]
-  (count @(.state this)))
-
 (defn- ptm-isCellEditable [^nico.ui.ProgramsTableModel this row col] false)
 
-(letfn [(get-pgm [this row] (nth @(.state this) row))]
+(letfn [(get-pgm [this row] (.get (.state this) row))
+        (get-pgm-old [this row] (nth @(.state this) row))]
   (defn- ptm-getUrl [^nico.ui.ProgramsTableModel this row]
     (:link (get-pgm this row)))
 
@@ -164,9 +184,6 @@
 (defn- pt-init [ptm pcm]
   [[ptm pcm] nil])
 
-(defn- pt-post-init [^nico.ui.ProgramsTable this ptm pcm]
-  (.setRowHeight this (+ THUMBNAIL-HEIGHT 4)))
-
 (letfn [(ago [t n]
           (let [intvl (tu/interval t n)]
             (if (> 60000 intvl) (format "%d秒前" (int (/ intvl 1000))) (format "%d分前" (tu/minute intvl)))))]
@@ -190,7 +207,58 @@
                    "</html>"))))))))
 
 (defn- pt-setSortable [^nico.ui.ProgramsTable this sortability]
-  (.setAutoCreateRowSorter this sortability))
+  (if sortability
+    (.setRowSorter this (doto (TableRowSorter. (.getModel this))
+                          (.setSortKeys (list (javax.swing.RowSorter$SortKey. 3 javax.swing.SortOrder/DESCENDING)))
+                          (.setSortsOnUpdates true)
+                          (.setSortable 0 false)))
+    (.setRowSorter this nil)))
+
+(letfn [(max-row-height [^nico.ui.ProgramsTable this row]
+          (apply max (for [colidx (range 0 (dec (.getColumnCount this)))]
+                       (let [vc (.convertColumnIndexToView this colidx)
+                             col (.getColumn (.getColumnModel this) vc)]
+                         (let [c (.prepareRenderer this (.getCellRenderer col) row vc)]
+                           (if (instance? javax.swing.text.JTextComponent c)
+                             (text-component-height c)
+                             (-> c .getPreferredSize .height)))))))
+        (update-row-height [^nico.ui.ProgramsTable tbl row]
+          (let [oh (.getRowHeight tbl row)
+                nh (max-row-height tbl row)]
+            (when (not= oh nh)
+              (trace (format "setRowHeight: %d -> %d" oh nh))
+              (do-swing (.setRowHeight tbl row nh)))))]
+
+  (defn- pt-post-init [^nico.ui.ProgramsTable this ptm pcm]
+    (let [tbl this
+          listener (proxy [java.beans.PropertyChangeListener][]
+                     (propertyChange [^java.beans.PropertyChangeEvent evt]
+                       (when (= "width" (.getPropertyName evt))
+                         (doseq [row (range 0 (.getRowCount tbl))]
+                           (update-row-height tbl row)))))]
+      (doseq [column (enumeration-seq (.getColumns (.getColumnModel this)))]
+        (.addPropertyChangeListener column listener)))
+    (.setReorderingAllowed (.getTableHeader this) false)
+    (.setRowHeight this (+ 8 THUMBNAIL-HEIGHT))
+    (.setRowMargin this 4))
+
+  (defn- pt-tableChanged-- [^nico.ui.ProgramsTable this ^javax.swing.event.TableModelEvent e]
+    (.superTableChanged this e)
+    (let [frow (.getFirstRow e) lrow (.getLastRow e) type (.getType e)]
+      (trace (format "caught an TableModelEvent[%s]: %d - %d"
+                     (condp = type TableModelEvent/INSERT "INSERT" TableModelEvent/UPDATE "UPDATE" TableModelEvent/DELETE "DELETE")
+                     frow lrow))
+      (when (and (or (= type TableModelEvent/INSERT) (= type TableModelEvent/UPDATE))
+                 (every? #(<= 0 %) [frow lrow]))
+        (cond
+         (< frow lrow) (doseq [row (range frow (min lrow (.getRowCount this)))]
+                         (update-row-height this (.convertRowIndexToView this row)))
+         (= frow lrow) (update-row-height this (.convertRowIndexToView this frow))))))
+
+  (defn- pt-columnMarginChanged [^nico.ui.ProgramsTable this ^javax.swing.event.ChangeEvent e]
+    (.superColumnMarginChanged this e)
+    (doseq [row (range 0 (.getRowCount this))]
+      (update-row-height this row))))
 
 (defn- pml-init [tbl] [[] (atom tbl)])
 (defn- pml-mouseClicked [^nico.ui.PgmMouseListener this ^MouseEvent evt]

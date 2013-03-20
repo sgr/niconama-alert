@@ -2,12 +2,17 @@
 (ns #^{:author "sgr"
        :doc "UI Utilities."}
   nico.ui.util
+  (:use [clojure.tools.logging]
+        [clojure.tools.swing-utils :only [do-swing]])
   (:require [time-utils :as tu])
   (:import [java.awt Color Component Container Dimension Font]
 	   [javax.swing JButton JLabel JTable JTextArea SpringLayout SwingConstants]
            [javax.swing.table DefaultTableCellRenderer]))
 
 (def ^Font DEFAULT-FONT (Font. "Default" Font/PLAIN 12))
+(def THUMBNAIL-WIDTH 32)
+(def THUMBNAIL-HEIGHT 32)
+
 (def ^{:private true} BTN-HEIGHT 25)
 (def ^{:private true} BTN-SIZE (Dimension. 100 BTN-HEIGHT))
 (def ^{:private true} ODD-ROW-COLOR (Color. 224 233 246))
@@ -54,22 +59,48 @@
   (.setLineWrap this true)
   (.setWrapStyleWord this true))
 
+(defn text-component-height [^javax.swing.text.JTextComponent c]
+  (let [fm (.getFontMetrics c (.getFont c))
+        fh (+ (.getHeight fm) 2)
+        text-len (.stringWidth fm (.getText c))
+        width (.getWidth c)
+        lines (int (inc (/ text-len width)))]
+    (* fh lines)))
+
+(defn- update-table-row-height
+  ([^javax.swing.table.TableCellRenderer rdr ^JTable tbl row height]
+     (let [rh (.getRowHeight tbl row)]
+       (when (> height rh)
+         (debug (format "updated height: %d -> %d" rh height))
+         (do-swing (.setRowHeight tbl row height)))))
+  ([^javax.swing.table.TableCellRenderer rdr ^JTable tbl row]
+     (let [nh (if (instance? javax.swing.text.JTextComponent rdr)
+                (text-component-height rdr)
+                (.height (.getPreferredSize rdr)))]
+       (update-table-row-height rdr tbl row nh))))
+
 (defn- mr-getTableCellRendererComponent [^nico.ui.MultiLineRenderer this ^JTable tbl ^Object val selected focus row col]
-  (if val
-    (condp = (class val)
-      java.util.Date (.setText this (tu/format-time-short val))
-      (.setText this (.toString val)))
-    (.setText this ""))
-  this)
+  (doto this
+    (.setText
+     (if val
+       (condp instance? val
+         java.util.Date (tu/format-time-short val)
+         (.toString val))
+       ""))
+    (.setSize (Dimension. (-> tbl .getTableHeader .getColumnModel (.getColumn col) .getWidth) 1000))
+    #(let [width (.width (.getPreferredSize %))
+           height (text-component-height %)]
+       (.setPreferredSize % (Dimension. width height))
+       (update-table-row-height tbl row height))))
 
 (defn- mr-invalidate [^nico.ui.MultiLineRenderer this])
 (defn- mr-validate [^nico.ui.MultiLineRenderer this])
 (defn- mr-revalidate [^nico.ui.MultiLineRenderer this])
-(defn- mr-repaint
-  ([^nico.ui.MultiLineRenderer this tm x y width height])
-  ([^nico.ui.MultiLineRenderer this x y width height])
-  ([^nico.ui.MultiLineRenderer this r])
-  ([^nico.ui.MultiLineRenderer this]))
+;; (defn- mr-repaint
+;;   ([^nico.ui.MultiLineRenderer this tm x y width height])
+;;   ([^nico.ui.MultiLineRenderer this x y width height])
+;;   ([^nico.ui.MultiLineRenderer this r])
+;;   ([^nico.ui.MultiLineRenderer this]))
 
 (defn- set-row-color [this ^JTable tbl selected row]
   (if selected
@@ -107,11 +138,18 @@
 (defn- sicr-getTableCellRendererComponent [^nico.ui.StripeImageCellRenderer this ^JTable tbl val selected focus row col]
   (.superGtcrc this tbl val selected focus row col)
   (set-row-color this tbl selected row)
+  (when (and val (instance? javax.swing.ImageIcon val))
+    (let [size (Dimension. (+ 8 THUMBNAIL-WIDTH) (+ 8 THUMBNAIL-HEIGHT))]
+      (doto this
+        (.setSize size)
+        (.setPreferredSize size)
+        (.setMinimumSize size))))
+  (update-table-row-height this tbl row)
   this)
 
 (defn- sicr-setValue [^nico.ui.StripeImageCellRenderer this ^Object val]
   (if val
-    (condp = (class val)
+    (condp instance? val
       javax.swing.ImageIcon (.setIcon this val)
       java.util.Date (.setText this (tu/format-time-short val))
       (.setText this (.toString val)))

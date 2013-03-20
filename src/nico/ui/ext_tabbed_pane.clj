@@ -210,7 +210,9 @@
          (mouseReleased [e])))))
   (let [q (ThreadPoolExecutor. 0 1 3 TimeUnit/SECONDS (LinkedBlockingQueue.))]
     (swap! (.state this) assoc :queue q))
-  (db/add-db-hook :updated #(doseq [idx (range 1 (.getTabCount this))] (update-tab this idx)))
+  (db/add-db-hook :updated #(doseq [idx (range 1 (.getTabCount this))]
+                              (.execute ^ThreadPoolExecutor (:queue @(.state this))
+                                        (fn [] (update-tab this idx)))))
   (nr/add-rss-hook :countdown (fn [count max]
                                 (when (= 0 (rem count 3))
                                   (.repaintTable (.getSelectedComponent this))))))
