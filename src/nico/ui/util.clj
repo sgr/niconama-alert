@@ -50,7 +50,7 @@
  :name nico.ui.MultiLineRenderer
  :extends javax.swing.JTextArea
  :implements [javax.swing.table.TableCellRenderer]
-;; :exposes-methods {isOpaque superIsOpaque}
+ :exposes-methods {setFont superSetFont}
  :prefix "mr-"
  :state state
  :init init
@@ -62,10 +62,14 @@
   (.setEditable this false)
   (.setLineWrap this true)
   (.setWrapStyleWord this false)
-  (reset! (.state this) {:fm (.getFontMetrics this (.getFont this))}))
+  (reset! (.state this) (.getFontMetrics this (.getFont this))))
+
+;; (defn- mr-setFont [^nico.ui.MultiLineRenderer this ^Font font]
+;;   (reset! (.state this) (.getFontMetrics this font))
+;;   (.superSetFont this font))
 
 (defn text-component-height [^nico.ui.MultiLineRenderer c]
-  (let [fm (:fm @(.state c))
+  (let [fm @(.state c)
         fh (+ (.getHeight fm) 2)
         text-len (.stringWidth fm (.getText c))
         width (.getWidth c)
