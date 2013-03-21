@@ -219,7 +219,7 @@
                        (let [vc (.convertColumnIndexToView this colidx)
                              col (.getColumn (.getColumnModel this) vc)]
                          (let [c (.prepareRenderer this (.getCellRenderer col) row vc)]
-                           (if (instance? javax.swing.text.JTextComponent c)
+                           (if (instance? nico.ui.MultiLineRenderer c)
                              (text-component-height c)
                              (-> c .getPreferredSize .height)))))))
         (update-row-height [^nico.ui.ProgramsTable tbl row]

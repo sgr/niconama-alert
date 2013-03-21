@@ -52,19 +52,24 @@
  :implements [javax.swing.table.TableCellRenderer]
 ;; :exposes-methods {isOpaque superIsOpaque}
  :prefix "mr-"
+ :state state
+ :init init
  :post-init post-init)
+
+(defn- mr-init [] [[] (atom nil)])
 
 (defn- mr-post-init [^nico.ui.MultiLineRenderer this]
   (.setEditable this false)
   (.setLineWrap this true)
-  (.setWrapStyleWord this true))
+  (.setWrapStyleWord this false)
+  (reset! (.state this) {:fm (.getFontMetrics this (.getFont this))}))
 
-(defn text-component-height [^javax.swing.text.JTextComponent c]
-  (let [fm (.getFontMetrics c (.getFont c))
+(defn text-component-height [^nico.ui.MultiLineRenderer c]
+  (let [fm (:fm @(.state c))
         fh (+ (.getHeight fm) 2)
         text-len (.stringWidth fm (.getText c))
         width (.getWidth c)
-        lines (int (inc (/ text-len width)))]
+        lines (inc (quot text-len width))]
     (* fh lines)))
 
 (defn- update-table-row-height
@@ -74,7 +79,7 @@
          (debug (format "updated height: %d -> %d" rh height))
          (do-swing (.setRowHeight tbl row height)))))
   ([^javax.swing.table.TableCellRenderer rdr ^JTable tbl row]
-     (let [nh (if (instance? javax.swing.text.JTextComponent rdr)
+     (let [nh (if (instance? nico.ui.MultiLineRenderer rdr)
                 (text-component-height rdr)
                 (.height (.getPreferredSize rdr)))]
        (update-table-row-height rdr tbl row nh))))
