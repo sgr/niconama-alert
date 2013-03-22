@@ -256,34 +256,19 @@
     (debug (format "where-clause: %s" where-clause))
     (str "SELECT * FROM pgms JOIN comms ON pgms.comm_id=comms.id WHERE " where-clause)))
 
-(let [pstmts (atom {})
-      search-pgms-by-pstmt-aux
-      (fn [^PreparedStatement pstmt]
-        (if-let [conn (.getConnection pstmt)]
-          (let [^ResultSet rs (.executeQuery pstmt)]
-            (try
-              (rs-to-pgms (jdbc/resultset-seq rs))
-              (catch Exception e (error e (format "failed search-pgms-by-pstmt: %s" pstmt)))
-              (finally (.close rs))))
-          (do
-            (error (format "invalid nil connection: %s" (pr-str pstmt)))
-            {})))]
+(let [pstmt-fns (atom {})]
   (defn search-pgms-by-pstmt [sql]
-    (if @pstmts
-      (if-let [pstmt (get @pstmts sql)]
-        (search-pgms-by-pstmt-aux pstmt)
-        (let [^PreparedStatement new-pstmt (db/ro-pstmt sql)]
-          (swap! pstmts assoc sql new-pstmt)
-          (search-pgms-by-pstmt-aux new-pstmt)))
+    (if @pstmt-fns
+      (if-let [pstmt-fn (get @pstmt-fns sql)]
+        (pstmt-fn rs-to-pgms)
+        (let [new-pstmt-fn (db/ro-pstmt-fn sql)]
+          (swap! pstmt-fns assoc sql new-pstmt-fn)
+          (new-pstmt-fn rs-to-pgms)))
       (do
         (debug (format "couldn't search pgms because pstmts have been shutdown-ed: %s" sql))
         {})))
   (defn remove-pstmt [sql]
-    (swap! pstmts dissoc sql))
-  (db/add-db-hook :shutdown
-                  #(let [ps @pstmts]
-                     (reset! pstmts nil)
-                     (doseq [^PreparedStatement pstmt (vals ps)] (.close pstmt)))))
+    (swap! pstmt-fns dissoc sql)))
 
 (defn search-pgms-by-sql [sql-str]
   (db/req-ro

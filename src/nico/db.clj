@@ -11,7 +11,7 @@
   (:import [java.sql Connection DriverManager PreparedStatement ResultSet SQLException Timestamp]
            [java.util Calendar Date]
            [java.util.concurrent Callable Future FutureTask LinkedBlockingQueue ThreadPoolExecutor TimeUnit
-            CancellationException ExecutionException ThreadPoolExecutor$DiscardPolicy]))
+            CancellationException CountDownLatch ExecutionException ThreadPoolExecutor$DiscardPolicy]))
 
 (def ^{:private true} DB-CLASSNAME "org.sqlite.JDBC")
 (def ^{:private true} KEEP-ALIVE 5)       ;; ワーカースレッド待機時間
@@ -167,7 +167,8 @@
                :subname ":memory:"}
       queue (atom nil)
       conn (atom nil)
-      ro-conn (atom nil)]
+      ro-conn (atom nil)
+      latch (atom nil)]
   (defn last-updated [] (when @queue (.lastUpdated ^nico.db.Queue @queue)))
   (defn queue-size [] (when @queue (.size (.getQueue ^nico.db.Queue @queue))))
   (defn- create-conn []
@@ -175,8 +176,17 @@
   (defn db [] (if @conn {:connection @conn} db-spec))
   (defn- vacuum []
     (when @conn
-      (debug "VACUUM!")
-      (doto (.createStatement ^java.sql.Connection @conn) (.execute "VACUUM") (.execute "REINDEX"))))
+      (reset! latch (CountDownLatch. 1))
+      (try
+        (debug "VACUUM!")
+        (doto (.createStatement ^java.sql.Connection @conn)
+          (.executeUpdate "VACUUM")
+          (.executeUpdate "REINDEX"))
+        (catch Exception e
+          (error e ("vacuum failed")))
+        (finally
+          (.countDown @latch)
+          (reset! latch nil)))))
   (defn enqueue [f]
     (when @queue
       (.submit ^nico.db.Queue @queue f)))
@@ -186,6 +196,7 @@
                 (f {:connection conn})
                 (catch Exception e e)))]
       (when @ro-conn
+        (when @latch (.await @latch)) ; await finishing vacuum
         (when-let [result (req-ro-aux f @ro-conn)]
           (condp instance? result
             Exception (let [msg (.getMessage result)]
@@ -195,8 +206,19 @@
                               (recur f))
                           (error result (format "failed req-ro: %s" msg))))
             result)))))
-  (defn ro-pstmt [^String sql]
-    (jdbc/prepare-statement @ro-conn sql :concurrency :read-only))
+  (defn ro-pstmt-fn [^String sql]
+    (let [pstmt (jdbc/prepare-statement @ro-conn sql :concurrency :read-only)]
+      (fn [f]
+        (when @latch (.await @latch)) ; await finishing vacuum
+        (if-let [conn (.getConnection pstmt)]
+          (let [^ResultSet rs (.executeQuery pstmt)]
+            (try
+              (f (jdbc/resultset-seq rs))
+              (catch Exception e (error e (format "failed search-pgms-by-pstmt: %s" pstmt)))
+              (finally (.close rs))))
+          (do
+            (error (format "invalid nil connection: %s" (pr-str pstmt)))
+            {})))))
   (defn init []
     (Class/forName DB-CLASSNAME)
     (let [c (create-conn)]
