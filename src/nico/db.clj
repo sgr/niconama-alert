@@ -259,4 +259,4 @@
                    (vacuum)
                    (info (format "page_count: %d, freelist_count: %d" (pragma-page-count) (pragma-freelist-count)))))))))
 
-(add-db-hook :updated maintenance-db)
+;;(add-db-hook :updated maintenance-db)
