@@ -80,7 +80,10 @@
       (if (tu/within? (:fetched_at pgm) (tu/now) 60)
         (.setFont this BOLD-FONT)
         (.setFont this DEFAULT-FONT))
-      (when (:member_only pgm) (.setForeground this Color/BLUE)))
+      (when (:member_only pgm)
+        (if (.isRowSelected tbl row)
+          (.setForeground this Color/WHITE)
+          (.setForeground this Color/BLUE))))
     this))
 
 (let [text-renderer (nico.ui.PgmCellRenderer.)]
