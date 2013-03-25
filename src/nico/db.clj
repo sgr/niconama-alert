@@ -108,7 +108,8 @@
  :exposes-methods {submit submitSuper
                    beforeExecute beforeExecuteSuper
                    afterExecute  afterExecuteSuper
-                   shutdown shutdownSuper}
+                   shutdown shutdownSuper
+                   terminated terminatedSuper}
  :methods [[lastUpdated [] java.util.Date]])
 
 (defn- dq-init [^clojure.lang.IPersistentMap db-spec]
@@ -153,10 +154,14 @@
     (error t (format "An error is occurred: %s" (pr-str r)))))
 
 (defn- dq-shutdown [^nico.db.Queue this]
-  (debug "shutting down the thread pool...")
+  (info "shutting down the thread pool...")
   (.shutdownSuper this)
-  (debug "await the thread pool termination")
+  (info "await the thread pool termination")
   (.awaitTermination this 10 TimeUnit/SECONDS))
+
+(defn- dq-terminated [^nico.db.Queue this]
+  (.terminatedSuper this)
+  (info "nico.db.Queue has been terminated"))
 
 (defn- dq-lastUpdated [^nico.db.Queue this]
   (:last-updated @(.state this)))
@@ -195,7 +200,7 @@
               (try
                 (f {:connection conn})
                 (catch Exception e e)))]
-      (when @ro-conn
+      (when (and @ro-conn (not (.isClosed @ro-conn)))
         (when @latch (.await @latch)) ; await finishing vacuum
         (when-let [result (req-ro-aux f @ro-conn)]
           (condp instance? result
@@ -210,14 +215,14 @@
     (let [pstmt (jdbc/prepare-statement @ro-conn sql :concurrency :read-only)]
       (fn [f]
         (when @latch (.await @latch)) ; await finishing vacuum
-        (if-let [conn (.getConnection pstmt)]
+        (if-not (.isClosed (.getConnection pstmt))
           (let [^ResultSet rs (.executeQuery pstmt)]
             (try
               (f (jdbc/resultset-seq rs))
               (catch Exception e (error e (format "failed search-pgms-by-pstmt: %s" pstmt)))
               (finally (.close rs))))
           (do
-            (error (format "invalid nil connection: %s" (pr-str pstmt)))
+            (error (format "connection has been closed: %s" (pr-str pstmt)))
             {})))))
   (defn init []
     (Class/forName DB-CLASSNAME)
