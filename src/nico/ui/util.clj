@@ -50,6 +50,7 @@
  :name nico.ui.MultiLineRenderer
  :extends javax.swing.JTextArea
  :implements [javax.swing.table.TableCellRenderer]
+ :methods [[updateFontInfo [] void]]
  :exposes-methods {setFont superSetFont}
  :prefix "mr-"
  :state state
@@ -58,23 +59,26 @@
 
 (defn- mr-init [] [[] (atom nil)])
 
+(defn- mr-updateFontInfo [^nico.ui.MultiLineRenderer this]
+  (let [fm (.getFontMetrics this (.getFont this))]
+    (reset! (.state this) {:fm fm
+                           :fh (+ (.getHeight fm) 2)})))
+
 (defn- mr-post-init [^nico.ui.MultiLineRenderer this]
   (.setEditable this false)
   (.setLineWrap this true)
   (.setWrapStyleWord this false)
-  (reset! (.state this) (.getFontMetrics this (.getFont this))))
+  (.updateFontInfo this))
 
-;; (defn- mr-setFont [^nico.ui.MultiLineRenderer this ^Font font]
-;;   (reset! (.state this) (.getFontMetrics this font))
-;;   (.superSetFont this font))
+ ;; (defn- mr-setFont [^nico.ui.MultiLineRenderer this ^Font font]
+ ;;  (.superSetFont this font)
+ ;;  (.updateFontInfo this))
 
 (defn text-component-height [^nico.ui.MultiLineRenderer c]
-  (let [fm @(.state c)
-        fh (+ (.getHeight fm) 2)
-        text-len (.stringWidth fm (.getText c))
+  (let [text-len (.stringWidth (:fm @(.state c)) (.getText c))
         width (.getWidth c)
         lines (inc (quot text-len width))]
-    (* fh lines)))
+    (* (:fh @(.state c)) lines)))
 
 (defn- update-table-row-height
   ([^javax.swing.table.TableCellRenderer rdr ^JTable tbl row height]
