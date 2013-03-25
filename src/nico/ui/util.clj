@@ -93,18 +93,20 @@
        (update-table-row-height rdr tbl row nh))))
 
 (defn- mr-getTableCellRendererComponent [^nico.ui.MultiLineRenderer this ^JTable tbl ^Object val selected focus row col]
-  (doto this
-    (.setText
-     (if val
-       (condp instance? val
-         java.util.Date (tu/format-time-short val)
-         (.toString val))
-       ""))
-    (.setSize (Dimension. (-> tbl .getTableHeader .getColumnModel (.getColumn col) .getWidth) 1000))
-    #(let [width (.width (.getPreferredSize %))
-           height (text-component-height %)]
-       (.setPreferredSize % (Dimension. width height))
-       (update-table-row-height tbl row height))))
+  (letfn [(fix-size [^nico.ui.MultiLineRenderer mlr ^JTable tbl row]
+            (let [width (.width (.getPreferredSize mlr))
+                  height (text-component-height mlr)]
+              (.setPreferredSize mlr (Dimension. width height))
+              (update-table-row-height mlr tbl row height)))]
+    (doto this
+      (.setText
+       (if val
+         (condp instance? val
+           java.util.Date (tu/format-time-short val)
+           (.toString val))
+         ""))
+      (.setSize (Dimension. (-> tbl .getTableHeader .getColumnModel (.getColumn col) .getWidth) 1000))
+      (fix-size tbl row))))
 
 (defn- mr-invalidate [^nico.ui.MultiLineRenderer this])
 (defn- mr-validate [^nico.ui.MultiLineRenderer this])
