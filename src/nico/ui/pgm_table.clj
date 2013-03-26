@@ -13,7 +13,7 @@
             [time-utils :as tu])
   (:import [java.awt Color Font]
            [java.awt.font TextAttribute]
-           [java.awt.event MouseEvent]
+           [java.awt.event MouseEvent WindowEvent]
            [javax.swing JLabel JMenuItem JPopupMenu JTable JTextArea ListSelectionModel SwingUtilities]
            [javax.swing.event TableModelEvent]
            [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn TableRowSorter]
@@ -72,17 +72,23 @@
 
 (let [attrs (doto (.getAttributes DEFAULT-FONT)
               (.put TextAttribute/WEIGHT TextAttribute/WEIGHT_BOLD))
-      BOLD-FONT (.deriveFont DEFAULT-FONT attrs)]
+      BOLD-FONT (.deriveFont DEFAULT-FONT attrs)
+      d (javax.swing.UIManager/getDefaults)
+      TABLE-SELECTION-FOREGROUND (.get d "Table.selectionForeground")
+      TABLE-SELECTION-INACTIVATE-FOREGROUND (.get d "Table.selectionInactiveForeground")]
   (defn- pr-getTableCellRendererComponent [^nico.ui.PgmCellRenderer this ^JTable tbl val selected focus row col]
     (.gtcrc this tbl val selected focus row col)
     (let [mr (.convertRowIndexToModel tbl row)
-          pgm (.getPgm ^nico.ui.ProgramsTableModel (.getModel tbl) mr)]
+          pgm (.getPgm ^nico.ui.ProgramsTableModel (.getModel tbl) mr)
+          window (SwingUtilities/getWindowAncestor tbl)]
       (if (tu/within? (:fetched_at pgm) (tu/now) 60)
         (.setFont this BOLD-FONT)
         (.setFont this DEFAULT-FONT))
       (when (:member_only pgm)
-        (if (.isRowSelected tbl row)
-          (.setForeground this Color/WHITE)
+        (if selected
+          (if (.isActive window)
+            (.setForeground this TABLE-SELECTION-FOREGROUND)
+            (.setForeground this TABLE-SELECTION-INACTIVATE-FOREGROUND))
           (.setForeground this Color/BLUE))))
     this))
 
@@ -253,8 +259,7 @@
       (doseq [column (enumeration-seq (.getColumns (.getColumnModel this)))]
         (.addPropertyChangeListener column listener)))
     (.setReorderingAllowed (.getTableHeader this) false)
-    (.setRowHeight this (+ 8 THUMBNAIL-HEIGHT))
-    (.setRowMargin this 4))
+    (.setRowHeight this (+ 8 THUMBNAIL-HEIGHT)))
 
   (defn- pt-tableChanged-- [^nico.ui.ProgramsTable this ^javax.swing.event.TableModelEvent e]
     (.superTableChanged this e)
