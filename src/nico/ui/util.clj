@@ -60,8 +60,7 @@
  :extends javax.swing.JTextArea
  :implements [javax.swing.table.TableCellRenderer]
  :methods [[updateFontInfo [] void]]
- :exposes-methods {setFont superSetFont
-                   getTableCellRendererComponent superGtcrc}
+ :exposes-methods {setFont superSetFont}
  :prefix "mr-"
  :state state
  :init init
@@ -108,7 +107,6 @@
                   height (text-component-height mlr)]
               (.setPreferredSize mlr (Dimension. width height))
               (update-table-row-height mlr tbl row height)))]
-    (.superGtcrc this tbl val selected focus row col)
     (render-stripe this tbl selected row)
     (doto this
       (.setText
@@ -128,6 +126,17 @@
 ;;   ([^nico.ui.MultiLineRenderer this x y width height])
 ;;   ([^nico.ui.MultiLineRenderer this r])
 ;;   ([^nico.ui.MultiLineRenderer this]))
+
+(gen-class
+ :name nico.ui.StripeRenderer
+ :extends javax.swing.table.DefaultTableCellRenderer
+ :exposes-methods {getTableCellRendererComponent superGtcrc}
+ :prefix "sr-")
+
+(defn- sr-getTableCellRendererComponent [^nico.ui.StripeRenderer this ^JTable tbl val selected focus row col]
+  (doto this
+    (.superGtcrc tbl val selected focus row col)
+    (render-stripe tbl selected row)))
 
 (gen-class
  :name nico.ui.StripeImageCellRenderer
