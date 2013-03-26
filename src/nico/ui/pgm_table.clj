@@ -130,7 +130,7 @@
           del-ids (difference oks nks)
           add-ids (difference nks oks)
           upd-ids (intersection oks nks)
-          del-idxes (sort #(> %1 %2) (map #(get rev-idx %) del-ids)) ; 逆順にしないと削除時によろしくない
+          del-idxes (sort > (map #(get rev-idx %) del-ids)) ; 逆順にしないと削除時によろしくない
           del-idxes-ranges (to-ranges del-idxes)
           add-pgms (map #(when-let [pgm (get pgms %)]
                            (assoc pgm :thumbnail (fetch (:thumbnail pgm) THUMBNAIL-WIDTH THUMBNAIL-HEIGHT)))
