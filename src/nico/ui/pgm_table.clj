@@ -25,7 +25,7 @@
 ;; 新着の番組をボールド、コミュ限の番組を青字で表示する。
 (gen-class
  :name nico.ui.PgmCellRenderer
- :extends nico.ui.StripeRenderer
+ :extends nico.ui.MultiLineRenderer
  :exposes-methods {getTableCellRendererComponent gtcrc}
  :prefix "pr-")
 

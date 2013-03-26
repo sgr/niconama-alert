@@ -46,12 +46,22 @@
   ([^String text ^Dimension size]
      (doto ^Component (mlabel text) (.setPreferredSize size))))
 
+(defn- render-stripe [^javax.swing.table.TableCellRenderer rdr ^JTable tbl selected row]
+  (if selected
+    (doto rdr
+      (.setForeground (.getSelectionForeground tbl))
+      (.setBackground (.getSelectionBackground tbl)))
+    (doto rdr
+      (.setForeground (.getForeground tbl))
+      (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl))))))
+
 (gen-class
  :name nico.ui.MultiLineRenderer
  :extends javax.swing.JTextArea
  :implements [javax.swing.table.TableCellRenderer]
  :methods [[updateFontInfo [] void]]
- :exposes-methods {setFont superSetFont}
+ :exposes-methods {setFont superSetFont
+                   getTableCellRendererComponent superGtcrc}
  :prefix "mr-"
  :state state
  :init init
@@ -98,6 +108,8 @@
                   height (text-component-height mlr)]
               (.setPreferredSize mlr (Dimension. width height))
               (update-table-row-height mlr tbl row height)))]
+    (.superGtcrc this tbl val selected focus row col)
+    (render-stripe this tbl selected row)
     (doto this
       (.setText
        (if val
@@ -117,27 +129,6 @@
 ;;   ([^nico.ui.MultiLineRenderer this r])
 ;;   ([^nico.ui.MultiLineRenderer this]))
 
-(defn- set-row-color [this ^JTable tbl selected row]
-  (if selected
-    (doto this
-      (.setForeground (.getSelectionForeground tbl))
-      (.setBackground (.getSelectionBackground tbl)))
-    (doto this
-      (.setForeground (.getForeground tbl))
-      (.setBackground (if (odd? row) ODD-ROW-COLOR (.getBackground tbl))))))
-
-(gen-class
- :name nico.ui.StripeRenderer
- :extends nico.ui.MultiLineRenderer
- :exposes-methods {getTableCellRendererComponent superGtcrc}
- :prefix "sr-")
-
-(defn- sr-init [] [[] nil])
-(defn- sr-getTableCellRendererComponent [^nico.ui.StripeRenderer this ^JTable tbl val selected focus row col]
-  (.superGtcrc this tbl val selected focus row col)
-  (set-row-color this tbl selected row)
-  this)
-
 (gen-class
  :name nico.ui.StripeImageCellRenderer
  :extends javax.swing.table.DefaultTableCellRenderer
@@ -152,7 +143,7 @@
 
 (defn- sicr-getTableCellRendererComponent [^nico.ui.StripeImageCellRenderer this ^JTable tbl val selected focus row col]
   (.superGtcrc this tbl val selected focus row col)
-  (set-row-color this tbl selected row)
+  (render-stripe this tbl selected row)
   (when (and val (instance? javax.swing.ImageIcon val))
     (let [size (Dimension. (+ 8 THUMBNAIL-WIDTH) (+ 8 THUMBNAIL-HEIGHT))]
       (doto this
