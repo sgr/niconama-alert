@@ -46,7 +46,7 @@
   ([^String text ^Dimension size]
      (doto ^Component (mlabel text) (.setPreferredSize size))))
 
-(defn- render-stripe [^javax.swing.table.TableCellRenderer rdr ^JTable tbl selected row]
+(defn- render-stripe [^javax.swing.JComponent rdr ^JTable tbl selected row]
   (if selected
     (doto rdr
       (.setForeground (.getSelectionForeground tbl))
@@ -84,18 +84,18 @@
  ;;  (.updateFontInfo this))
 
 (defn text-component-height [^nico.ui.MultiLineRenderer c]
-  (let [text-len (.stringWidth (:fm @(.state c)) (.getText c))
+  (let [text-len (.stringWidth ^java.awt.FontMetrics (:fm @(.state c)) (.getText c))
         width (.getWidth c)
         lines (inc (quot text-len width))]
     (* (:fh @(.state c)) lines)))
 
 (defn- update-table-row-height
-  ([^javax.swing.table.TableCellRenderer rdr ^JTable tbl row height]
+  ([^javax.swing.JComponent rdr ^JTable tbl row height]
      (let [rh (.getRowHeight tbl row)]
        (when (> height rh)
          (debug (format "updated height: %d -> %d" rh height))
          (do-swing (.setRowHeight tbl row height)))))
-  ([^javax.swing.table.TableCellRenderer rdr ^JTable tbl row]
+  ([^javax.swing.JComponent rdr ^JTable tbl row]
      (let [nh (if (instance? nico.ui.MultiLineRenderer rdr)
                 (text-component-height rdr)
                 (.height (.getPreferredSize rdr)))]

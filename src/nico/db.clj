@@ -190,7 +190,7 @@
         (catch Exception e
           (error e ("vacuum failed")))
         (finally
-          (.countDown @latch)
+          (.countDown ^java.util.concurrent.CountDownLatch @latch)
           (reset! latch nil)))))
   (defn enqueue [f]
     (when @queue
@@ -200,11 +200,11 @@
               (try
                 (f {:connection conn})
                 (catch Exception e e)))]
-      (when (and @ro-conn (not (.isClosed @ro-conn)))
-        (when @latch (.await @latch)) ; await finishing vacuum
+      (when (and @ro-conn (not (.isClosed ^java.sql.Connection @ro-conn)))
+        (when @latch (.await ^java.util.concurrent.CountDownLatch @latch)) ; await finishing vacuum
         (when-let [result (req-ro-aux f @ro-conn)]
           (condp instance? result
-            Exception (let [msg (.getMessage result)]
+            Exception (let [msg (.getMessage ^java.lang.Exception result)]
                         (if (re-find #"\[SQLITE_BUSY\]*" msg)
                           (do (warn result (format "retry requesting..."))
                               (.sleep TimeUnit/SECONDS INTERVAL-RETRY)
@@ -212,10 +212,10 @@
                           (error result (format "failed req-ro: %s" msg))))
             result)))))
   (defn ro-pstmt-fn [^String sql]
-    (let [pstmt (jdbc/prepare-statement @ro-conn sql :concurrency :read-only)]
+    (let [^java.sql.PreparedStatement pstmt (jdbc/prepare-statement @ro-conn sql :concurrency :read-only)]
       (fn [f]
-        (when @latch (.await @latch)) ; await finishing vacuum
-        (if-not (.isClosed (.getConnection pstmt))
+        (when @latch (.await ^java.util.concurrent.CountDownLatch @latch)) ; await finishing vacuum
+        (if-not (.isClosed ^java.sql.Connection (.getConnection pstmt))
           (let [^ResultSet rs (.executeQuery pstmt)]
             (try
               (f (jdbc/resultset-seq rs))
@@ -234,13 +234,13 @@
       (.get ^Future (enqueue create-db))))
   (defn- close-conn [conn]
     (try
-      (.close @conn)
+      (.close ^java.sql.Connection @conn)
       (reset! conn nil)
       (catch Exception e
         (error e (format "failed closing conn: %s" (pr-str @conn))))))
   (defn shutdown []
     (debug "called shutdown database!!!")
-    (let [q @queue]
+    (let [^nico.db.Queue q @queue]
       (reset! queue nil)
       (.shutdown q))
     (run-db-hooks :shutdown)

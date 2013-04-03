@@ -22,7 +22,7 @@
         vgrp (.createSequentialGroup layout)]
     (letfn [(update-status []
               (do-swing
-               (.setText vpgms (let [qs (db/queue-size)]
+               (.setText vpgms (when-let [qs (db/queue-size)]
                                  (if (< 0 qs)
                                    (format "%d (+ %d) / %d" (pgm/count-pgms) qs (pgm/get-total))
                                    (format "%d / %d" (pgm/count-pgms) (pgm/get-total)))))
