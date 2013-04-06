@@ -12,10 +12,10 @@
 (defn sql-now [] (date-to-timestamp (now)))
 
 (let [fmt (SimpleDateFormat. "yyyy/MM/dd HH:mm:ss")]
-  (defn format-time-long [^Date d] (.format fmt d)))
+  (defn format-time-long [^Date d] (locking fmt (.format fmt d))))
 
 (let [fmt (SimpleDateFormat. "MM/dd HH:mm")]
-  (defn format-time-short [^Date d] (.format fmt d)))
+  (defn format-time-short [^Date d] (locking fmt (.format fmt d))))
 
 (defn later? [^Date this ^Date that] (pos? (.compareTo this that)))
 (defn earlier? [^Date this ^Date that] (neg? (.compareTo this that)))
