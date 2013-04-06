@@ -22,11 +22,14 @@
         vgrp (.createSequentialGroup layout)]
     (letfn [(update-status []
               (do-swing
-               (.setText vpgms (when-let [qs (db/queue-size)]
+               (.setText vpgms (if-let [qs (db/queue-size)]
                                  (if (< 0 qs)
                                    (format "%d (+ %d) / %d" (pgm/count-pgms) qs (pgm/get-total))
-                                   (format "%d / %d" (pgm/count-pgms) (pgm/get-total)))))
-               (.setText vfetched (tu/format-time-long (db/last-updated)))))]
+                                   (format "%d / %d" (pgm/count-pgms) (pgm/get-total)))
+                                 "="))
+               (.setText vfetched (if-let [lu (db/last-updated)]
+                                    (tu/format-time-long lu)
+                                    "-"))))]
       (nr/add-rss-hook :countdown (fn [count max] (update-status)))
       (db/add-db-hook :updated update-status))
     (doto hgrp
