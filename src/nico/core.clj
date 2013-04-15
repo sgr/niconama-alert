@@ -56,4 +56,5 @@
             (log-memory-usage level)
             (.gc mbean)
             (log-memory-usage level))]
-    (db/add-db-hook :updated #(force-gc :trace))))
+;;    (db/add-db-hook :updated #(force-gc :trace))
+    ))
