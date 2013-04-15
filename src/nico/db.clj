@@ -140,10 +140,10 @@
               last-hook-called (get @(.state this) :last-hook-called)]
           (swap! (.state this) assoc :last-updated now)
           ;; DB更新フックの実行
-          (when (or (= 0 (-> this .getQueue .size))
-                    (not (tu/within? last-hook-called now INTERVAL-UPDATE)))
+          (when (and (= 0 (-> this .getQueue .size))
+                     (not (tu/within? last-hook-called now INTERVAL-UPDATE)))
             (run-db-hooks :updated)
-            (swap! (.state this) assoc :last-hook-called now))))
+            (swap! (.state this) assoc :last-hook-called (tu/now)))))
       (catch CancellationException ce
         (error ce "!!!   CancellationException"))
       (catch ExecutionException ee
@@ -179,8 +179,22 @@
   (defn- create-conn []
     (DriverManager/getConnection (format "jdbc:%s:%s" (:subprotocol db-spec) (:subname db-spec))))
   (defn db [] (if @conn {:connection @conn} db-spec))
+  (defn- shrink-memory []
+    (when (and @conn (not (.isClosed ^java.sql.Connection @conn)))
+      (when @latch (.await ^java.util.concurrent.CountDownLatch @latch)) ; await finishing vacuum
+      (reset! latch (CountDownLatch. 1))
+      (try
+        (debug "SHRINK_MEMORY!")
+        (doto (.createStatement ^java.sql.Connection @conn)
+          (.executeUpdate "PRAGMA shrink_memory"))
+        (catch Exception e
+          (error e ("PRAGMA shrink_memory failed")))
+        (finally
+          (.countDown ^java.util.concurrent.CountDownLatch @latch)
+          (reset! latch nil)))))
   (defn- vacuum []
-    (when @conn
+    (when (and @conn (not (.isClosed ^java.sql.Connection @conn)))
+      (when @latch (.await ^java.util.concurrent.CountDownLatch @latch)) ; await finishing vacuum
       (reset! latch (CountDownLatch. 1))
       (try
         (debug "VACUUM!")
@@ -252,16 +266,23 @@
             (req-ro #(let [{:keys [page_count]}
                            (jdbc/query %1 ["PRAGMA page_count"] :result-set-fn first)]
                        page_count)))
+          (pragma-max-page-count []
+            (req-ro #(let [{:keys [max_page_count]}
+                           (jdbc/query %1 ["PRAGMA max_page_count"] :result-set-fn first)]
+                       max_page_count)))
           (pragma-freelist-count []
             (req-ro #(let [{:keys [freelist_count]}
                            (jdbc/query %1 ["PRAGMA freelist_count"] :result-set-fn first)]
                        freelist_count)))]
-    (let [page_count (pragma-page-count) freelist_count (pragma-freelist-count)]
-      (trace (format "page_count: %d, freelist_count: %d" page_count freelist_count))
+    (let [max_page_count (pragma-max-page-count) page_count (pragma-page-count) freelist_count (pragma-freelist-count)]
       (when (< THRESHOLD-FREELIST freelist_count)
-        (enqueue (fn [db]
-                   (info (format "page_count: %d, freelist_count: %d" page_count freelist_count))
-                   (vacuum)
-                   (info (format "page_count: %d, freelist_count: %d" (pragma-page-count) (pragma-freelist-count)))))))))
+        (do
+          (info (format "max_page_count: %d, page_count: %d, freelist_count: %d"
+                        max_page_count page_count freelist_count))
+          (vacuum)
+          (shrink-memory)
+          (info (format "max_page_count: %d, page_count: %d, freelist_count: %d"
+                        (pragma-max-page-count) (pragma-page-count) (pragma-freelist-count))))))))
 
 ;;(add-db-hook :updated maintenance-db)
+(add-db-hook :updated shrink-memory)
