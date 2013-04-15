@@ -1,13 +1,13 @@
-(defproject nicoalert "1.6.1-SNAPSHOT"
+(defproject nicoalert "1.6.1"
   :description "Niconama Alert J"
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/data.zip "0.1.1"]
-                 [org.clojure/java.jdbc "0.2.4-SNAPSHOT"]
+                 [org.clojure/java.jdbc "0.3.0-alpha1"]
                  [org.clojure/math.numeric-tower "0.0.2"]
                  [org.clojure/tools.logging "0.2.6"]
                  [logutil "[0.2,)"]
                  [clj-http "0.7.1"]
-                 [org.apache.httpcomponents/httpclient-cache "4.2.3"]
+                 [org.apache.httpcomponents/httpclient-cache "4.2.4"]
                  [swing-utils "0.2.0"]
                  [enlive "1.0.1"]
                  [org.xerial/sqlite-jdbc "3.7.2"]
