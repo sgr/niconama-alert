@@ -29,32 +29,36 @@
 (let [use-cache (do (ImageIO/setUseCache false) (ImageIO/getUseCache))
       ^ImageReader jpeg-reader (.next (ImageIO/getImageReadersByFormatName "jpeg"))
       ^ImageWriter jpeg-writer (.next (ImageIO/getImageWritersByFormatName "jpeg"))]
-  (defn to-bytes [^Image img]
-    (let [baos (ByteArrayOutputStream.)
-          ios (ImageIO/createImageOutputStream baos)]
-      (try
-        (doto jpeg-writer (.setOutput ios) (.write ^RenderedImage img))
-        (.toByteArray baos)
-        (finally
-          (.flush ios)
-          (.reset jpeg-writer)
-          (.close ios)
-          (.close baos)))))
-
   (defn fetch [url width height]
+    (letfn [(to-bytes [^Image img]
+              (let [baos (ByteArrayOutputStream.)
+                    ios (ImageIO/createImageOutputStream baos)]
+                (try
+                  (doto jpeg-writer (.setOutput ios) (.write ^RenderedImage img))
+                  (.toByteArray baos)
+                  (finally
+                    (.flush ios)
+                    (.reset jpeg-writer)
+                    (.close ios)
+                    (.close baos)))))
+            (read-img-from-response [response]
+              (let [is (-> response .getEntity .getContent)
+                    ^ImageInputStream iis (if is (ImageIO/createImageInputStream is) nil)]
+                (try
+                  (if iis
+                    (do (.setInput jpeg-reader iis true true)
+                        (.read jpeg-reader 0))
+                    nil)
+                  (catch Exception e
+                    (error e (format "" url)))
+                  (finally (when jpeg-reader (.reset jpeg-reader))
+                           (when iis (.close iis))
+                           (when is (.close is))))))]
     (locking jpeg-reader
-      (let [is (n/url-stream-with-caching url)
-            ^ImageInputStream iis (if is (ImageIO/createImageInputStream is) nil)
-            ^BufferedImage img (if iis
-                                 (do (.setInput jpeg-reader iis true true)
-                                     (.read jpeg-reader 0))
-                                 nil)]
+      (let [^BufferedImage img (n/fetch-with-caching url read-img-from-response)]
         (try
           (ImageIcon. (adjust-img (or img NO-IMAGE) width height))
           (catch Exception e
             (error e (format "failed fetching image: %s" url))
             (ImageIcon. ^Image NO-IMAGE))
-          (finally (when img (.flush img))
-                   (when jpeg-reader (.reset jpeg-reader))
-                   (when iis (.close iis))
-                   (when is (.close is))))))))
+          (finally (when img (.flush img)))))))))

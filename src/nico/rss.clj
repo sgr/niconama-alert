@@ -9,7 +9,6 @@
             [clojure.zip :as zip]
             [clojure.data.zip :as dz]
             [clojure.data.zip.xml :as dzx]
-            [clj-http.client :as client]
             [nico.pgm :as pgm]
             [nico.api-updator :as api]
             [nico.log :as l]
@@ -25,8 +24,7 @@
 
 (defn- get-nico-rss-aux [page]
   (try
-    (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/recent/rss?p=%s" page)
-                                          n/HTTP-OPTS)]
+    (n/with-http-res [raw-res (n/http-get (format "http://live.nicovideo.jp/recent/rss?p=%s" page))]
       (try
         (-> raw-res :body s/cleanup s/utf8stream xml/parse)
         (catch Exception e
@@ -50,12 +48,14 @@
 (defn- get-programs-count
   "get the total programs count."
   ([] (get-programs-count (get-nico-rss 1)))
-  ([rss] (try
-           (Integer/parseInt
-            (first (dzx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count dzx/text)))
-           (catch NumberFormatException e
-             (error e (format "failed fetching RSS for get programs count: %s" rss))
-             0))))
+  ([rss] (if-let [total-count (first (dzx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count dzx/text))]
+           (try
+             (Integer/parseInt total-count)
+             (catch NumberFormatException e
+               (error e (format "failed fetching RSS for get programs count: %s" rss))
+               0))
+           (do (warn (format "RSS parse error: %s" rss))
+               0))))
 
 (defn- get-child-elm [tag node]
   (some #(if (= tag (:tag %)) %) (:content node)))

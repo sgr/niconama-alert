@@ -2,8 +2,10 @@
 (ns #^{:author "sgr"
        :doc "Utility for networking."}
   net-utils
-  (:use [clojure.tools.logging])
-  (:require [io-utils :as io])
+  (:use [clojure.tools.logging]
+        [clj-http.conn-mgr :only [make-reusable-conn-manager]])
+  (:require [io-utils :as io]
+            [clj-http.client :as client])
   (:import [java.io File IOException]
            [java.util.concurrent TimeUnit]
            [java.net SocketTimeoutException HttpURLConnection]
@@ -17,7 +19,7 @@
 (def ^{:private true} READ-TIMEOUT    8000)
 (def ^{:private true} INTERVAL-RETRY  2000)
 
-(def HTTP-OPTS
+(def ^{:private true} HTTP-OPTS
   {:headers {"user-agent" "Niconama-alert J/1.1.0"}
    :socket-timeout CONNECT-TIMEOUT
    :conn-timeout   CONNECT-TIMEOUT})
@@ -32,6 +34,13 @@
          (let [msg# (format "returned HTTP error: %d, %s" status# body#)]
            (error msg#)
            (throw (Exception. msg#)))))))
+
+(let [cm (make-reusable-conn-manager {:threads 2})
+      default-opts (assoc HTTP-OPTS :connection-manager cm)]
+  (defn http-get [url & opts]
+    (client/get url (if opts (apply assoc default-opts opts) default-opts)))
+  (defn http-post [url & opts]
+    (client/post url (if opts (apply assoc default-opts opts) default-opts))))
 
 (defn url-stream
   "returns an input stream of the URL. When any error occurred (ex. HTTP response 50x), it returns an error stream."
@@ -56,7 +65,10 @@
 (let [cache-dir (atom nil)
       resource-factory (atom nil)
       cache-config (CacheConfig.)
-      cache-storage (BasicHttpCacheStorage. cache-config)]
+      cache-storage (BasicHttpCacheStorage. cache-config)
+      cm (make-reusable-conn-manager {:threads 2})]
+  (defn close-conns [] (.closeExpiredConnections cm))
+
   (defn clear-cache []
     (when @cache-dir (io/delete-all-files @cache-dir)))
 
@@ -76,27 +88,30 @@
           (error msg)
           (throw (Exception. msg))))))
 
-  (defn ^java.io.InputStream url-stream-with-caching
-    [^String url]
-    (try
-      (trace (format "fetching content from %s" url ))
-      (let [client (CachingHttpClient. (DefaultHttpClient.) @resource-factory cache-storage cache-config)
-            context (BasicHttpContext.)
-            request (HttpGet. url)
-            response (.execute client request context)
-            status-code (-> response .getStatusLine .getStatusCode)
-            cache-status (.getAttribute context CachingHttpClient/CACHE_RESPONSE_STATUS)]
-        (debug (format "%s: (%s)"
-                       (condp = cache-status
-                         CacheResponseStatus/CACHE_HIT  "CACHE_HIT"
-                         CacheResponseStatus/CACHE_MISS "CACHE_MISS"
-                         CacheResponseStatus/CACHE_MODULE_RESPONSE "CACHE_MODULE_RESPONSE"
-                         CacheResponseStatus/VALIDATED  "VALIDATED"
-                         (format "unknown cache status (%s)" (pr-str cache-status)))
-                        url))
-        (condp = status-code
-          200 (-> response .getEntity .getContent)
-          (do (debug (format "status code (%d) is returned" status-code))
-              nil)))
-      (catch Exception e
-        (error e (format "failed fetching contnet from: %s" url))))))
+  (defn ^java.io.InputStream fetch-with-caching
+    [^String url handler]
+    (let [client (CachingHttpClient. (DefaultHttpClient. cm) @resource-factory cache-storage cache-config)
+          context (BasicHttpContext.)
+          request (HttpGet. url)]
+      (try
+        (trace (format "fetching content from %s" url ))
+        (let [response (.execute client request context)
+              status-code (-> response .getStatusLine .getStatusCode)
+              cache-status (.getAttribute context CachingHttpClient/CACHE_RESPONSE_STATUS)]
+          (debug (format "%s: (%s)"
+                         (condp = cache-status
+                           CacheResponseStatus/CACHE_HIT  "CACHE_HIT"
+                           CacheResponseStatus/CACHE_MISS "CACHE_MISS"
+                           CacheResponseStatus/CACHE_MODULE_RESPONSE "CACHE_MODULE_RESPONSE"
+                           CacheResponseStatus/VALIDATED  "VALIDATED"
+                           (format "unknown cache status (%s)" (pr-str cache-status)))
+                         url))
+          (condp = status-code
+            200 (handler response)
+            (do (debug (format "status code (%d) is returned" status-code))
+                nil)))
+        (catch Exception e
+          (.abort request)
+          (error e (format "failed fetching contnet from: %s" url)))
+        (finally
+          (.releaseConnection request))))))

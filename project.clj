@@ -6,7 +6,7 @@
                  [org.clojure/math.numeric-tower "0.0.2"]
                  [org.clojure/tools.logging "0.2.6"]
                  [logutil "[0.2,)"]
-                 [clj-http "0.6.5"]
+                 [clj-http "0.7.1"]
                  [org.apache.httpcomponents/httpclient-cache "4.2.3"]
                  [swing-utils "0.2.0"]
                  [enlive "1.0.1"]

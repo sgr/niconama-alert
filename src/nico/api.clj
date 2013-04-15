@@ -10,8 +10,7 @@
             [time-utils :as tu]
             [clojure.xml :as xml]
             [clojure.zip :as zip]
-            [clojure.data.zip.xml :as dzx]
-            [clj-http.client :as client])
+            [clojure.data.zip.xml :as dzx])
   (:import [java.util Date]))
 
 (defmacro ^{:private true} with-nico-res [bindings & body]
@@ -28,13 +27,12 @@
 
 (defn get-alert-status [email passwd]
   (letfn [(get-ticket [email passwd] ;; 認証APIでチケットを得る
-            (n/with-http-res [raw-res (client/post "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
-                                                   (assoc n/HTTP-OPTS :form-params {:mail email :password passwd}))]
+            (n/with-http-res [raw-res (n/http-post "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
+                                                   :form-params {:mail email :password passwd})]
               (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
                 (dzx/xml1-> (zip/xml-zip res) :ticket dzx/text))))
           (get-alert-status1 [ticket]
-            (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
-                                                  n/HTTP-OPTS)]
+            (n/with-http-res [raw-res (n/http-get (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket))]
               (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
                 (let [xz (zip/xml-zip res)]
                   {:user_id (dzx/xml1-> xz :user_id dzx/text)
@@ -49,8 +47,7 @@
         (error e "failed login: %s" email)))))
 
 (defn- get-stream-info [pid]
-  (n/with-http-res [raw-res (client/get (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
-                                        n/HTTP-OPTS)]
+  (n/with-http-res [raw-res (n/http-get (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid))]
     (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
       (zip/xml-zip res))))
 
