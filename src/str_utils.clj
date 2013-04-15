@@ -4,6 +4,7 @@
   str-utils
   (:require [clojure.string :as s])
   (:import [java.io ByteArrayInputStream]
+           [java.util.regex Pattern]
            [org.apache.commons.lang3 StringEscapeUtils]
            [org.htmlcleaner CompactXmlSerializer HtmlCleaner TagNode]))
 
@@ -16,11 +17,12 @@
 (defn trim-to [^String s ^Integer max]
   (if (and s (< max (.length s))) (.substring s 0 max) s))
 
-(defn cleanup
-  "絵文字など制御文字扱いになる文字を削除する"
-  [^String s]
-  (when s
-    (.replaceAll s "\\p{Cntrl}" "")))
+(let [p (Pattern/compile "\\p{Cntrl}")]
+  (defn cleanup
+    "絵文字など制御文字扱いになる文字を削除する"
+    [^String s]
+    (when s
+      (-> p (.matcher s) (.replaceAll "")))))
 
 (defn unescape
   [^String s type]
