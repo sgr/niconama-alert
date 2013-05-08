@@ -2,7 +2,7 @@
   :description "Niconama Alert J"
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/data.zip "0.1.1"]
-                 [org.clojure/java.jdbc "0.3.0-alpha1"]
+                 [org.clojure/java.jdbc "0.3.0-alpha2"]
                  [org.clojure/math.numeric-tower "0.0.2"]
                  [org.clojure/tools.logging "0.2.6"]
                  [logutil "[0.2,)"]
