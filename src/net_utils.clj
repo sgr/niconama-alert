@@ -13,7 +13,7 @@
            [org.apache.http.impl.client DefaultHttpClient]
            [org.apache.http.client.methods HttpGet]
            [org.apache.http.client.cache CacheResponseStatus]
-           [org.apache.http.impl.client.cache BasicHttpCacheStorage CacheConfig CachingHttpClient FileResourceFactory]))
+           [org.apache.http.impl.client.cache ManagedHttpCacheStorage CacheConfig CachingHttpClient FileResourceFactory]))
 
 (def ^{:private true} CONNECT-TIMEOUT 5000)
 (def ^{:private true} READ-TIMEOUT    8000)
@@ -65,12 +65,18 @@
 (let [cache-dir (atom nil)
       resource-factory (atom nil)
       cache-config (CacheConfig.)
-      cache-storage (BasicHttpCacheStorage. cache-config)
-      cm (make-reusable-conn-manager {:threads 2})]
+      cache-storage (ManagedHttpCacheStorage. cache-config)
+      ^org.apache.http.impl.conn.PoolingClientConnectionManager cm (make-reusable-conn-manager {:threads 2})
+      client (atom nil)]
   (defn close-conns [] (.closeExpiredConnections cm))
 
   (defn clear-cache []
+    (.shutdown cache-storage)
     (when @cache-dir (io/delete-all-files @cache-dir)))
+
+  (defn clean-cache []
+    (debug (format "CLEANING HTTP CACHE RESOURCES"))
+    (.cleanResources cache-storage))
 
   (defn init-cache
     "This function must be called before using url-stream-with-caching"
@@ -90,15 +96,16 @@
 
   (defn ^java.io.InputStream fetch-with-caching
     [^String url handler]
-    (let [client (CachingHttpClient. (DefaultHttpClient. cm) @resource-factory cache-storage cache-config)
-          context (BasicHttpContext.)
+    (when-not @client
+      (reset! client (CachingHttpClient. (DefaultHttpClient. cm) @resource-factory cache-storage cache-config)))
+    (let [context (BasicHttpContext.)
           request (HttpGet. url)]
       (try
         (trace (format "fetching content from %s" url ))
-        (let [response (.execute client request context)
+        (let [response (.execute @client request context)
               status-code (-> response .getStatusLine .getStatusCode)
               cache-status (.getAttribute context CachingHttpClient/CACHE_RESPONSE_STATUS)]
-          (debug (format "%s: (%s)"
+          (trace (format "%s: (%s)"
                          (condp = cache-status
                            CacheResponseStatus/CACHE_HIT  "CACHE_HIT"
                            CacheResponseStatus/CACHE_MISS "CACHE_MISS"
