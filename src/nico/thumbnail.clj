@@ -50,7 +50,7 @@
                         (.read jpeg-reader 0))
                     nil)
                   (catch Exception e
-                    (error e (format "" url)))
+                    (error e (format "failed reading thumbnail image from response stream: %s" url)))
                   (finally (when jpeg-reader (.reset jpeg-reader))
                            (when iis (.close iis))
                            (when is (.close is))))))]

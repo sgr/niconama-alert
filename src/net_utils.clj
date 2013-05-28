@@ -13,7 +13,8 @@
            [org.apache.http.impl.client DefaultHttpClient]
            [org.apache.http.client.methods HttpGet]
            [org.apache.http.client.cache CacheResponseStatus]
-           [org.apache.http.impl.client.cache ManagedHttpCacheStorage CacheConfig CachingHttpClient FileResourceFactory]))
+           [org.apache.http.impl.client.cache ManagedHttpCacheStorage CacheConfig CachingHttpClient FileResourceFactory]
+           [org.apache.http.util EntityUtils]))
 
 (def ^{:private true} CONNECT-TIMEOUT 5000)
 (def ^{:private true} READ-TIMEOUT    8000)
@@ -114,7 +115,9 @@
                            (format "unknown cache status (%s)" (pr-str cache-status)))
                          url))
           (condp = status-code
-            200 (handler response)
+            200 (try
+                  (handler response)
+                  (finally (EntityUtils/consume (-> response .getEntity))))
             (do (debug (format "status code (%d) is returned" status-code))
                 nil)))
         (catch Exception e

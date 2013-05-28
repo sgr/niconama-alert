@@ -74,6 +74,7 @@
                            (.setVisible false)
                            (.dispatchEvent (WindowEvent. adlg WindowEvent/WINDOW_CLOSING))
                            (.dispose))
+                         (-> thumbicn .getImage .flush)
                          (release-fn)))]
           (reset! last-modified now)
           (do-swing-and-wait (doto adlg
