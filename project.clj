@@ -15,13 +15,13 @@
                  [net.sourceforge.htmlcleaner/htmlcleaner "2.5"]]
   :exclusions [org.apache.ant/ant]
   :debug false
+  :global-vars {*warn-on-reflection* true
+                *assert* false}
   :profiles {:dev
              {:dependencies [[org.clojure/tools.nrepl "[0.2,)"]]
-              :debug true
-              :warn-on-reflection true}
+              :debug true}
              :debug
              {:debug true
-              :warn-on-reflection true
               :injections [(prn (into {} (System/getProperties)))]}}
   :omit-source true
   :resource-paths ["resources"]
