@@ -181,7 +181,7 @@
   (defn db [] (if @conn {:connection @conn} db-spec))
   (defn- shrink-memory []
     (when (and @conn (not (.isClosed ^java.sql.Connection @conn)))
-      (when @latch (.await ^java.util.concurrent.CountDownLatch @latch)) ; await finishing vacuum
+      (when-let [^java.util.concurrent.CountDownLatch l @latch] (.await l)) ; await finishing vacuum
       (reset! latch (CountDownLatch. 1))
       (try
         (debug "SHRINK_MEMORY!")
@@ -194,7 +194,7 @@
           (reset! latch nil)))))
   (defn- vacuum []
     (when (and @conn (not (.isClosed ^java.sql.Connection @conn)))
-      (when @latch (.await ^java.util.concurrent.CountDownLatch @latch)) ; await finishing vacuum
+      (when-let [^java.util.concurrent.CountDownLatch l @latch] (.await l)) ; await finishing vacuum
       (reset! latch (CountDownLatch. 1))
       (try
         (debug "VACUUM!")
@@ -215,7 +215,7 @@
                 (f {:connection conn})
                 (catch Exception e e)))]
       (when (and @ro-conn (not (.isClosed ^java.sql.Connection @ro-conn)))
-        (when @latch (.await ^java.util.concurrent.CountDownLatch @latch)) ; await finishing vacuum
+        (when-let [^java.util.concurrent.CountDownLatch l @latch] (.await l)) ; await finishing vacuum
         (when-let [result (req-ro-aux f @ro-conn)]
           (condp instance? result
             Exception (let [msg (.getMessage ^java.lang.Exception result)]
@@ -228,7 +228,7 @@
   (defn ro-pstmt-fn [^String sql]
     (let [^java.sql.PreparedStatement pstmt (jdbc/prepare-statement @ro-conn sql :concurrency :read-only)]
       (fn [f]
-        (when @latch (.await ^java.util.concurrent.CountDownLatch @latch)) ; await finishing vacuum
+        (when-let [^java.util.concurrent.CountDownLatch l @latch] (.await l)) ; await finishing vacuum
         (if-not (.isClosed ^java.sql.Connection (.getConnection pstmt))
           (let [^ResultSet rs (.executeQuery pstmt)]
             (try
