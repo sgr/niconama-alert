@@ -8,9 +8,9 @@
             [nico.pgm :as pgm]
             [nico.ui.ext-tabbed-pane :as etp]
             [nico.ui.menu :as m])
-  (:import [java.awt Dimension Font]
+  (:import [java.awt BorderLayout Dimension Font]
            [java.awt.event WindowEvent WindowListener]
-           [javax.swing JFrame ImageIcon SpringLayout ToolTipManager UIManager]))
+           [javax.swing JFrame ImageIcon ToolTipManager UIManager]))
 
 (def ^{:private true} F-KEYS ["Button.font" "Menu.font" "MenuItem.font" "ColorChooser.font" "CheckBox.font"
                               "CheckBoxMenuItem.font" "ToggleButton.font" "Label.font"
@@ -18,6 +18,7 @@
                               "List.font" "TableHeader.font" "ComboBox.font"])
 
 (defn ^JFrame main-frame [add-hook-fn closing-fn]
+  (System/setProperty "apple.laf.useScreenMenuBar" "true")
   (UIManager/setLookAndFeel (UIManager/getSystemLookAndFeelClassName))
   (UIManager/put "OptionPane.okButtonText" "OK")
   (UIManager/put "OptionPane.cancelButtonText" "キャンセル")
@@ -29,21 +30,10 @@
         mbar (m/menu-bar frame tabbed-pane)
         tm (ToolTipManager/sharedInstance)
         cpane (.getContentPane frame)
-        cpanel (control-panel)
-        layout (SpringLayout.)]
+        cpanel (control-panel)]
     (.addTabs tabbed-pane (:tabs pref))
-    (doto layout
-      (.putConstraint SpringLayout/NORTH mbar         0  SpringLayout/NORTH cpane)
-      (.putConstraint SpringLayout/WEST  mbar         0  SpringLayout/WEST  cpane)
-      (.putConstraint SpringLayout/EAST  mbar        -0  SpringLayout/EAST  cpane)
-      (.putConstraint SpringLayout/NORTH tabbed-pane  0  SpringLayout/SOUTH mbar)
-      (.putConstraint SpringLayout/WEST  tabbed-pane  5  SpringLayout/WEST  cpane)
-      (.putConstraint SpringLayout/EAST  tabbed-pane -5  SpringLayout/EAST  cpane)
-      (.putConstraint SpringLayout/SOUTH tabbed-pane -5  SpringLayout/NORTH cpanel)
-      (.putConstraint SpringLayout/WEST  cpanel       5  SpringLayout/WEST  cpane)
-      (.putConstraint SpringLayout/EAST  cpanel      -5  SpringLayout/EAST  cpane)
-      (.putConstraint SpringLayout/SOUTH cpanel      -10 SpringLayout/SOUTH cpane))
     (doto tm (.setInitialDelay 100))
+    (-> frame .getRootPane (.setJMenuBar mbar))
     (doto frame
       (.addWindowListener
        (proxy [WindowListener][]
@@ -66,7 +56,9 @@
          (windowDeactivated [e])))
       (.setIconImage (.getImage appicn))
       (.setDefaultCloseOperation JFrame/DO_NOTHING_ON_CLOSE)
-      (.setLayout layout) (.add mbar) (.add cpanel) (.add tabbed-pane)
+      (.add tabbed-pane BorderLayout/CENTER)
+      (.add cpanel BorderLayout/SOUTH)
+;;      (.setLayout layout) (.add cpanel) (.add tabbed-pane)
       (.setSize (-> pref :window :width) (-> pref :window :height))
       (.setLocation (-> pref :window :posx) (-> pref :window :posy)))))
 
