@@ -5,7 +5,7 @@
   (:use [clojure.tools.logging])
   (:require [io-utils :as io]
             [prefs-utils :as pu]
-	    [str-utils :as s])
+	    [input-parser.tokenizer :as tok])
   (:import [java.awt Desktop GraphicsEnvironment]
            [java.io File IOException]
 	   [java.net URI URL]))
@@ -80,7 +80,7 @@
       (debug (format "open by default browser: %s" url))
       (.browse (Desktop/getDesktop) (URI. url)))
     (do
-      (let [cmds (s/tokenize cmd)]
+      (let [cmds (tok/tokenize cmd)]
 	(debug (format "open by %s: %s" (pr-str cmds) url))
 	(.start (ProcessBuilder. ^java.util.List (conj cmds url)))))))
 
