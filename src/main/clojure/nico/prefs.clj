@@ -4,7 +4,7 @@
   nico.prefs
   (:use [clojure.tools.logging])
   (:require [io-utils :as io]
-            [prefs-utils :as pu]
+            [config-file :as cf]
 	    [input-parser.tokenizer :as tok])
   (:import [java.awt Desktop GraphicsEnvironment]
            [java.io File IOException]
@@ -25,8 +25,8 @@
      :browsers [[:default :default true]]}))
 
 (defn ^File pref-dir []
-  (File. (pu/pref-base-path)
-         (condp = (pu/system)
+  (File. (cf/config-base-path)
+         (condp = (cf/system)
            :windows "NiconamaAlertCLJ"
            :mac     "NiconamaAlertCLJ"
            :linux   ".NiconamaAlertCLJ"
@@ -41,8 +41,8 @@
         (throw (IOException. (format "failed creating pref-dir: %s" (.getCanonicalPath p))))))))
 
 (defn- ^File old-pref-dir []
-  (File. (pu/pref-base-path)
-         (condp = (pu/system)
+  (File. (cf/config-base-path)
+         (condp = (cf/system)
            :mac     "Application Support"
            "")))
 
@@ -54,17 +54,17 @@
   (defn load-pref []
     (when-not @p
       (reset! p
-              (if-let [lp (pu/load-pref (pref-file))]
+              (if-let [lp (cf/load-config (pref-file))]
                 lp
                 (let [opf (old-pref-file)]
                   (if (.exists opf)
                     (do (info (format "loading old pref: %s" (.getCanonicalPath opf)))
-                        (if-let [op (pu/load-pref opf)]
+                        (if-let [op (cf/load-config opf)]
                           op
                           (gen-initial-pref)))
                     (gen-initial-pref))))))
     p)
-  (defn store-pref [] (pu/store-pref @p (pref-file))))
+  (defn store-pref [] (cf/store-config @p (pref-file))))
 
 (defn cache-dir [] (File. (pref-dir) "thumbnail"))
 
