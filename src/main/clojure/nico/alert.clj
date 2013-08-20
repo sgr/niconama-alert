@@ -14,7 +14,7 @@
 (def ^{:private true} ICON-HEIGHT 64)
 
 (defn init-alert []
-  (da/init-alert (uad/dlg-width) (uad/dlg-height) :rl-tb 1))
+  (da/init-alert (uad/dlg-width) (uad/dlg-height) :lr-bt 1))
 
 (defn alert-pgm [id thumb-url]
   (let [^Future ftr (pgm/not-alerted id)
