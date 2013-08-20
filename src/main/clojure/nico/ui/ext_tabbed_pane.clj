@@ -5,7 +5,6 @@
   (:use [clojure.tools.swing-utils :only [do-swing do-swing-and-wait add-action-listener]]
         [clojure.tools.logging])
   (:require [clojure.java.jdbc :as jdbc]
-            [concurrent-utils :as c]
             [time-utils :as tu]
             [nico.alert :as al]
             [nico.api :as api]

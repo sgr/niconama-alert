@@ -2,20 +2,12 @@
 (ns #^{:author "sgr"
        :doc "Alert management functions."}
   nico.alert
-  (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
-        [clojure.tools.logging]
-        [nico.thumbnail :only [fetch]])
-  (:require [concurrent-utils :as c]
+  (:require [clojure.tools.logging :as log]
             [desktop-alert :as da]
-            [time-utils :as tu]
             [nico.pgm :as pgm]
-            [nico.thumbnail :as thumbnail]
-            [nico.log :as l]
+            [nico.thumbnail :as nt]
             [nico.ui.alert-dlg :as uad])
-  (:import [java.awt GraphicsEnvironment]
-           [java.awt.event WindowEvent]
-           [javax.swing JDialog ImageIcon]
-           [java.util.concurrent Future ThreadPoolExecutor TimeUnit]))
+  (:import [java.util.concurrent Future]))
 
 (def ^{:private true} DISPLAY-TIME 20000) ; アラートウィンドウの表示時間(ミリ秒)
 (def ^{:private true} ICON-WIDTH  64)
@@ -26,9 +18,9 @@
 
 (defn alert-pgm [id thumb-url]
   (let [^Future ftr (pgm/not-alerted id)
-        thumbnail (fetch thumb-url ICON-WIDTH ICON-HEIGHT)]
+        thumbnail (nt/fetch thumb-url ICON-WIDTH ICON-HEIGHT)]
     (if-let [pgm (.get ftr)]
       (let [adlg (uad/alert-dlg pgm thumbnail)]
-        (trace (str "alert: " id))
+        (log/trace (str "alert: " id))
         (da/alert adlg DISPLAY-TIME))
-      (trace (str "already alerted: " id)))))
+      (log/trace (str "already alerted: " id)))))
