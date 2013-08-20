@@ -9,6 +9,7 @@
                  [clj-http "0.7.3"]
                  [org.apache.httpcomponents/httpclient-cache "4.2.5"]
                  [config-file "0.1.0"]
+                 [desktop-alert "0.2.2"]
                  [input-parser "0.1.1"]
                  [swing-utils "0.2.0"]
                  [enlive "1.1.1"]

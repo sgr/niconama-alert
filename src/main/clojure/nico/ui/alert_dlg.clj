@@ -105,7 +105,7 @@
 	 (mouseClicked  [^MouseEvent e])
          (mouseReleased [^MouseEvent e]))))))
 
-(defn alert-dlg [^nico.pgm.Pgm pgm ^ImageIcon thumbicn extra-close-fn]
+(defn alert-dlg [^nico.pgm.Pgm pgm ^ImageIcon thumbicn]
   (let [dlg (JDialog.)]
     (let [tpanel (JPanel.), dpanel (JPanel.)
 	  owner (su/ifstr (:owner_name pgm) "")
@@ -115,8 +115,7 @@
 				(if (:member_only pgm) "※コミュ限" "")
 				(tu/minute (tu/interval (:pubdate pgm) (tu/now)))))
           close-fn (fn [e]
-                     (do-swing-and-wait (.setVisible dlg false) (.dispose dlg))
-                     (extra-close-fn))]
+                     (do-swing-and-wait (.setVisible dlg false) (.dispose dlg)))]
       (let [title (JLabel. ^String (su/ifstr (:title pgm) (name (:id pgm))))
 	    cbtn (JButton. ^ImageIcon CLOSE-ICON), layout (SpringLayout.)
             close-listener (proxy [ActionListener][]
@@ -124,8 +123,7 @@
                                (do-swing-and-wait
                                 (.setVisible dlg false)
                                 (.removeActionListener cbtn this)
-                                (.dispose dlg))
-                               (extra-close-fn)))]
+                                (.dispose dlg))))]
 	(doto title (.setFont uu/DEFAULT-FONT))
 	(doto layout
           (.putConstraint SpringLayout/NORTH title 0 SpringLayout/NORTH tpanel)

@@ -6,6 +6,7 @@
         [nico.ui.main-frame :only [main-frame]])
   (:require [hook-utils :as h]
             [net-utils :as n]
+            [nico.alert :as na]
             [nico.db :as db]
             [nico.log :as l]
             [nico.prefs :as p])
@@ -27,6 +28,7 @@
     (p/load-pref)
     (n/init-cache (p/cache-dir))
     (db/init)
+    (na/init-alert)
     ;; invoke main frame
     (let [frame (main-frame (fn [f] (add-main-hook :shutdown f))
                             (fn [] (run-main-hooks :shutdown)))]
