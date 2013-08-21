@@ -3,12 +3,14 @@
 /classes
 /checkouts
 pom.xml
+pom.xml.asc
 *.jar
 *.class
 *.log
 .lein-deps-sum
 .lein-failures
 .lein-plugins
+.lein-repl-history
 .DS_Store
 *~
 #*.clj#
