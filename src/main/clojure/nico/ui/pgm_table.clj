@@ -11,6 +11,7 @@
             [str-utils :as su]
             [time-utils :as tu])
   (:import [java.awt.event MouseEvent]
+           [java.util Timer TimerTask]
            [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
            [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn TableRowSorter]
            [com.github.sgr.swingx MultiLineRenderer MultiLineTable]))
@@ -35,7 +36,8 @@
            [getProgramTitle [int] String]
            [setPgms [clojure.lang.IPersistentMap] void]
            [getIds [] clojure.lang.IPersistentSet]
-           [getPgm [int] nico.pgm.Pgm]])
+           [getPgm [int] nico.pgm.Pgm]
+           [getRowNumber [clojure.lang.Keyword] Integer]])
 
 (gen-class
  :name nico.ui.PgmMouseListener
@@ -45,7 +47,7 @@
  :state state
  :init init)
 
-(let [renderer (nico.ui.PgmCellRenderer. "MM/dd HH:mm" 6)]
+(let [renderer (nico.ui.PgmCellRenderer. "MM/dd HH:mm" 5 6)]
   (def ^{:private true} PGM-COLUMNS
     (list
      {:key :thumbnail :colName "" :class javax.swing.ImageIcon :width THUMBNAIL-WIDTH :resizable false :renderer renderer }
@@ -76,46 +78,62 @@
 
 (defn- ptm-init [pgms] [[] (java.util.Vector.)])
 
-(defn- ptm-setPgms [^nico.ui.ProgramsTableModel this pgms]
-  (letfn [(to-ranges [lst]
-            (reduce (fn [rs itm]
-                      (if-let [litm (-> rs last last)]
-                        (if (= (dec litm) itm)
-                          (conj (subvec rs 0 (dec (count rs)))
-                                (conj (last rs) itm))
-                          (conj rs [itm]))
-                        [[itm]]))
-                    [] lst))]
-    (let [rev-idx (reduce (fn [m [idx pgm]] (assoc m (:id pgm) idx))
-                          {} (map-indexed vector ^java.util.Vector (.state this)))
-          oks (apply hash-set (keys rev-idx))
-          nks (apply hash-set (keys pgms))
-          del-ids (set/difference oks nks)
-          add-ids (set/difference nks oks)
-          upd-ids (set/intersection oks nks)
-          del-idxes (sort > (map #(get rev-idx %) del-ids)) ; 逆順にしないと削除時によろしくない
-          del-idxes-ranges (to-ranges del-idxes)
-          add-pgms (map #(when-let [pgm (get pgms %)]
-                           (assoc pgm :thumbnail (thumbnail/fetch (:thumbnail pgm) THUMBNAIL-WIDTH THUMBNAIL-HEIGHT)))
-                        add-ids)
-          upd-pgms (select-keys pgms upd-ids)]
-      (doseq [pgm (vals upd-pgms)]
-        (let [idx (get rev-idx (:id pgm))]
-          (.setElementAt ^java.util.Vector (.state this)
-                         (assoc pgm :thumbnail (:thumbnail (.get ^java.util.Vector (.state this) idx)))
-                         idx)))
-      (doseq [r del-idxes-ranges]
-        (let [osize (.size ^java.util.Vector (.state this))]
-          (doseq [idx r] (.removeElementAt ^java.util.Vector (.state this) idx))
-          (log/trace (format "fireTableRowsDeleted(%d): %d - %d (%d -> %d)"
-                         (count r) (last r) (first r) osize (.size ^java.util.Vector (.state this)))))
-        (.fireTableRowsDeleted this (last r) (first r)))
-      (when (< 0 (count add-pgms))
-        (let [fidx (.size ^java.util.Vector (.state this))]
-          (doseq [pgm add-pgms] (when pgm (.add ^java.util.Vector (.state this) pgm)))
-          (log/trace (format "fireTableRowsInserted(%d): %d - %d"
-                         (count add-pgms) fidx (dec (.size ^java.util.Vector (.state this)))))
-          (.fireTableRowsInserted this fidx (dec (.size ^java.util.Vector (.state this)))))))))
+(let [timer (Timer. "Pgm table updater" true)]
+  (defn- ptm-setPgms [^nico.ui.ProgramsTableModel this pgms]
+    (letfn [(to-ranges [lst]
+              (reduce (fn [rs itm]
+                        (if-let [litm (-> rs last last)]
+                          (if (= (dec litm) itm)
+                            (conj (subvec rs 0 (dec (count rs)))
+                                  (conj (last rs) itm))
+                            (conj rs [itm]))
+                          [[itm]]))
+                      [] lst))]
+      (let [rev-idx (reduce (fn [m [idx pgm]] (assoc m (:id pgm) idx))
+                            {} (map-indexed vector ^java.util.Vector (.state this)))
+            oks (apply hash-set (keys rev-idx))
+            nks (apply hash-set (keys pgms))
+            del-ids (set/difference oks nks)
+            add-ids (set/difference nks oks)
+            upd-ids (set/intersection oks nks)
+            del-idxes (sort > (map #(get rev-idx %) del-ids)) ; 逆順にしないと削除時によろしくない
+            del-idxes-ranges (to-ranges del-idxes)
+            add-pgms (map #(when-let [pgm (get pgms %)]
+                             (assoc pgm :thumbnail (thumbnail/fetch (:thumbnail pgm) THUMBNAIL-WIDTH THUMBNAIL-HEIGHT)))
+                          add-ids)
+            upd-pgms (select-keys pgms upd-ids)]
+        (doseq [pgm (vals upd-pgms)]
+          (let [idx (get rev-idx (:id pgm))]
+            (.setElementAt ^java.util.Vector (.state this)
+                           (assoc pgm :thumbnail (:thumbnail (.get ^java.util.Vector (.state this) idx)))
+                           idx)))
+        (doseq [r del-idxes-ranges]
+          (let [osize (.size ^java.util.Vector (.state this))]
+            (doseq [idx r] (.removeElementAt ^java.util.Vector (.state this) idx))
+            (log/trace (format "fireTableRowsDeleted(%d): %d - %d (%d -> %d)"
+                               (count r) (last r) (first r) osize (.size ^java.util.Vector (.state this)))))
+          (.fireTableRowsDeleted this (last r) (first r)))
+        (when (< 0 (count add-pgms))
+          (let [fidx (.size ^java.util.Vector (.state this))
+                apgms (filter identity add-pgms)
+                tbl this]
+            (doseq [pgm apgms] (.add ^java.util.Vector (.state this) pgm))
+            (.schedule timer (proxy [TimerTask] []
+                               (run []
+                                 (doseq [pgm apgms]
+                                   (try
+                                     (when-let [row (.getRowNumber tbl (:id pgm))]
+                                       (.fireTableRowsUpdated tbl row row))
+                                     (catch Exception e
+                                       (log/error e (format "failed update pgm[%s]: %s" (:id pgm) (:title pgm))))))))
+                       60000)
+            (log/trace (format "fireTableRowsInserted(%d): %d - %d"
+                               (count add-pgms) fidx (dec (.size ^java.util.Vector (.state this)))))
+            (.fireTableRowsInserted this fidx (dec (.size ^java.util.Vector (.state this))))))))))
+
+(defn- ptm-getRowNumber [^nico.ui.ProgramsTableModel this id]
+  (doseq [[idx pgm] (map-indexed vector ^java.util.Vector (.state this))]
+    (when (= id (:id pgm)) idx)))
 
 (defn- ptm-getIds [^nico.ui.ProgramsTableModel this]
   (apply hash-set (map :id (.state this))))
