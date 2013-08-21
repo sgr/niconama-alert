@@ -51,13 +51,13 @@
 (let [renderer (nico.ui.PgmCellRenderer. "MM/dd HH:mm" 6)]
   (def ^{:private true} PGM-COLUMNS
     (list
-     {:key :thumbnail, :colName "", :class javax.swing.ImageIcon, :width THUMBNAIL-WIDTH, :renderer renderer}
-     {:key :title, :colName "タイトル", :class String :width 300, :renderer renderer}
-     {:key :comm_name, :colName "コミュ名", :class String :width 250, :renderer renderer}
-     {:key :pubdate, :colName "開始", :class java.util.Date :width 80, :renderer renderer}
-     {:key :owner_name, :colName "放送主", :class String :width 80, :renderer renderer}
-     {:key :fetched_at, :colName "取得", :class java.util.Date :width 80, :renderer renderer, :disabled true}
-     {:key :member_only, :colName "コミュ限" :class Boolean :width 40, :renderer renderer, :disabled true})))
+     {:key :thumbnail :colName "" :class javax.swing.ImageIcon :width THUMBNAIL-WIDTH :resizable false :renderer renderer }
+     {:key :title :colName "タイトル" :class String :width 300 :resizable true :renderer renderer}
+     {:key :comm_name :colName "コミュ名" :class String :width 250 :resizable true :renderer renderer}
+     {:key :pubdate :colName "開始" :class java.util.Date :width 80 :resizable true :renderer renderer}
+     {:key :owner_name :colName "放送主" :class String :width 80 :resizable true :renderer renderer}
+     {:key :fetched_at :colName "取得" :class java.util.Date :width 80 :resizable true :renderer renderer :disabled true}
+     {:key :member_only :colName "コミュ限" :class Boolean :width 40 :resizable true :renderer renderer :disabled true})))
 
 (defn- pgm-colnum
   "PGM-COLUMNS の中から、指定されたキーのカラム番号を得る"
@@ -70,7 +70,8 @@
   (letfn [(gen-col [i pc]
             (doto (TableColumn. i (:width pc))
               (.setHeaderValue (:colName pc))
-              (.setCellRenderer (:renderer pc))))]
+              (.setCellRenderer (:renderer pc))
+              (.setResizable (:resizable pc))))]
     (let [col-model (DefaultTableColumnModel.)]
       (doseq [[i pc] (map-indexed vector (filter #(not (:disabled %)) PGM-COLUMNS))]
         (.addColumn col-model (gen-col i pc)))
