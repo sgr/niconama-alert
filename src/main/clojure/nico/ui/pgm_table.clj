@@ -221,4 +221,5 @@
                          (.setSortsOnUpdates true)
                          (.setSortable 0 false)))
         (.setSelectionMode ListSelectionModel/SINGLE_SELECTION)
+        (.setAutoResizeMode JTable/AUTO_RESIZE_NEXT_COLUMN)
         (.addMouseListener (nico.ui.PgmMouseListener. table))))))
