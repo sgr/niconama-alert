@@ -285,4 +285,4 @@
                         (pragma-max-page-count) (pragma-page-count) (pragma-freelist-count))))))))
 
 ;;(add-db-hook :updated maintenance-db)
-(add-db-hook :updated shrink-memory)
+;;(add-db-hook :updated shrink-memory)
