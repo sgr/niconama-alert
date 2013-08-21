@@ -19,21 +19,18 @@
 (defn -main []
   ;; set up shutdown hooks
   (add-main-hook :shutdown db/shutdown)
-  (add-main-hook :shutdown n/clear-cache)
 
   ;; call start-up functions
   (try
     (p/check-pref-dir)
     (l/load-log-props)
     (p/load-pref)
-    (n/init-cache (p/cache-dir))
     (db/init)
     (na/init-alert)
     ;; invoke main frame
     (let [frame (main-frame (fn [f] (add-main-hook :shutdown f))
                             (fn [] (run-main-hooks :shutdown)))]
       (do-swing (.setVisible frame true)))
-    (db/add-db-hook :updated n/clean-cache) ;; clean http cache
     (start-updators) ; start updators
     (catch Exception e
       (error e (format "failed starting up"))
