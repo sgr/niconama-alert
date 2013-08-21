@@ -2,20 +2,13 @@
 (ns #^{:author "sgr"
        :doc "UI Utilities."}
   nico.ui.util
-  (:use [clojure.tools.logging]
-        [clojure.tools.swing-utils :only [do-swing]])
-  (:require [time-utils :as tu])
   (:import [java.awt Color Component Container Dimension Font]
-	   [javax.swing JButton JLabel JTable JTextArea SpringLayout SwingConstants]
-           [javax.swing.table DefaultTableCellRenderer]))
+	   [javax.swing JButton JTextArea SpringLayout]))
 
 (def ^Font DEFAULT-FONT (Font. "Default" Font/PLAIN 12))
-(def THUMBNAIL-WIDTH 32)
-(def THUMBNAIL-HEIGHT 32)
 
 (def ^{:private true} BTN-HEIGHT 25)
 (def ^{:private true} BTN-SIZE (Dimension. 100 BTN-HEIGHT))
-(def ^{:private true} ODD-ROW-COLOR (Color. 224 233 246))
 
 (defn ^JButton btn [text]
   (doto (JButton.)

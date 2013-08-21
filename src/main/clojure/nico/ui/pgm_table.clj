@@ -2,24 +2,21 @@
 (ns #^{:author "sgr"
        :doc "番組情報表示テーブル。"}
   nico.ui.pgm-table
-  (:use [clojure.set :only [difference intersection]]
-        [clojure.tools.swing-utils :only [do-swing add-action-listener]]
-        [clojure.tools.logging]
-        [nico.thumbnail :only [fetch]]
-        [nico.ui.util])
-  (:require [clojure.string :as s]
+  (:use [clojure.tools.swing-utils :only [add-action-listener]])
+  (:require [clojure.set :as set]
+            [clojure.string :as s]
+            [clojure.tools.logging :as log]
             [nico.prefs :as p]
+            [nico.thumbnail :as thumbnail]
             [str-utils :as su]
             [time-utils :as tu])
-  (:import [java.awt Color Font]
-           [java.awt.font TextAttribute]
-           [java.awt.event MouseEvent WindowEvent]
-           [javax.swing JLabel JMenuItem JPopupMenu JTable JTextArea ListSelectionModel SwingUtilities]
-           [javax.swing.event TableModelEvent]
+  (:import [java.awt.event MouseEvent]
+           [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
            [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn TableRowSorter]
-           [javax.swing.text JTextComponent View]
            [com.github.sgr.swingx MultiLineRenderer MultiLineTable]))
 
+(def THUMBNAIL-WIDTH 32)
+(def THUMBNAIL-HEIGHT 32)
 (def ^{:private true} DESC-COL 64)
 
 ;; ProgramsTableModelは、pgmsを開始時刻でソートしたものを表示するTableModel。
@@ -93,13 +90,13 @@
                           {} (map-indexed vector ^java.util.Vector (.state this)))
           oks (apply hash-set (keys rev-idx))
           nks (apply hash-set (keys pgms))
-          del-ids (difference oks nks)
-          add-ids (difference nks oks)
-          upd-ids (intersection oks nks)
+          del-ids (set/difference oks nks)
+          add-ids (set/difference nks oks)
+          upd-ids (set/intersection oks nks)
           del-idxes (sort > (map #(get rev-idx %) del-ids)) ; 逆順にしないと削除時によろしくない
           del-idxes-ranges (to-ranges del-idxes)
           add-pgms (map #(when-let [pgm (get pgms %)]
-                           (assoc pgm :thumbnail (fetch (:thumbnail pgm) THUMBNAIL-WIDTH THUMBNAIL-HEIGHT)))
+                           (assoc pgm :thumbnail (thumbnail/fetch (:thumbnail pgm) THUMBNAIL-WIDTH THUMBNAIL-HEIGHT)))
                         add-ids)
           upd-pgms (select-keys pgms upd-ids)]
       (doseq [pgm (vals upd-pgms)]
@@ -110,13 +107,13 @@
       (doseq [r del-idxes-ranges]
         (let [osize (.size ^java.util.Vector (.state this))]
           (doseq [idx r] (.removeElementAt ^java.util.Vector (.state this) idx))
-          (trace (format "fireTableRowsDeleted(%d): %d - %d (%d -> %d)"
+          (log/trace (format "fireTableRowsDeleted(%d): %d - %d (%d -> %d)"
                          (count r) (last r) (first r) osize (.size ^java.util.Vector (.state this)))))
         (.fireTableRowsDeleted this (last r) (first r)))
       (when (< 0 (count add-pgms))
         (let [fidx (.size ^java.util.Vector (.state this))]
           (doseq [pgm add-pgms] (when pgm (.add ^java.util.Vector (.state this) pgm)))
-          (trace (format "fireTableRowsInserted(%d): %d - %d"
+          (log/trace (format "fireTableRowsInserted(%d): %d - %d"
                          (count add-pgms) fidx (dec (.size ^java.util.Vector (.state this)))))
           (.fireTableRowsInserted this fidx (dec (.size ^java.util.Vector (.state this)))))))))
 
