@@ -218,7 +218,9 @@
                                    "</html>"))))))))]
       (doto table
         (.setRowSorter (doto (TableRowSorter. tmodel)
-                         (.setSortKeys (list (javax.swing.RowSorter$SortKey. 3 javax.swing.SortOrder/DESCENDING)))
+                         (.setSortKeys (list (javax.swing.RowSorter$SortKey.
+                                              (pgm-colnum :pubdate)
+                                              javax.swing.SortOrder/DESCENDING)))
                          (.setSortsOnUpdates true)
                          (.setSortable 0 false)))
         (.setSelectionMode ListSelectionModel/SINGLE_SELECTION)
