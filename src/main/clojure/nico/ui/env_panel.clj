@@ -4,15 +4,15 @@
   nico.ui.env-panel
   (:import [java.awt BorderLayout Dimension]
            [javax.swing JPanel JScrollPane JTable]
-           [javax.swing.table AbstractTableModel
-            DefaultTableColumnModel TableColumn]))
+           [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn]
+           [com.github.sgr.swingx MultiLineRenderer MultiLineTable]))
 
 (def ^{:private true} COLDEF
   (list
    {:colName "key", :width 100, :class String
-    :renderer (nico.ui.StripeRenderer.)}
+    :renderer (MultiLineRenderer.)}
    {:colName "value", :width 300, :class String
-    :renderer (nico.ui.StripeRenderer.)}))
+    :renderer (MultiLineRenderer.)}))
 
 (gen-class
  :name nico.ui.EnvTableModel
@@ -43,7 +43,7 @@
 (defn ^JPanel env-panel []
   (doto (JPanel.)
     (.setLayout (BorderLayout.))
-    (.add (JScrollPane. (doto (JTable. (nico.ui.EnvTableModel.) (env-column-model))
+    (.add (JScrollPane. (doto (MultiLineTable. (nico.ui.EnvTableModel.) (env-column-model))
                           (.setAutoCreateRowSorter true)))
           BorderLayout/CENTER)))
 

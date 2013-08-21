@@ -24,16 +24,17 @@
 
 (defn- pp-getIds [^nico.ui.ProgramsPanel this]
   (.getIds ^nico.ui.ProgramsTableModel
-           (.getModel ^nico.ui.ProgramsTable (:tbl @(.state this)))))
+           (.getModel (:tbl @(.state this)))))
 
 (defn- pp-setPgms [^nico.ui.ProgramsPanel this pgms]
   (do-swing
    (.setPgms ^nico.ui.ProgramsTableModel
-             (.getModel ^nico.ui.ProgramsTable (:tbl @(.state this)))
+             (.getModel (:tbl @(.state this)))
              pgms)))
 
 (defn- pp-post-init [^nico.ui.ProgramsPanel this]
-  (let [tbl (doto (upt/pgm-table) (.setSortable true))
+  (let [tbl (upt/pgm-table)
+;;        tbl (doto (upt/pgm-table) (.setSortable true))
         spane (doto (JScrollPane. tbl) (-> .getViewport (.setBackground Color/WHITE)))
         layout (SpringLayout.)]
     (swap! (.state this) assoc :tbl tbl)
