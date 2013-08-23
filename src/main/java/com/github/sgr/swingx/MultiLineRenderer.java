@@ -65,7 +65,9 @@ public class MultiLineRenderer implements TableCellRenderer {
 	} else if (value instanceof Icon) {
 	    c = getImgTableCellRendererComponent(table, (Icon)value, isSelected, hasFocus, row, column);
 	} else {
-	    c = getTxtTableCellRendererComponent(table, value.toString(), isSelected, hasFocus, row, column);
+	    if (value != null) {
+		c = getTxtTableCellRendererComponent(table, value.toString(), isSelected, hasFocus, row, column);
+	    }
 	}
 	// render stripe
 	if (isSelected) {
