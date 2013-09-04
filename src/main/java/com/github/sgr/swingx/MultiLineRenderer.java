@@ -67,20 +67,25 @@ public class MultiLineRenderer implements TableCellRenderer {
 	} else {
 	    if (value != null) {
 		c = getTxtTableCellRendererComponent(table, value.toString(), isSelected, hasFocus, row, column);
+	    } else {
+		c = getImgTableCellRendererComponent(table, (Icon)value, isSelected, hasFocus, row, column);
 	    }
 	}
-	// render stripe
-	if (isSelected) {
-	    c.setForeground(table.getSelectionForeground());
-	    c.setBackground(table.getSelectionBackground());
-	} else {
-	    c.setForeground(table.getForeground());
-	    c.setBackground(row % 2 == 0 ? table.getBackground() : ODD_ROW_BACKGROUND);
-	}
-	// update rowHeight
-	int h = c.getPreferredSize().height;
-	if (table.getRowHeight(row) < h) {
-	    table.setRowHeight(row, h);
+
+	if (c != null) {
+	    // render stripe
+	    if (isSelected) {
+		c.setForeground(table.getSelectionForeground());
+		c.setBackground(table.getSelectionBackground());
+	    } else {
+		c.setForeground(table.getForeground());
+		c.setBackground(row % 2 == 0 ? table.getBackground() : ODD_ROW_BACKGROUND);
+	    }
+	    // update rowHeight
+	    int h = c.getPreferredSize().height;
+	    if (table.getRowHeight(row) < h) {
+		table.setRowHeight(row, h);
+	    }
 	}
 	return c;
     }

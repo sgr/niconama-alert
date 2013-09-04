@@ -26,10 +26,10 @@
     (l/load-log-props)
     (p/load-pref)
     (db/init)
-    (na/init-alert)
     ;; invoke main frame
     (let [frame (main-frame (fn [f] (add-main-hook :shutdown f))
                             (fn [] (run-main-hooks :shutdown)))]
+      (na/init-alert frame)
       (do-swing (.setVisible frame true)))
     (start-updators) ; start updators
     (catch Exception e

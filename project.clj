@@ -9,7 +9,7 @@
                  [logutil "[0.2,)"]
                  [clj-http "0.7.3"]
                  [config-file "0.1.0"]
-                 [desktop-alert "0.2.2"]
+                 [desktop-alert "[0.3,)"]
                  [input-parser "0.1.1"]
                  [swing-utils "0.2.0"]
                  [enlive "1.1.1"]
@@ -34,4 +34,13 @@
   :test-paths ["src/test/clojure"]
   :jar-exclusions [#"(?:^|/).svn" #"(?:^|/).git" #"(?:\w+).xcf$" #"(?:\w+).pdn$"]
 ;;  :repositories [["sonatype-oss-public" {:url "https://oss.sonatype.org/content/groups/public/"}]]
+  :jvm-opts ~(let [sys (.toLowerCase (System/getProperty "os.name"))]
+               (condp re-find sys
+                 #"mac" ["-Xdock:name=NikonamaAlert.clj" "-Xdock:icon=resources/dempakun.png" "-XX:+TieredCompilation" "-XX:TieredStopAtLevel=1"]
+                 ["-XX:+TieredCompilation" "-XX:TieredStopAtLevel=1"]))
+  ;; In Mac, Java SE 7u25 consume memory to excess.
+  :java-cmd ~(let [sys (.toLowerCase (System/getProperty "os.name"))]
+               (condp re-find sys
+                 #"mac" "/System/Library/Java/JavaVirtualMachines/1.6.0.jdk/Contents/Home/bin/java"
+                 (or (System/getenv "JAVA_CMD") "java")))
   :main nico.core)
