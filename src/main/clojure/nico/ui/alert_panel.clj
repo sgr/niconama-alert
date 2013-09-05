@@ -1,16 +1,15 @@
 ;; -*- coding: utf-8-unix -*-
 (ns #^{:author "sgr" :doc "Alert panel."}
   nico.ui.alert-panel
-  (:use [clojure.tools.swing-utils :only [do-swing-and-wait]]
-        [clojure.tools.logging])
-  (:require [nico.prefs :as p]
+  (:require [clojure.tools.logging :as log]
+            [nico.prefs :as p]
             [nico.ui.util :as uu]
             [net-utils :as n]
             [str-utils :as su]
             [time-utils :as tu])
   (:import [java.awt Color Component Container Cursor Dimension FlowLayout Font GraphicsEnvironment
             GridBagLayout GridBagConstraints Insets]
-           [java.awt.event ActionListener ComponentAdapter MouseEvent MouseListener MouseMotionListener]
+           [java.awt.event ActionListener ComponentAdapter MouseEvent MouseListener MouseMotionListener WindowEvent]
            [java.awt.geom RoundRectangle2D$Float]
            [java.net URL]
            [java.util.concurrent TimeUnit]
@@ -44,16 +43,24 @@
          (mouseReleased [^MouseEvent e]))))))
 
 (defn alert-panel [^nico.pgm.Pgm pgm ^ImageIcon thumbicn]
-  (let [tpanel (JPanel.), dpanel (JPanel.)
+  (let [apanel (JPanel.)
+        tpanel (JPanel.)
+        dpanel (JPanel.)
         owner (su/ifstr (:owner_name pgm) "")
         comm_name (su/ifstr (:comm_name pgm) (:comm_id pgm))
         olabel (JLabel. (format " %s (%s)" owner comm_name))
         time (JLabel. (format "%s  （%d分前に開始）"
                               (if (:member_only pgm) "※コミュ限" "")
-                              (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))
-        close-fn (fn [e])]
+                              (tu/minute (tu/interval (:pubdate pgm) (tu/now)))))]
     (let [title (JLabel. ^String (su/ifstr (:title pgm) (name (:id pgm))))
-          cbtn (JButton. ^ImageIcon CLOSE-ICON), layout (SpringLayout.)]
+          cbtn (JButton. ^ImageIcon CLOSE-ICON), layout (SpringLayout.)
+          close-listener (proxy [ActionListener][]
+                             (actionPerformed [e]
+                               (let [p (.getParent apanel)]
+                                 (when (and p (instance? java.awt.Window p))
+                                   (log/debug (format "p is Window: %s" (pr-str p)))
+                                   (.dispatchEvent p (WindowEvent. p WindowEvent/WINDOW_CLOSING))
+                                   (.removeActionListener cbtn this)))))]
       (doto title (.setFont uu/DEFAULT-FONT))
       (doto layout
         (.putConstraint SpringLayout/NORTH title 0 SpringLayout/NORTH tpanel)
@@ -64,6 +71,7 @@
         (.putConstraint SpringLayout/EAST title 0 SpringLayout/WEST cbtn)
         (.putConstraint SpringLayout/EAST cbtn 0 SpringLayout/EAST tpanel))
       (doto cbtn
+        (.addActionListener close-listener)
         (.setPreferredSize CLOSE-ICON-SIZE))
       (when (:member_only pgm) (.setBackground cbtn MONLY-BGCOLOR))
       (doto tpanel
@@ -83,7 +91,7 @@
             (.setLayout layout) (.add thumbnail) (.add desc)))
     (doto time (.setHorizontalAlignment (JLabel/RIGHT)) (.setFont uu/DEFAULT-FONT))
     (doto olabel (.setFont uu/DEFAULT-FONT))
-    (let [apanel (JPanel.) layout (SpringLayout.) s 5 ns -5 is 2]
+    (let [layout (SpringLayout.) s 5 ns -5 is 2]
       (doto layout
         (.putConstraint SpringLayout/WEST tpanel s SpringLayout/WEST apanel)
         (.putConstraint SpringLayout/EAST tpanel ns SpringLayout/EAST apanel)
@@ -105,85 +113,3 @@
       (doto apanel
         (.setLayout layout)
         (.add tpanel) (.add dpanel) (.add olabel) (.add time)))))
-
-(comment
-(defn alert-dlg [^nico.pgm.Pgm pgm ^ImageIcon thumbicn]
-  (let [dlg (JDialog.)]
-    (let [tpanel (JPanel.), dpanel (JPanel.)
-	  owner (su/ifstr (:owner_name pgm) "")
-	  comm_name (su/ifstr (:comm_name pgm) (:comm_id pgm))
-	  olabel (JLabel. (format " %s (%s)" owner comm_name))
-	  time (JLabel. (format "%s  （%d分前に開始）"
-				(if (:member_only pgm) "※コミュ限" "")
-				(tu/minute (tu/interval (:pubdate pgm) (tu/now)))))
-          close-fn (fn [e]
-                     (do-swing-and-wait (.setVisible dlg false) (.dispose dlg)))]
-      (let [title (JLabel. ^String (su/ifstr (:title pgm) (name (:id pgm))))
-	    cbtn (JButton. ^ImageIcon CLOSE-ICON), layout (SpringLayout.)
-            close-listener (proxy [ActionListener][]
-                             (actionPerformed [e]
-                               (do-swing-and-wait
-                                (.setVisible dlg false)
-                                (.removeActionListener cbtn this)
-                                (.dispose dlg))))]
-	(doto title (.setFont uu/DEFAULT-FONT))
-	(doto layout
-          (.putConstraint SpringLayout/NORTH title 0 SpringLayout/NORTH tpanel)
-          (.putConstraint SpringLayout/SOUTH title 0 SpringLayout/SOUTH tpanel)
-          (.putConstraint SpringLayout/NORTH cbtn 0 SpringLayout/NORTH tpanel)
-          (.putConstraint SpringLayout/SOUTH cbtn 0 SpringLayout/SOUTH tpanel)
-          (.putConstraint SpringLayout/WEST title 0 SpringLayout/WEST tpanel)
-          (.putConstraint SpringLayout/EAST title 0 SpringLayout/WEST cbtn)
-          (.putConstraint SpringLayout/EAST cbtn 0 SpringLayout/EAST tpanel))
-        (doto cbtn
-          (.addActionListener close-listener)
-          (.setPreferredSize CLOSE-ICON-SIZE))
-        (when (:member_only pgm) (.setBackground cbtn MONLY-BGCOLOR))
-        (doto tpanel
-          (.setPreferredSize TITLE-PANEL-SIZE)
-          (.setLayout layout) (.add title) (.add cbtn)))
-      (let [thumbnail (JLabel. thumbicn),
-            ^Component desc (uu/mlabel (su/ifstr (:desc pgm) "") DESC-SIZE)
-            layout (GridBagLayout.), c (GridBagConstraints.)]
-        (letfn [(set-con!
-                  [^GridBagLayout lt component x y top left bottom right]
-                  (set! (.gridx c) x) (set! (.gridy c) y) (set! (.fill c) GridBagConstraints/BOTH)
-                  (set! (.insets c) (Insets. top left bottom right)) (.setConstraints lt component c))]
-          (set-con! layout thumbnail 0 0 0 0 0 0)
-          (set-con! layout desc 1 0 0 5 0 0))
-        (change-cursor thumbnail (:link pgm)) (change-cursor desc (:link pgm))
-        (doto ^Container dpanel
-              (.setLayout layout) (.add thumbnail) (.add desc)))
-      (doto time (.setHorizontalAlignment (JLabel/RIGHT)) (.setFont uu/DEFAULT-FONT))
-      (doto olabel (.setFont uu/DEFAULT-FONT))
-      (let [cpane (.getContentPane dlg), layout (SpringLayout.), s 5, ns -5, is 2]
-        (doto layout
-          (.putConstraint SpringLayout/WEST tpanel s SpringLayout/WEST cpane)
-          (.putConstraint SpringLayout/EAST tpanel ns SpringLayout/EAST cpane)
-          (.putConstraint SpringLayout/WEST dpanel s SpringLayout/WEST cpane)
-          (.putConstraint SpringLayout/EAST dpanel ns SpringLayout/EAST cpane)
-          (.putConstraint SpringLayout/WEST olabel s SpringLayout/WEST cpane)
-          (.putConstraint SpringLayout/EAST olabel ns SpringLayout/EAST cpane)
-          (.putConstraint SpringLayout/WEST time s SpringLayout/WEST cpane)
-          (.putConstraint SpringLayout/EAST time ns SpringLayout/EAST cpane)
-          (.putConstraint SpringLayout/NORTH tpanel s SpringLayout/NORTH cpane)
-          (.putConstraint SpringLayout/NORTH dpanel s SpringLayout/SOUTH tpanel)
-          (.putConstraint SpringLayout/NORTH olabel is SpringLayout/SOUTH dpanel)
-          (.putConstraint SpringLayout/NORTH time is SpringLayout/SOUTH olabel)
-          (.putConstraint SpringLayout/SOUTH time ns SpringLayout/SOUTH cpane))
-        (when (:member_only pgm)
-          (.setBackground cpane MONLY-BGCOLOR)
-          (.setBackground tpanel MONLY-BGCOLOR)
-          (.setBackground dpanel MONLY-BGCOLOR))
-        (doto cpane
-          (.setLayout layout)
-          (.add tpanel) (.add dpanel) (.add olabel) (.add time))))
-    (doto dlg
-      (.setDefaultCloseOperation JDialog/DISPOSE_ON_CLOSE)
-      (.addComponentListener
-       (proxy [ComponentAdapter][] (componentResized [e] (decorate dlg))))
-      (.setFocusableWindowState false)
-      (.setAlwaysOnTop true)
-      (.setMinimumSize ASIZE)
-      (.setUndecorated true))))
-)
