@@ -16,7 +16,7 @@
 
 (defn init-alert [frame]
   (let [mode (condp = (cf/system)
-               :mac :lr-bt
+               :mac :lr-tb
                :rl-bt)]
     (da/init-alert frame (uap/dlg-width) (uap/dlg-height) mode 1 150 uap/OPACITY (uap/get-shape))))
 
