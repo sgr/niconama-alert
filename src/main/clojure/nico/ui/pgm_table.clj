@@ -224,12 +224,12 @@
                                    (format "<table><tr><th>説明</th><td>%s</td></tr>"
                                            (s/join "<br/>" (su/split-by-length (su/ifstr (:desc pgm) "") DESC-COL)))
                                    (format "<tr><th>カテゴリ</th><td>%s</td></tr>" (su/ifstr (:category pgm) ""))
+                                   (format "<tr><th>開始</th><td>%s (%s)</td></tr>"
+                                           (ago (:pubdate pgm) now) (tu/format-time-short (:pubdate pgm)))
                                    (format "<tr><th>取得</th><td>%s (%s)</td></tr>"
                                            (ago (:fetched_at pgm) now) (tu/format-time-short (:fetched_at pgm)))
-                                   (format "<tr><th>更新</th><td>%s (%s)</td></tr>"
+                                   (format "<tr><th>更新</th><td>%s (%s)</td></tr></table>"
                                            (ago (:updated_at pgm) now) (tu/format-time-short (:updated_at pgm)))
-                                   (format "<tr><th>開始</th><td>%s (%s)</td></tr></table>"
-                                           (ago (:pubdate pgm) now) (tu/format-time-short (:pubdate pgm)))
                                    "</html>"))))))))]
       (doto table
         (.setRowSorter (doto (TableRowSorter. tmodel)
