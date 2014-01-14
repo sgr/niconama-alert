@@ -66,36 +66,63 @@
 (defn- get-child-attr [tag attr node]
   (attr (:attrs (get-child-elm tag node))))
 
+(let [fmt (SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")]
+  (defn- create-official-pgm [item fetched_at]
+    (let [id (keyword (get-child-content :guid item))
+          title (get-child-content :title item)
+          pubdate (if-let [start-time-str (get-child-content :nicolive:start_time item)]
+                    (try
+                      (locking fmt
+                        (.parse fmt start-time-str))
+                      (catch Exception e
+                        (error e (format "failed parsing str as date: %s" start-time-str))))
+                    (trace "start_time is nil"))
+          desc (if-let [s (get-child-content :description item)] (s/remove-tag s) "")
+          ;; category (get-child-content :category item) ; ない
+          link (get-child-content :link item)
+          thumbnail (get-child-attr :media:thumbnail :url item)
+          ;; owner_name (get-child-content :nicolive:owner_name item) ; ない
+          ;; member_only (Boolean/parseBoolean (get-child-content :nicolive:member_only item)) ; ない
+          ;; type (if-let [type-str (get-child-content :nicolive:type item)] ; Officialのみ
+          ;;        (condp = type-str
+          ;;          "community" :community
+          ;;          "channel" :channel
+          ;;          :official)
+          ;;        :official)
+          ;; comm_name (get-child-content :nicolive:community_name item) ; ない
+          ;; comm_id (keyword (get-child-content :nicolive:community_id item)) ; ない
+          ]
+      (when (and id title pubdate desc link thumbnail)
+        (nico.pgm.Pgm. id title pubdate desc nil link thumbnail nil false :official nil nil false fetched_at fetched_at)))))
+
 (let [fmt (SimpleDateFormat. "EEE, dd MMM yyyy HH:mm:ss Z" Locale/ENGLISH)]
   (defn- create-pgm [item fetched_at]
-    (nico.pgm.Pgm.
-     (keyword (get-child-content :guid item))
-     (get-child-content :title item)
-     (if-let [pubdate-str (get-child-content :pubDate item)]
-       (try
-         (locking fmt
-           (.parse fmt pubdate-str))
-         (catch Exception e
-           (error e (format "failed parsing str as date: %s" pubdate-str))))
-       (trace "pubdate is nil"))
-     (if-let [s (get-child-content :description item)] (s/remove-tag s) "")
-     (get-child-content :category item)
-     (get-child-content :link item)
-     (get-child-attr :media:thumbnail :url item)
-     ;;   (first (clojure.string/split (get-child-attr :media:thumbnail :url item) #"\?"))
-     (get-child-content :nicolive:owner_name item)
-     (Boolean/parseBoolean (get-child-content :nicolive:member_only item))
-     (if-let [type-str (get-child-content :nicolive:type item)]
-       (condp = type-str
-         "community" :community
-         "channel" :channel
-         :official)
-       :official)
-     (get-child-content :nicolive:community_name item)
-     (keyword (get-child-content :nicolive:community_id item))
-     false
-     fetched_at
-     fetched_at)))
+    (let [id (keyword (get-child-content :guid item))
+          title (get-child-content :title item)
+          pubdate (if-let [pubdate-str (get-child-content :pubDate item)]
+                    (try
+                      (locking fmt
+                        (.parse fmt pubdate-str))
+                      (catch Exception e
+                        (error e (format "failed parsing str as date: %s" pubdate-str))))
+                    (trace "pubdate is nil"))
+          desc (if-let [s (get-child-content :description item)] (s/remove-tag s) "")
+          category (get-child-content :category item)
+          link (get-child-content :link item)
+          thumbnail (get-child-attr :media:thumbnail :url item)
+          ;;   (first (clojure.string/split (get-child-attr :media:thumbnail :url item) #"\?"))
+          owner_name (get-child-content :nicolive:owner_name item)
+          member_only (Boolean/parseBoolean (get-child-content :nicolive:member_only item))
+          type (if-let [type-str (get-child-content :nicolive:type item)]
+                 (condp = type-str
+                   "community" :community
+                   "channel" :channel
+                   :official)
+                 :official)
+          comm_name (get-child-content :nicolive:community_name item)
+          comm_id (keyword (get-child-content :nicolive:community_id item))]
+      (when (and id title pubdate desc link thumbnail)
+        (nico.pgm.Pgm. id title pubdate desc category link thumbnail owner_name false type comm_name comm_id false fetched_at fetched_at)))))
 
 (defn- get-programs-from-rss-aux [rss]
   [(get-programs-count rss)
@@ -120,7 +147,7 @@
          rss (get-nico-rss page)
          [total pgms] (get-programs-from-rss-aux rss)]
     (if (= 0 c)
-      [total (if pgms pgms '())]
+      [total (or pgms '())]
       (if (or (>= 0 total) (nil? pgms))
         (l/with-debug (format "retry fetching RSS #%d (%d) total number: %d, pgms: %d"
                               page c total (if-not pgms 0 (count pgms)))

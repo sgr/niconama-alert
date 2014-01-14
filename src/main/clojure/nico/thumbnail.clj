@@ -5,11 +5,9 @@
   (:import [java.awt Image]
            [javax.imageio ImageIO]
            [javax.swing ImageIcon]
-           [com.github.sgr.util ImageCache]))
+           [nico.cache ImageCache]))
 
-(def ^{:private true} NO-IMAGE (ImageIO/read (clojure.java.io/resource "noimage.png")))
-
-(let [image-cache (ImageCache. 512 NO-IMAGE)]
+(let [image-cache (ImageCache. 2048 150 150 (ImageIO/read (clojure.java.io/resource "noimage.png")))]
   (defn fetch [url width height]
     (let [^Image img (.getImage image-cache url)]
       (ImageIcon. (.getScaledInstance img width height Image/SCALE_SMOOTH)))))

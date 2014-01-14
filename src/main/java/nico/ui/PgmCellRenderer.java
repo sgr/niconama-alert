@@ -17,7 +17,7 @@ import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
 import javax.swing.table.TableCellRenderer;
-import com.github.sgr.swingx.MultiLineRenderer;
+import com.github.sgr.slide.MultiLineRenderer;
 
 public class PgmCellRenderer extends MultiLineRenderer {
     private static Color TABLE_SELECTION_FOREGROUND = (Color)UIManager.getDefaults().get("Table.selectionForeground");

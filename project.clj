@@ -7,6 +7,7 @@
                  [org.clojure/tools.logging "0.2.6"]
                  [org.apache.httpcomponents/httpclient-cache "4.2.5"]
                  [logutil "[0.2,)"]
+                 [slide "[0.1,)"]
                  [clj-http "0.7.3"]
                  [config-file "0.1.0"]
                  [desktop-alert "[0.3,)"]

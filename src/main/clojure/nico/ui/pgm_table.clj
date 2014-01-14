@@ -14,7 +14,7 @@
            [java.util Timer TimerTask]
            [javax.swing JLabel JMenuItem JPopupMenu JTable ListSelectionModel SwingUtilities]
            [javax.swing.table AbstractTableModel DefaultTableColumnModel TableColumn TableRowSorter]
-           [com.github.sgr.swingx MultiLineRenderer MultiLineTable]))
+           [com.github.sgr.slide MultiLineRenderer MultiLineTable]))
 
 (def THUMBNAIL-WIDTH 32)
 (def THUMBNAIL-HEIGHT 32)
@@ -212,7 +212,7 @@
               (if (> 60000 intvl) (format "%d秒前" (int (/ intvl 1000))) (format "%d分前" (tu/minute intvl)))))]
     (let [tmodel (nico.ui.ProgramsTableModel. {})
           cmodel (pgm-column-model)
-          table (proxy [MultiLineTable] [tmodel cmodel]
+          table (proxy [MultiLineTable] []
                   (getToolTipText [^MouseEvent e]
                     (let [c (.columnAtPoint this (.getPoint e)), r (.rowAtPoint this (.getPoint e))]
                       (when (and (<= 0 c) (<= 0 r))
@@ -232,6 +232,8 @@
                                            (ago (:updated_at pgm) now) (tu/format-time-short (:updated_at pgm)))
                                    "</html>"))))))))]
       (doto table
+        (.setModel tmodel)
+        (.setColumnModel cmodel)
         (.setRowSorter (doto (TableRowSorter. tmodel)
                          (.setSortKeys (list (javax.swing.RowSorter$SortKey.
                                               (pgm-colnum :pubdate)
