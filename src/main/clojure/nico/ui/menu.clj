@@ -8,7 +8,8 @@
             [nico.ui.ext-tabbed-pane]
             [nico.ui.key-val-dlg :as ukvd]
             [nico.ui.kwd-tab-dlg :as uktd]
-            [nico.ui.browser-dlg :as ubd])
+            [nico.ui.browser-dlg :as ubd]
+            [slide.logging :as sl])
   (:import [java.awt Desktop Window]
            [java.awt.event InputEvent KeyEvent MouseEvent WindowEvent WindowListener]
            [java.net URI]
@@ -67,6 +68,10 @@
                        {:name "ヘルプページの参照 (H)" :mnemonic KeyEvent/VK_H
                         :accelerator (KeyStroke/getKeyStroke KeyEvent/VK_F1 0)
                         :handler (fn [e] (.browse (Desktop/getDesktop) (URI. HELP-URL)))})}
+             {:action (make-action
+                       {:name "アプリケーションログ (L)" :mnemonic KeyEvent/VK_L
+                        :handler (fn [e] (doto (sl/log-dlg frame "Application Log")
+                                           (.setVisible true)))})}
              {:action (make-action
                        {:name "About..." :mnemonic KeyEvent/VK_A
                         :handler (fn [e] (let [dlg (uad/about-dialog

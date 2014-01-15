@@ -9,7 +9,8 @@
             [nico.alert :as na]
             [nico.db :as db]
             [nico.log :as l]
-            [nico.prefs :as p])
+            [nico.prefs :as p]
+            [slide.logging :as sl])
   (:import [java.lang.management ManagementFactory]
            [javax.swing JOptionPane])
   (:gen-class))
@@ -23,7 +24,11 @@
   ;; call start-up functions
   (try
     (p/check-pref-dir)
-    (l/load-log-props)
+    ;;(l/load-log-props)
+    (sl/configure-logging-swing 500 {"handlers" "java.util.logging.ConsoleHandler"
+                                     "java.util.logging.ConsoleHandler.formatter" "logutil.Log4JLikeFormatter"
+                                     ".level" "INFO"
+                                     "nico.level" "ALL"})
     (p/load-pref)
     (db/init)
     ;; invoke main frame
