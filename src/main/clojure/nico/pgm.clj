@@ -83,24 +83,19 @@
   "Futureを返す。このFutureは、まだアラートを出してない番組ならアラート済みに更新した上で番組情報を返す。アラート済みならnilを返す。"
   [^Keyword id]
   (letfn [(update-alerted-aux [^String id db]
-            (trace (format "called update-alerted-aux: %s" id))
             (try
               (jdbc/db-transaction
                [db db]
                (let [result (jdbc/update! db :pgms {:alerted true} (sql/where {:id id :alerted 0}))]
-                 (trace (format "updating alerted (%s) result: %s" id result))
                  (if (= 1 (first result)) true false)))
               (catch Exception e
                 (error e (format "failed updating for " id))
                 false)))]
     (db/enqueue (fn [db]
-                  (trace (format "called not-alerted: %s" (name id)))
                   (let [nid (name id), result (update-alerted-aux nid db)]
-                    (trace (format "update-alerted-aux result: %s" (pr-str result)))
                     (if result
                       (if-let [row-pgm (get-pgm-aux nid db)]
-                        (l/with-trace (format "row-pgm: %s" (pr-str row-pgm))
-                          (row-to-pgm row-pgm))
+                        (row-to-pgm row-pgm)
                         (l/with-error (format "failed get-pgm: %s" nid)
                           nil))
                       nil))))))
@@ -175,7 +170,6 @@
           (let [comm_id (if-let [cid (:comm_id pgm)] (name cid) nil)
                 row-comm (if comm_id (get-row-comm comm_id) nil)
                 now (tu/sql-now)]
-            (trace (format "add pgm: %s" (name (:id pgm))))
             (try ; 番組情報を追加する
               (let [row (pgm-to-row pgm)]
                 (jdbc/insert! db :pgms row))
@@ -207,14 +201,12 @@
                 (when (> (.getTime ^Date (:pubdate pgm)) (:pubdate row-comm-pgm))
                   (let [old-pid (name (:id row-comm-pgm)) ; 自分のほうが新しければ古いのを削除してから追加する
                         old-title (:title row-comm-pgm)]
-                    (trace (format "replace pgm from %s (%s) to %s (%s)" pid (:title pgm) old-pid old-title))
                     (jdbc/db-transaction
                      [db db]
                      (rem-pgm-by-id (:id row-comm-pgm) db)
                      (add3 pgm db))))
                 (jdbc/db-transaction
                  [db db]
-                 (trace (format "add pgm %s (%s)" pid (:title pgm)))
                  (add3 pgm db))))))
         ;; add2はadd1とadd1-pgms双方から呼ばれる。違いはadd1が一つずつ追加するのに対し、
         ;; add1-pgmsは複数を一度で追加する。add1から呼ばれた場合はadd2の中のトランザクションが有効となる。

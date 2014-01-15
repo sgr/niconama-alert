@@ -122,20 +122,16 @@
   (.setRejectedExecutionHandler this (ThreadPoolExecutor$DiscardPolicy.)))
 
 (defn- dq-submit [^nico.db.Queue this ^clojure.lang.IFn f]
-  (trace (format "submitted queue: %d, %s" (-> this .getQueue .size) (pr-str f)))
   (.submitSuper this (wrap-conn-callable f (:db-spec @(.state this)))))
 
 (defn- dq-beforeExecute [^nico.db.Queue this ^Thread t ^Runnable r]
-  (trace (format "beforeExecute queue: %d, %s, %s" (-> this .getQueue .size) (pr-str (:db-spec @(.state this))) (pr-str r)))
   (.beforeExecuteSuper this t r))
 
 (defn- dq-afterExecute [^nico.db.Queue this ^Runnable r ^Throwable t]
   (.afterExecuteSuper this r t)
-  (trace (format "afterExecute queue: %d, %s" (-> this .getQueue .size) (pr-str r)))
   (if (and (nil? t) (instance? Future r))
     (try
       (when (.isDone ^Future r)
-        (trace (format "afterExecute result: %s" (pr-str (.get ^Future r))))
         (let [now (tu/now)
               last-hook-called (get @(.state this) :last-hook-called)]
           (swap! (.state this) assoc :last-updated now)

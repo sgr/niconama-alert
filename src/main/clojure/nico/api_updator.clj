@@ -121,10 +121,9 @@
       (.execute ^ThreadPoolExecutor pool (nico.api-updator.WrappedFutureTask. pid cid uid received)))
     (defn- create-task [pid cid uid received]
       (swap! received-rate conj (tu/now))
-      (if (contains? @communities cid)
+      (when (contains? @communities cid)
         (l/with-info (format "%s will be fetched because %s is joined community." pid cid)
-          (enqueue pid cid uid received))
-        (trace (format "%s: %s isn't your community." pid cid))))
+          (enqueue pid cid uid received))))
     (defn request-fetch
       "RSSでタイトルが空の場合('<'を含んだ場合になるようだ)など、
        どうしてもスクレイピングで番組情報を取得したい場合に用いる。"
