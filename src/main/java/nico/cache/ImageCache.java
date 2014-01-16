@@ -101,41 +101,54 @@ public class ImageCache {
 	    Future<Image> f = null;
 	    synchronized (_fetching) {
 		f = _fetching.get(url);
-		if (f == null) {
-		    f = _executor.submit(new Callable<Image>() {
-			    public Image call() {
-				try {
-				    return fetch(new URL(url));
-				} catch (MalformedURLException e) {
-				    log.log(Level.WARNING, MessageFormat.format("Malformed URL string: {0}", url), e);
-				    return null;
-				}
+	    }
+	    if (f == null) {
+		f = _executor.submit(new Callable<Image>() {
+			public Image call() {
+			    try {
+				return fetch(new URL(url));
+			    } catch (MalformedURLException e) {
+				log.log(Level.WARNING, MessageFormat.format("Malformed URL string: {0}", url), e);
+				return null;
 			    }
-			});
+			}
+		    });
+		synchronized (_fetching) {
 		    _fetching.put(url, f);
 		}
-	    }
-	    try {
-		img = f.get(FETCHING_TIMEOUT_SEC, TimeUnit.SECONDS);
-		synchronized (_fetching) {
-		    _fetching.remove(url);
-		}
-		if (img != null) {
-		    synchronized (_map) {
-			_map.put(url, img);
+		try {
+		    img = f.get(); // 最初にリクエストした者は最後まで待つ
+		} catch (CancellationException e) {
+		    log.log(Level.WARNING, "CANCELED while fetching image, queue size: {0}", _queue.size());
+		} catch (ExecutionException e) {
+		    log.log(Level.WARNING, "THROWN EXCEPTION while fetching image, queue size: {0}", _queue.size());
+		} catch (InterruptedException e) {
+		    log.log(Level.WARNING, "INTERRUPTED while fetching image, queue size: {0}", _queue.size());
+		} finally {
+		    synchronized (_fetching) {
+			_fetching.remove(url);
+		    }
+		    if (img != null) {
+			synchronized (_map) {
+			    _map.put(url, img);
+			}
 		    }
 		}
-	    } catch (CancellationException e) {
-		log.log(Level.WARNING, "CANCELED while fetching image", e);
-	    } catch (ExecutionException e) {
-		log.log(Level.WARNING, "THROWN EXCEPTION while fetching image", e);
-	    } catch (InterruptedException e) {
-		log.log(Level.WARNING, "INTERRUPTED while fetching image", e);
-	    } catch (TimeoutException e) {
-		log.log(Level.WARNING, "TIMEOUTED while fetching image", e);
-	    } finally {
-		return img != null ? img : _fallbackImage;
+	    } else {
+		try {
+		    img = f.get(FETCHING_TIMEOUT_SEC, TimeUnit.SECONDS);
+		} catch (CancellationException e) {
+		    log.log(Level.WARNING, "CANCELED while fetching image, queue size: {0}", _queue.size());
+		} catch (ExecutionException e) {
+		    log.log(Level.WARNING, "THROWN EXCEPTION while fetching image, queue size: {0}", _queue.size());
+		} catch (InterruptedException e) {
+		    log.log(Level.WARNING, "INTERRUPTED while fetching image, queue size: {0}", _queue.size());
+		} catch (TimeoutException e) {
+		    log.log(Level.WARNING, "TIMEOUTED while fetching image, queue size: {0}", _queue.size());
+		}
 	    }
+
+	    return img != null ? img : _fallbackImage;
 	}
     }
 
@@ -183,7 +196,7 @@ public class ImageCache {
 	    int handle = img.hashCode();
 	    _mt.addImage(img, handle);
 	    try {
-		_mt.waitForID(handle);
+		_mt.waitForID(handle, FETCHING_TIMEOUT_SEC * 1000);
 		if (img == null) {
 		    URLConnection conn = url.openConnection();
 		    conn.setConnectTimeout(1000);
