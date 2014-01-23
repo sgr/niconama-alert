@@ -4,6 +4,9 @@ import java.awt.Container;
 import java.awt.Image;
 import java.awt.MediaTracker;
 import java.awt.Toolkit;
+import java.io.ByteArrayOutputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.MalformedURLException;
@@ -22,7 +25,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 
 /**
@@ -33,7 +35,7 @@ import javax.swing.ImageIcon;
 public class ImageCache {
     private static final Logger log = Logger.getLogger(ImageCache.class.getCanonicalName());
     private static final int LIMIT_REFETCH = 5;
-    private static final int INTERVAL_REFETCH = 5;
+    private static final int INTERVAL_REFETCH = 2;
     private static final int FETCHING_TIMEOUT_SEC = 10;
 
     private Toolkit _tk = Toolkit.getDefaultToolkit();
@@ -176,9 +178,13 @@ public class ImageCache {
 		} catch (Exception _) { }
 	    }
 
-	    Image img = fetchAux(url);
-	    if (img != null) {
-		return img;
+	    try {
+		byte[] data = fetchData(url);
+		if (data != null) {
+		    return createImage(data);
+		}
+	    } catch (FileNotFoundException e) {
+		return null; // 直ちに終了
 	    }
 	}
 	return null;
@@ -188,22 +194,57 @@ public class ImageCache {
      * ImageCache#fetch の下請けメソッド。
      *
      * @param url 取得する画像を指すURL文字列
-     * @return 取得に成功した場合はImage、失敗した場合はnull
+     * @return 取得に成功した場合はイメージデータバイト列、失敗した場合はnull
+     * @throws FileNotFoundException URLで示されるリソースが存在しない場合
      */
-    private Image fetchAux(URL url) {
+    private byte[] fetchData(URL url) throws FileNotFoundException {
 	try {
-	    Image img = _tk.createImage(url);
+	    URLConnection conn = url.openConnection();
+	    conn.setConnectTimeout(1000);
+	    conn.setReadTimeout(FETCHING_TIMEOUT_SEC * 1000);
+	    conn.connect();
+	    InputStream is = conn.getInputStream();
+	    ByteArrayOutputStream os = new ByteArrayOutputStream();
+	    byte[] tmpBuf = new byte[1024];
+	    int len = -1;
+	    try {
+		while (0 <= (len = is.read(tmpBuf))) {
+		    os.write(tmpBuf, 0, len);
+		}
+	    } catch (Exception e) {
+		log.log(Level.WARNING, MessageFormat.format("failed reading data from: {0}", url.toString()), e);
+		os.reset();
+	    } finally {
+		is.close();
+	    }
+	    if (os.size() > 0) {
+		return os.toByteArray();
+	    } else {
+		return null;
+	    }
+	} catch (FileNotFoundException e) {
+	    log.log(Level.FINE, MessageFormat.format("requested resource is not found: {0}", url.toString()));
+	    throw e;
+	} catch (Exception e) {
+	    log.log(Level.WARNING, MessageFormat.format("failed connecting the resource: {0}", url.toString()), e);
+	    return null;
+	}
+    }
+
+    /**
+     * イメージデータバイト列から画像を生成する。
+     * 画像が決められたサイズより大きい場合は収まるようにスケールされる。
+     *
+     * @param イメージデータバイト列
+     * @return 生成に成功した場合はImage、失敗した場合はnull
+     */
+    private Image createImage(byte[] data) {
+	try {
+	    Image img = _tk.createImage(data);
 	    int handle = img.hashCode();
 	    _mt.addImage(img, handle);
 	    try {
-		_mt.waitForID(handle, FETCHING_TIMEOUT_SEC * 1000);
-		if (img == null) {
-		    URLConnection conn = url.openConnection();
-		    conn.setConnectTimeout(1000);
-		    conn.setReadTimeout(3000);
-		    conn.connect();
-		    img = ImageIO.read(conn.getInputStream());
-		}
+		_mt.waitForID(handle);
 		if ((img != null) &&
 		    (img.getWidth(null) > _width) ||
 		    (img.getHeight(null) > _height)) {
@@ -213,15 +254,13 @@ public class ImageCache {
 		    try {
 			_mt.waitForID(scaledHandle);
 			log.log(Level.FINE,
-				MessageFormat.format("scaled image[{0}]: ({1}, {2}) -> ({3}, {4})",
-						     url.toString(),
+				MessageFormat.format("scaled image: ({1}, {2}) -> ({3}, {4})",
 						     img.getWidth(null), img.getHeight(null),
 						     scaledImg.getWidth(null), scaledImg.getHeight(null)));
 			return scaledImg;
 		    } catch (Exception e) {
 			log.log(Level.WARNING,
-				MessageFormat.format("failed scaling image[{0}]: ({1}, {2})",
-						     url.toString(),
+				MessageFormat.format("failed scaling image: ({1}, {2})",
 						     img.getWidth(null), img.getHeight(null)),
 				e);
 			return img;
@@ -232,13 +271,13 @@ public class ImageCache {
 		    return img;
 		}
 	    } catch (Exception e) {
-		log.log(Level.WARNING, MessageFormat.format("failed creating image from: {0}", url.toString()), e);
+		log.log(Level.WARNING, MessageFormat.format("failed creating image from bytes[{0}]", data.length), e);
 		return null;
 	    } finally {
 		_mt.removeImage(img);
 	    }
 	} catch (Exception e) {
-	    log.log(Level.WARNING, MessageFormat.format("failed fetching image from: {0}", url.toString()), e);
+	    log.log(Level.WARNING, MessageFormat.format("failed fetching image from bytes [{0}]", data.length), e);
 	    return null;
 	}
     }
