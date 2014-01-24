@@ -228,7 +228,7 @@
         (if-not (.isClosed ^java.sql.Connection (.getConnection pstmt))
           (let [^ResultSet rs (.executeQuery pstmt)]
             (try
-              (f (jdbc/resultset-seq rs))
+              (f (jdbc/result-set-seq rs))
               (catch Exception e (error e (format "failed search-pgms-by-pstmt: %s" pstmt)))
               (finally (.close rs))))
           (do

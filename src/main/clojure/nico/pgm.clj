@@ -4,7 +4,7 @@
   nico.pgm
   (:use [clojure.tools.logging])
   (:require [clojure.java.jdbc :as jdbc]
-            [clojure.java.jdbc.sql :as sql]
+            [java-jdbc.sql :as sql]
             [query-utils :as q]
             [str-utils :as s]
 	    [time-utils :as tu]
