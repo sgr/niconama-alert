@@ -1,11 +1,14 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.ui.main-frame
   (:require [clojure.tools.logging :as log]
+            [clojure.java.io :as io]
+            [config-file :as cf]
             [nico.config :as config]
             [nico.ui.search-panel :as spanel]
             [seesaw.core :as sc]
             [seesaw.mig :as sm])
-  (:import [java.awt.event WindowEvent]
+  (:import [java.awt Toolkit]
+           [java.awt.event WindowEvent]
            [nico.ui WaterfallPanel]))
 
 (defn close! [window]
@@ -46,4 +49,6 @@
                         :size [800 :by 600]
                         :content content
                         :on-close :dispose)]
+    (when (not= :mac (cf/system))
+      (.setIconImage frame (.createImage (Toolkit/getDefaultToolkit) (io/resource "icon.png"))))
     frame))
