@@ -38,38 +38,42 @@
     (catch Exception e
       (log/warn e "This platform doesn't support eawt"))))
 
-(let [add-user-channel-item (sc/menu-item :id :add-user-channel-item :text "Add user channel")
-      view-log-item (sc/menu-item :id :view-log-item :text "View Application Log")]
+(defn- menu-bar-mac [about-fn exit-fn prefs-fn]
+  (reg-app-handlers-mac about-fn exit-fn prefs-fn)
+  (sc/menubar
+   :items [(sc/menu :text "Channel"
+                    :items [(sc/menu-item :id :add-user-channel-item
+                                          :text "Add user channel")])
+           (sc/menu :text "Tool"
+                    :items [(sc/menu-item :id :view-log-item
+                                          :text "View Application Log")])]))
 
-  (defn- menu-bar-mac [about-fn exit-fn prefs-fn]
-    (reg-app-handlers-mac about-fn exit-fn prefs-fn)
+(defn- menu-bar-aux [about-fn exit-fn prefs-fn]
+  (let [about-item (sc/menu-item :text "About")
+        exit-item (sc/menu-item :text "Exit"
+                                :mnemonic (su/to-mnemonic-keycode \X)
+                                :key "ctrl Q")
+        prefs-item (sc/menu-item :text "Preferences"
+                                 :mnemonic (su/to-mnemonic-keycode \A))
+        add-user-channel-item (sc/menu-item :id :add-user-channel-item
+                                            :text "Add user channel")
+        view-log-item (sc/menu-item :id :view-log-item
+                                    :text "View Application Log")]
+
+    (sc/listen about-item :action about-fn)
+    (sc/listen exit-item :action exit-fn)
+    (sc/listen prefs-item :action prefs-fn)
+
     (sc/menubar
-     :items [(sc/menu :text "Channel"
+     :items [(sc/menu :text "File"
+                      :mnemonic (su/to-mnemonic-keycode \F)
+                      :items [prefs-item exit-item])
+             (sc/menu :text "Channel"
+                      :mnemonic (su/to-mnemonic-keycode \C)
                       :items [add-user-channel-item])
-             (sc/menu :text "Tool"
-                      :items [view-log-item])]))
-
-  (defn- menu-bar-aux [about-fn exit-fn prefs-fn]
-    (let [about-item (sc/menu-item :text "About")
-          exit-item (sc/menu-item :text "Exit"
-                                  :mnemonic (su/to-mnemonic-keycode \X)
-                                  :key "ctrl Q")
-          prefs-item (sc/menu-item :text "Preferences"
-                                   :mnemonic (su/to-mnemonic-keycode \A))]
-      (sc/listen about-item :action about-fn)
-      (sc/listen exit-item :action exit-fn)
-      (sc/listen prefs-item :action prefs-fn)
-
-      (sc/menubar
-       :items [(sc/menu :text "File"
-                        :mnemonic (su/to-mnemonic-keycode \F)
-                        :items [prefs-item exit-item])
-               (sc/menu :text "Channel"
-                        :mnemonic (su/to-mnemonic-keycode \C)
-                        :items [add-user-channel-item])
-               (sc/menu :text "Help"
-                        :mnemonic (su/to-mnemonic-keycode \H)
-                        :items [view-log-item about-item])]))))
+             (sc/menu :text "Help"
+                      :mnemonic (su/to-mnemonic-keycode \H)
+                      :items [view-log-item about-item])])))
 
 (defn menu-bar [about-fn exit-fn prefs-fn]
   (condp = (cf/system)
