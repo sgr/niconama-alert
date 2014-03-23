@@ -1,82 +1,77 @@
 ;; -*- coding: utf-8-unix -*-
-(ns #^{:author "sgr"
-       :doc "menu bar."}
-  nico.ui.menu
-  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener make-action make-menubar]])
-  (:require [nico.prefs :as p]
-            [nico.ui.about-dlg :as uad]
-            [nico.ui.ext-tabbed-pane]
-            [nico.ui.key-val-dlg :as ukvd]
-            [nico.ui.kwd-tab-dlg :as uktd]
-            [nico.ui.browser-dlg :as ubd]
-            [slide.logging :as sl])
-  (:import [java.awt Desktop Window]
-           [java.awt.event InputEvent KeyEvent MouseEvent WindowEvent WindowListener]
-           [java.net URI]
-           [javax.swing JMenuBar JMenu JMenuItem JSeparator KeyStroke]
-           [javax.swing.event MenuListener]))
+(ns nico.ui.menu
+  (:require [clojure.java.io :as io]
+            [clojure.tools.logging :as log]
+            [config-file :as cf]
+            [seesaw.core :as sc]
+            [seesaw.util :as su])
+  (:import [java.lang.reflect InvocationHandler Proxy]))
 
-(def ^{:private true} HELP-URL "https://github.com/sgr/niconama-alert/wiki/Help")
+(defn- get-app-mac []
+  (let [cApp (Class/forName "com.apple.eawt.Application")
+        mGetApplication (.getMethod cApp "getApplication" nil)]
+    [cApp (.invoke mGetApplication nil nil)]))
 
-(defn ^JMenuBar menu-bar [^Window frame ^nico.ui.ExtTabbedPane tpane]
-  (make-menubar
-   [{:name "ファイル (F)" :mnemonic KeyEvent/VK_F
-     :items [{:action (make-action
-                       {:name "ブラウザ設定の編集... (B)" :mnemonic KeyEvent/VK_B
-                        :handler (fn [e]
-                                   (let [dlg (ubd/browsers-dialog
-                                              frame "ブラウザ設定" (:browsers @(p/get-pref))
-                                              (fn [nbpref] (swap! (p/get-pref) assoc :browsers nbpref)))]
-                                     (do-swing (.setVisible dlg true))))})}
-             {:action (make-action
-                       {:name "終了(X)" :mnemonic KeyEvent/VK_X
-                        :accelerator (KeyStroke/getKeyStroke KeyEvent/VK_Q InputEvent/CTRL_DOWN_MASK)
-                        :handler (fn [e]
-                                   (do-swing
-                                    (.postEvent (.. frame getToolkit getSystemEventQueue)
-                                                (WindowEvent. frame WindowEvent/WINDOW_CLOSING))))})}]}
-    {:name "タブ (T)" :mnemonic KeyEvent/VK_T
-     :listener (proxy [MenuListener] []
-                 (menuSelected
-                   [^MouseEvent e]
-                   (when-let [items (.getTabMenuItems tpane (.getSelectedIndex tpane))]
-                     (let [^JMenu tmenu (.getSource e)]
-                       (.add tmenu (JSeparator.))
-                       (doseq [^JMenuItem item items] (.add tmenu item)))))
-                 (menuDeselected
-                   [^MouseEvent e]
-                   (let [^JMenu tmenu (.getSource e)]
-                     (doseq [^long idx (range (dec (.getItemCount tmenu)) 1 -1)]
-                       (.remove tmenu idx))))
-                 (menuCanceled [^MouseEvent e]))
-     :items [{:action (make-action
-                       {:name "ユーザータブの追加... (U)" :mnemonic KeyEvent/VK_U
-                        :handler (fn [e] (let [tpref (p/gen-initial-user-tpref)
-                                               dlg (ukvd/user-password-dialog
-                                                    frame "ユーザー情報の入力" tpref
-                                                    (fn [ntpref] (.addTab tpane ntpref)))]
-                                           (do-swing (.setVisible dlg true))))})}
-             {:action (make-action
-                       {:name "キーワードタブの追加... (K)" :mnemonic KeyEvent/VK_K
-                        :handler (fn [e] (let [tpref (p/gen-initial-keyword-tpref)
-                                               dlg (uktd/keyword-tab-dialog
-                                                    frame "番組検索条件の入力" tpref
-                                                    (fn [ntpref] (.addTab tpane ntpref)))]
-                                           (do-swing (.setVisible dlg true))))})}]}
-    {:name "ヘルプ (H)"
-     :items [{:action (make-action
-                       {:name "ヘルプページの参照 (H)" :mnemonic KeyEvent/VK_H
-                        :accelerator (KeyStroke/getKeyStroke KeyEvent/VK_F1 0)
-                        :handler (fn [e] (.browse (Desktop/getDesktop) (URI. HELP-URL)))})}
-             {:action (make-action
-                       {:name "アプリケーションログ (L)" :mnemonic KeyEvent/VK_L
-                        :handler (fn [e] (doto (sl/log-dlg frame "Application Log")
-                                           (.setVisible true)))})}
-             {:action (make-action
-                       {:name "About..." :mnemonic KeyEvent/VK_A
-                        :handler (fn [e] (let [dlg (uad/about-dialog
-                                                    frame "About this software")]
-                                           (do-swing (.setVisible dlg true))))})}]}
-    ]))
+(defn- impl-interface [cInterface method-map]
+  (Proxy/newProxyInstance
+   (.getClassLoader cInterface) (into-array Class [cInterface])
+   (proxy [InvocationHandler] []
+     (invoke [proxy method args]
+       (when-let [f (get method-map (.getName method))]
+         (f nil))))))
 
+(defn- reg-app-handlers-mac [about-fn exit-fn alert-config-fn]
+  (try
+    (let [[cApp app] (get-app-mac)
+          cAboutHandler (Class/forName "com.apple.eawt.AboutHandler")
+          cQuitHandler (Class/forName "com.apple.eawt.QuitHandler")
+          cPreferencesHandler (Class/forName "com.apple.eawt.PreferencesHandler")
+          mSetAboutHandler (.getMethod cApp "setAboutHandler" (into-array Class [cAboutHandler]))
+          mSetQuitHandler (.getMethod cApp "setQuitHandler" (into-array Class [cQuitHandler]))
+          mSetPreferencesHandler (.getMethod cApp "setPreferencesHandler" (into-array Class [cPreferencesHandler]))
+          aboutHandler (impl-interface cAboutHandler {"handleAbout" about-fn})
+          quitHandler (impl-interface cQuitHandler {"handleQuitRequestWith" exit-fn})
+          preferencesHandler (impl-interface cPreferencesHandler {"handlePreferences" alert-config-fn})]
+      (.invoke mSetAboutHandler app (to-array [aboutHandler]))
+      (.invoke mSetQuitHandler app (to-array [quitHandler]))
+      (.invoke mSetPreferencesHandler app (to-array [preferencesHandler])))
+    (catch Exception e
+      (log/warn e "This platform doesn't support eawt"))))
 
+(let [add-user-channel-item (sc/menu-item :id :add-user-channel-item :text "Add user channel")
+      view-log-item (sc/menu-item :id :view-log-item :text "View Application Log")]
+
+  (defn- menu-bar-mac [about-fn exit-fn prefs-fn]
+    (reg-app-handlers-mac about-fn exit-fn prefs-fn)
+    (sc/menubar
+     :items [(sc/menu :text "Channel"
+                      :items [add-user-channel-item])
+             (sc/menu :text "Tool"
+                      :items [view-log-item])]))
+
+  (defn- menu-bar-aux [about-fn exit-fn prefs-fn]
+    (let [about-item (sc/menu-item :text "About")
+          exit-item (sc/menu-item :text "Exit"
+                                  :mnemonic (su/to-mnemonic-keycode \X)
+                                  :key "ctrl Q")
+          prefs-item (sc/menu-item :text "Preferences"
+                                   :mnemonic (su/to-mnemonic-keycode \A))]
+      (sc/listen about-item :action about-fn)
+      (sc/listen exit-item :action exit-fn)
+      (sc/listen prefs-item :action prefs-fn)
+
+      (sc/menubar
+       :items [(sc/menu :text "File"
+                        :mnemonic (su/to-mnemonic-keycode \F)
+                        :items [prefs-item exit-item])
+               (sc/menu :text "Channel"
+                        :mnemonic (su/to-mnemonic-keycode \C)
+                        :items [add-user-channel-item])
+               (sc/menu :text "Help"
+                        :mnemonic (su/to-mnemonic-keycode \H)
+                        :items [view-log-item about-item])]))))
+
+(defn menu-bar [about-fn exit-fn prefs-fn]
+  (condp = (cf/system)
+    :mac (menu-bar-mac about-fn exit-fn prefs-fn)
+    (menu-bar-aux about-fn exit-fn prefs-fn)))

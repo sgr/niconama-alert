@@ -68,7 +68,7 @@ public class ImageCache {
 	    protected boolean removeEldestEntry(final Map.Entry<String, Image> entry) {
 		if (super.size() > capacity) {
 		    //entry.getValue().flush(); // 今は利用側でフラッシュするためコメントアウト
-		    //log.log(Level.FINEST, MessageFormat.format("removeEldestEntry: {0} > {1}", super.size(), capacity));
+		    log.log(Level.FINE, MessageFormat.format("removeEldestEntry: {0} > {1}", super.size(), capacity));
 		    return true;
 		} else {
 		    return false;
@@ -248,7 +248,7 @@ public class ImageCache {
 		if ((img != null) &&
 		    (img.getWidth(null) > _width) ||
 		    (img.getHeight(null) > _height)) {
-		    Image scaledImg = img.getScaledInstance(_width, _height, Image.SCALE_DEFAULT);
+		    Image scaledImg = img.getScaledInstance(_width, _height, Image.SCALE_SMOOTH);
 		    int scaledHandle = img.hashCode();
 		    _mt.addImage(scaledImg, scaledHandle);
 		    try {

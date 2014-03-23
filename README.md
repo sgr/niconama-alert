@@ -20,8 +20,6 @@ JREをインストールし、次のコマンドラインで起動します。
 
     $ java -jar nicoalert-<VERSION>-standalone.jar
 
-起動してからの使い方については、ヘルプページ (https://github.com/sgr/niconama-alert/wiki/Help) をご覧ください。
-
 ## Installation
 
 スタンドアロンjarファイルを好きな場所に配置します。

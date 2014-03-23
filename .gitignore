@@ -6,11 +6,13 @@ pom.xml
 pom.xml.asc
 *.jar
 *.class
-*.log
+*.msi
+*.wixpdb
+*.wixproj.*.txt
+*.wixobj
 .lein-deps-sum
 .lein-failures
 .lein-plugins
 .lein-repl-history
-.DS_Store
-*~
-#*.clj#
+/test-data/rss*
+/test-data/sample*

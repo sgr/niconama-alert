@@ -1,96 +1,140 @@
 ;; -*- coding: utf-8-unix -*-
-(ns #^{:author "sgr"
-       :doc "'about this application' dialog."}
-  nico.ui.about-dlg
-  (:use [clojure.tools.swing-utils :only [do-swing add-action-listener]])
-  (:require [clojure.string :as s]
-            [nico.prefs :as p]
-            [nico.ui.util :as uu]
-            [nico.ui.env-panel :as ue])
-  (:import [java.awt BorderLayout Dimension Font Frame]
-           [javax.swing BorderFactory BoxLayout SpringLayout
-            JButton JDialog JLabel JPanel JScrollPane JTabbedPane]))
+(ns nico.ui.about-dlg
+  (:require [clojure.java.io :as io]
+            [clojure.tools.logging :as log]
+            [nico.config :as config]
+            [seesaw.core :as sc]
+            [seesaw.font :as sf]
+            [seesaw.mig :as sm])
+  (:import [java.awt Color]
+           [java.net URI]
+           [com.github.sgr.slide Link MultiLineLabel]))
 
-(def ^{:private true} ^Dimension DLG-SIZE (Dimension. 500 300))
-(def ^{:private true} ^Dimension CR-PANEL-SIZE (Dimension. 450 55))
-(def ^{:private true} ^Dimension BTN-PANEL-SIZE (Dimension. 450 40))
-(def ^{:private true} ^Font APP-NAME-FONT (Font. "Default" Font/PLAIN 20))
+(def LIBS
+  [{:title "Clojure"
+    :url "http://clojure.org/"
+    :copyright "Copyright (c) Rich Hickey. All rights reserved."
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "core.async"
+    :url "https://github.com/clojure/core.async"
+    :copyright "Copyright (c) 2013 Rich Hickey and contributors"
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "clojure.data.zip"
+    :url "https://github.com/clojure/data.zip/"
+    :copyright "Copyright (c) Aaron Bedra, 2011-2012. All rights reserved."
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "clojure.java.jdbc"
+    :url "https://github.com/clojure/java.jdbc"
+    :copyright "Copyright (c) Sean Corfield, Stephen Gilardi, 2011-2013. All rights reserved."
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "math.numeric-tower"
+    :url "https://github.com/clojure/math.numeric-tower"
+    :copyright "Mark Engelberg"
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "tools.logging"
+    :url "https://github.com/clojure/tools.logging"
+    :copyright "Copyright (c) 2009 Alex Taggart"
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "clj-http"
+    :url "https://github.com/dakrone/clj-http/"
+    :copyright "Copyright (c) 2013 M. Lee Hinman"
+    :lic "MIT License"
+    :lic-url "https://github.com/dakrone/clj-http/blob/master/LICENSE"}
+   {:title "Commons Lang"
+    :url "http://commons.apache.org/proper/commons-lang/"
+    :copyright "Copyright 2001-2013 The Apache Software Foundation"
+    :lic "the Apache License 2.0"
+    :lic-url "http://www.apache.org/licenses/LICENSE-2.0.html"}
+   {:title "Enlive"
+    :url "https://github.com/cgrand/enlive"
+    :copyright "Christophe Grand"
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "HtmlCleaner"
+    :url "http://htmlcleaner.sourceforge.net/"
+    :copyright "Copyright (c) 2006-2014, HtmlCleaner team. All rights reserved."
+    :lic "BSD License"
+    :lic-url "http://htmlcleaner.sourceforge.net/license.php"}
+   {:title "seesaw"
+    :url "http://seesaw-clj.org/"
+    :copyright "Copyright (C) 2012 Dave Ray"
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "SQLite JDBC Driver"
+    :url "https://bitbucket.org/xerial/sqlite-jdbc"
+    :copyright "Taro L. Saito"
+    :lic "Apache License version 2.0"
+    :lic-url "http://www.apache.org/licenses/"}
+   {:title "config-file"
+    :url "https://github.com/sgr/config-file"
+    :copyright "Copyright (C) Shigeru Fujiwara All Rights Reserved."
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "desktop-alert"
+    :url "https://github.com/sgr/desktop-alert"
+    :copyright "Copyright (C) Shigeru Fujiwara All Rights Reserved."
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "input-parser"
+    :url "https://github.com/sgr/input-parser"
+    :copyright "Copyright (C) Shigeru Fujiwara All Rights Reserved."
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "logutil"
+    :url "https://github.com/sgr/logutil"
+    :copyright "Copyright (C) Shigeru Fujiwara All Rights Reserved."
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}
+   {:title "Slide"
+    :url "https://github.com/sgr/slide"
+    :copyright "Copyright (C) Shigeru Fujiwara All Rights Reserved."
+    :lic "Eclipse Public License 1.0"
+    :lic-url "http://opensource.org/licenses/eclipse-1.0.php"}])
 
-(def ^{:private true} POWERED-BY
-  (s/join \newline
-          ["Clojure 1.5 Copyright (c) Rich Hickey. All rights reserved."
-           "clojure.data.zip 0.1 Copyright (c) Rich Hickey and contributors. All rights reserved."
-           "clojure.java.jdbc 0.2 Copyright (c) Stephen Gilardi, Sean Corfield, 2011-2012. All rights reserved."
-           "clojure.math.numeric-tower 0.0.2"
-           "clojure.tools.logging 0.2 Copyright (c) 2009 Alex Taggart"
-           "clj-http 0.6 authored by mmcgrana and dakrone"
-           "Apache Commons Lang library 3.1"
-           "Apache HttpComponents 4.2"
-           "HtmlCleaner 2.4 Copyright (c) 2006-2013, HtmlCleaner team. All rights reserved."
-           "logutil 0.2 Copyright (C) Shigeru Fujiwara All Rights Reserved."
-           "swing-utils 0.2.0 Copyright (c) Stephen C. Gilardi and Meikel Brandmeyer. All rights reserved."
-           "Enlive 1.0 Copyright (c) Christophe Grand, 2012. All rights reserved."
-           "SQLite JDBC developed by Taro L. Saito"
-           "The original Zentus's SQLite JDBC driver Copyright (c) 2006, David Crawshaw."
-           "... and great dependencies"]))
+(letfn [(concat-libs [libs]
+          (loop [lib-str nil, links [], libs libs]
+            (if-let [lib (first libs)]
+              (let [start-title (count lib-str)
+                    end-title (+ start-title (count (:title lib)))
+                    start-lic (+ end-title 3 (count (:copyright lib)))
+                    end-lic (+ start-lic (count (:lic lib)))]
+                (recur (str lib-str (:title lib) " " (:copyright lib) " (" (:lic lib) ")" (System/getProperty "line.separator"))
+                       (conj links
+                             (Link. start-title end-title (URI. (:url lib)))
+                             (Link. start-lic end-lic (URI. (:lic-url lib))))
+                       (rest libs)))
+              [lib-str (into-array Link links)])))
+        (libs-label [libs]
+          (let [[text links] (concat-libs libs)]
+            (doto (MultiLineLabel.)
+              (.setLinkColor Color/BLUE)
+              (.setText text links))))]
 
-(defn- ^JPanel about-panel []
-  (let [cr-panel (JPanel.) lib-panel (JPanel.)]
-    (let [lapp (JLabel. p/APP-TITLE)
-          lauthor (JLabel. "Copyright (C) Shigeru Fujiwara All Rights Reserved.")
-          layout (SpringLayout.)]
-      (doto lapp (.setFont APP-NAME-FONT))
-      (doto lauthor (.setFont uu/DEFAULT-FONT))
-      (doto layout
-        (.putConstraint SpringLayout/NORTH lapp 10 SpringLayout/NORTH cr-panel)
-        (.putConstraint SpringLayout/WEST lapp 20 SpringLayout/WEST cr-panel)
-        (.putConstraint SpringLayout/NORTH lauthor 5 SpringLayout/SOUTH lapp)
-        (.putConstraint SpringLayout/EAST lauthor -10 SpringLayout/EAST cr-panel)
-        (.putConstraint SpringLayout/SOUTH lauthor -3 SpringLayout/SOUTH cr-panel))
-      (doto cr-panel
-        (.setLayout layout)
-        (.setPreferredSize CR-PANEL-SIZE)
-        (.add lapp) (.add lauthor)))
-    (let [inner-panel (JPanel.)
-          lpowered-by (uu/mlabel POWERED-BY)
-          layout (BoxLayout. inner-panel BoxLayout/Y_AXIS)]
-      (doto lpowered-by (.setFont uu/DEFAULT-FONT))
-      (doto inner-panel
-        (.setBorder (BorderFactory/createTitledBorder "Powered by"))
-        (.setLayout layout) (.add (JScrollPane. lpowered-by)))
-      (doto lib-panel
-        (uu/do-add-expand inner-panel 5)))
-    (doto (JPanel.)
-      (.setLayout (BorderLayout.))
-      (.add cr-panel BorderLayout/NORTH)
-      (.add lib-panel BorderLayout/CENTER))))
+  (defn about-dlg []
+    (let [lfont (sf/font :name :sans-serif :style :bold :size 16)
+          title-label (doto (sc/label (format "%s %s" config/APP-TITLE (config/app-version-str)))
+                        (.setFont lfont))
+          libs-label (libs-label LIBS)
+          libs (doto (sc/scrollable libs-label
+                                    :hscroll :never
+                                    :border "dependencies")
+                 #(.setOpaque (.getViewport %) false)
+                 (.setOpaque false))]
 
-(defn ^JDialog about-dialog
-  [^Frame parent ^String title]
-  (let [dlg (JDialog. parent title true), cpane (.getContentPane dlg)
-        tpane (JTabbedPane.) btn-panel (JPanel.)
-        p (.getLocationOnScreen parent)]
-    (let [btn-ok (uu/btn "OK")]
-      (doto btn-ok
-        (add-action-listener (fn [e] (do-swing (.setVisible dlg false) (.dispose dlg)))))
-      (.setDefaultButton (.getRootPane dlg) btn-ok)
-      (let [layout (SpringLayout.)]
-        (doto layout
-          (.putConstraint SpringLayout/NORTH btn-ok  5  SpringLayout/NORTH btn-panel)
-          (.putConstraint SpringLayout/SOUTH btn-ok -10 SpringLayout/SOUTH btn-panel)
-          (.putConstraint SpringLayout/EAST  btn-ok -10 SpringLayout/EAST  btn-panel))
-        (doto btn-panel
-          (.setPreferredSize BTN-PANEL-SIZE)
-          (.setLayout layout) (.add btn-ok))))
-    (doto tpane
-      (.add "About" (about-panel))
-      (.add "Your Environment" (ue/env-panel)))
-    (doto cpane
-      (.add tpane BorderLayout/CENTER)
-      (.add btn-panel BorderLayout/SOUTH))
-    (doto dlg
-      (.setDefaultCloseOperation JDialog/DISPOSE_ON_CLOSE)
-      (.setLocation (+ (.x p) (int (/ (- (.getWidth  parent) (.getWidth  DLG-SIZE)) 2)))
-                    (+ (.y p) (int (/ (- (.getHeight parent) (.getHeight DLG-SIZE)) 2))))
-      (.setResizable false)
-      (.setMinimumSize DLG-SIZE))))
+      (-> (sc/dialog
+           :title "About this software"
+           :content (sm/mig-panel
+                     :constraints ["wrap 2, ins 0 0 0 0, fill" "[:300:][:130:]" "[:130:][:200:]"]
+                     :items [[title-label "align center"] [(sc/label :icon (sc/icon "dempakun_small.png"))]
+                             [libs "span 2, grow"]])
+           :option-type :default
+           :on-close :dispose
+           :modal? true)
+          sc/pack!))))
+

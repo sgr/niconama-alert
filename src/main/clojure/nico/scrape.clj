@@ -1,15 +1,13 @@
 ;; -*- coding: utf-8-unix -*-
-(ns #^{:author "sgr"
-       :doc "ニコ生のページから情報を取得する。"}
-    nico.scrape
-  (:use [clojure.tools.logging])
-  (:require [clojure.string :as cs]
+(ns nico.scrape
+  (:require [clojure.java.io :as io]
+            [clojure.string :as cs]
+            [clojure.tools.logging :as log]
             [net.cgrand.enlive-html :as html]
-	    [net-utils :as n]
-	    [str-utils :as s]
-	    [time-utils :as tu]
-            [nico.log :as l])
-  (:import [java.io InputStream]
+            [nico.net :as net]
+            [nico.string :as s])
+  (:import [java.io InputStream StringReader]
+           [java.net URI]
            [java.util Calendar Date GregorianCalendar Locale TimeZone]
            [java.util.concurrent TimeUnit]
            [org.htmlcleaner CompactXmlSerializer HtmlCleaner TagNode]))
@@ -18,106 +16,125 @@
 (def ^{:private true} INTERVAL-RETRY 5)
 (def ^{:private true} LIMIT-RETRY 5)
 
-(defn- fetch-pgm-info1
-  [pid]
-  (let [url (str BASE-URL pid)
-        cleaner (let [c (HtmlCleaner.)]
-                  (doto (.getProperties c) (.setOmitComments true) (.setPruneTags "script, style"))
+(let [cleaner (let [c (HtmlCleaner.)]
+                  (doto (.getProperties c)
+                    (.setOmitComments true)
+                    (.setPruneTags "script, style"))
                   c)
-	h (html/xml-resource (java.io.StringReader.
-                              (.getAsString (CompactXmlSerializer. (.getProperties cleaner))
-                                            ^TagNode (.clean cleaner ^InputStream (n/url-stream url) "utf-8")
-                                            "utf-8")))
-        base (-> (html/select h [:base]) first :attrs :href)
-        infobox (first (html/select h [:div.infobox]))
-        title (s/unescape (first (html/select infobox [:h2 (html/attr= :itemprop "name") :> html/text-node])) :html)
-        desc (if-let [str (cs/join " " (for [n (html/select infobox [:div.bgm :> :div :> html/text-node])]
-                                         (s/unescape n :html)))]
-               (s/remove-tag str) "")
-        pubdate (let [[^String sday ^String sopen ^String sstart] ; 開始日 開場時刻 開演時刻
-                      (html/select infobox
-                                   [:div.kaijo :> :strong :> html/text-node])]
-                  (let [[yyyy MM dd] (for [x (rest (re-find #"(\d{4})/(\d{2})/(\d{2})" sday))]
-                                       (Integer/parseInt x))
-                        [ohh omm] (if sopen (for [x (.split sopen ":")] (Integer/parseInt x)) [nil nil])
-                        [shh smm] (if sstart (for [x (.split sstart ":")] (Integer/parseInt x)) [nil nil])
-                        ;; 終了後の番組ページを開く場合は開演時刻しか表示されないため、チェック。
-                        c (doto (if (and shh smm)
-                                  (GregorianCalendar. yyyy (dec MM) dd shh smm)
-                                  (GregorianCalendar. yyyy (dec MM) dd ohh omm))
-                            (.setTimeZone (TimeZone/getTimeZone "Asia/Tokyo")))]
-                    (do
-                      ;; 開場23:5x、開演00:0xの場合に対応
-                      (when (and (= 23 ohh) (= 0 shh)) (.add c Calendar/DAY_OF_MONTH 1))
-                      (.getTime c))))
-        member_only (if (first (html/select infobox [:h2.onlym])) true false)
-        type (cond
-              (not (empty? (html/select infobox [:div.com]))) :community
-              (not (empty? (html/select infobox [:div.chan]))) :channel
-              :else :official)
-        category (cs/join " " (for [x (html/select h [[:nobr (html/has [:img])]])]
-                                (first (html/select x [:a.nicopedia :> html/text-node]))))
-        comm (first (html/select infobox (condp = type
-                                           :community [:div.com]
-                                           :channel [:div.chan]
-                                           [:div.official]))) ; こんなクラスはないから何も取れない
-        comm_name (if comm
-                    (condp = type
-                      :community (let [name (html/select comm [:div.shosai (html/attr= :itemprop "name") :> html/text-node])]
-                                   (s/unescape (first name) :html))
-                      :channel   (let [name (html/select comm [:div.shosai :> :a :> html/text-node])]
-                                   (s/unescape (first name) :html))
-                      nil)
-                    nil)
-        owner_name (condp = type
-                     :community (s/unescape
-                                 (first
-                                  (html/select
-                                   comm [:strong.nicopedia_nushi (html/attr= :itemprop "member") :> html/text-node]))
-                                 :html)
-                     :channel (s/unescape
-                               (second
-                                (html/select comm [:div.shosai (html/attr= :itemprop "name") :> html/text-node]))
-                               :html)
-                     nil)
-        thumbnail (let [bn (-> (html/select infobox [:div.bn :img]) first :attrs :src)]
-;;                               (clojure.string/split #"\?") first)]
-                    (if (= type :community) bn (str base bn)))
-        now (tu/now)]
-    (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts h))]
-      (do
-        (warn (format "frequently access error: %s" (pr-str node)))
-        nil)
-      (do
-        (when-not pubdate (error (format " NULL PUBDATE: %s (%s)" title url)))
-        {:title title
-         :pubdate pubdate
-         :desc desc
-         :category category
-         :link url
-         :thumbnail thumbnail
-         :owner_name owner_name
-         :member_only member_only
-         :type type
-         :comm_name comm_name
-         :fetched_at now
-         :updated_at now}))))
+      serializer (CompactXmlSerializer. (.getProperties cleaner))
+      CS "utf-8"]
+  (defn- clean [^InputStream is]
+    (locking cleaner
+      (.clean cleaner is CS)))
 
-(defn fetch-pgm-info
+  (defn- serialize [tag-node]
+    (locking serializer
+      (.getAsString serializer tag-node CS))))
+
+(defn- last-path-uri-str [s-uri]
+  (when-not (cs/blank? s-uri)
+    (try
+      (-> (URI. s-uri) .getPath (cs/split #"/") last)
+      (catch Exception e (log/warnf "Malformed URI string %s" s-uri)))))
+
+(defn- open-start-time [[sday sopen sstart]]
+  (let [[yyyy MM dd] (map #(Integer/parseInt %) (rest (re-find #"(\d{4})/(\d{2})/(\d{2})" sday)))
+        [ohh omm] (if sopen (map #(Integer/parseInt %) (.split sopen ":")) [nil nil])
+        [shh smm] (if sstart (map #(Integer/parseInt %) (.split sstart ":")) [nil nil])
+        ;; 終了後の番組ページを開く場合は開演時刻しか表示されないため、sopenが開演時刻
+        [oc sc] (map #(doto % (.setTimeZone (TimeZone/getTimeZone "Asia/Tokyo")))
+                     (if sstart
+                       [(GregorianCalendar. yyyy (dec MM) dd ohh omm)
+                        (GregorianCalendar. yyyy (dec MM) dd shh smm)]
+                       [(GregorianCalendar. yyyy (dec MM) dd ohh omm)
+                        (GregorianCalendar. yyyy (dec MM) dd ohh omm)]))]
+    (when (and (= 23 ohh) (= 0 shh)) ;; 開場23:5x、開演00:0xの場合
+      (.add sc Calendar/DAY_OF_MONTH 1))
+    [(.getTime oc) (.getTime sc)]))
+
+(defn extract-pgm [xml]
+  (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts xml))]
+    (log/warnf "frequently access error: %s" (pr-str node))
+    (let [link (-> (html/select xml [(html/attr= :property "og:url")]) first :attrs :content)
+          id (last-path-uri-str link)
+          base (-> (html/select xml [:base]) first :attrs :href)
+          infobox (first (html/select xml [:div.infobox]))
+          title (-> (html/select infobox [:h2 (html/attr= :itemprop "name") :> html/text-node])
+                    first
+                    (s/unescape :html))
+          description (->> (html/select infobox [(html/attr= :itemprop "description")])
+                           first xml-seq (map html/text)
+                           ;; 無駄な改行を取り除く↓
+                           cs/join cs/split-lines (remove cs/blank?) (cs/join "\n"))
+          [open_time start_time] (-> (html/select infobox [:div.kaijo :> :strong :> html/text-node])
+                                     open-start-time)
+          thumbnail (-> (html/select xml [(html/attr= :itemprop "thumbnail")])
+                        first :attrs :content)
+          member_only (if (first (html/select infobox [:h2.onlym])) true false)
+          type (cond
+                (not (empty? (html/select infobox [:div.com]))) :community
+                (not (empty? (html/select infobox [:div.chan]))) :channel
+                :else :official)
+          category (->> (html/select xml [:nobr :> :a.nicopedia :> html/text-node])
+                        (cs/join ","))
+          comm (-> (html/select infobox (condp = type
+                                          :community [:div.com]
+                                          :channel [:div.chan]
+                                          [:div.official])) ; こんなクラスはないから何も取れない
+                   first)
+          comm_id (when-let [selector (condp = type
+                                        :community [:a.community]
+                                        :channel [:div.shosai :> :a])]
+                    (-> (html/select xml selector) first :attrs :href last-path-uri-str))
+          comm_name (when-let [selector (condp = type
+                                          :community [:div.shosai (html/attr= :itemprop "name")
+                                                      :> html/text-node]
+                                          :channel [:div.shosai :> :a :> html/text-node])]
+                      (-> (html/select comm selector) first (s/unescape :html)))
+          owner_name (when-let [selector (condp = type
+                                           :community [:strong.nicopedia_nushi
+                                                       (html/attr= :itemprop "member")
+                                                       :> html/text-node]
+                                           :channel [:div.shosai (html/attr= :itemprop "name")
+                                                     :> html/text-node])]
+                       (-> (html/select comm selector) first (s/unescape :html)))
+          now (Date.)]
+      (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
+        (nico.pgm.Pgm. id title open_time start_time description category link thumbnail owner_name
+                       member_only type comm_name comm_id now now)
+        (log/warnf "couldn't create pgm from scraped data: [%s %s %s %s %s, %s %s]"
+                   id title description link thumbnail open_time start_time)))))
+
+(defn- fetch-pgm
   "ニコ生の番組ページから番組情報を取得する。"
-  [pid]
-  (letfn [(fetch-pgm-info-aux [pid]
+  [pid cid]
+  (letfn [(fetch-pgm-aux [pid cid]
             (try
-              (fetch-pgm-info1 pid)
+              (with-open [is (-> (str BASE-URL pid) (net/http-get {:as :stream}) :body)
+                          rdr (-> is clean serialize (StringReader.))]
+                (extract-pgm (html/xml-resource rdr)))
               (catch Exception e
-                (warn e (format "failed fetching pgm info: %s" pid))
-                nil)))]
+                (log/warnf e "failed fetching pgm info: %s" pid))))]
     (loop [cnt 0]
       (if (< cnt LIMIT-RETRY)
-        (if-let [info (fetch-pgm-info-aux pid)]
-          info
-          (l/with-warn (format "retrying fetching pgm indo: %s" pid)
+        (if-let [pgm (fetch-pgm-aux pid cid)]
+          pgm
+          (do
+            (log/warnf "retrying fetching pgm indo: %s" pid)
             (.sleep TimeUnit/SECONDS INTERVAL-RETRY)
             (recur (inc cnt))))
-        (l/with-warn (format "reached retry limit. aborted fetching pgm info: %s" pid)
-          nil)))))
+        (log/warnf "reached retry limit. aborted fetching pgm info: %s" pid)))))
+
+(defn- create-pgm-from-scrapedinfo [pid cid] (fetch-pgm pid cid))
+
+(def ^{:private true} LIMIT-ELAPSED 1200000) ;; APIによる番組ID取得からこの秒以上経過したら情報取得を諦める。
+
+(defn scrape-pgm [pid cid received]
+  (let [now (System/currentTimeMillis)]
+    ;; 繁忙期は番組ページ閲覧すら重い。番組ID受信から LIMIT-ELAPSED 秒経過していたら諦める。
+    (if (> LIMIT-ELAPSED (- now received))
+      (if-let [pgm (create-pgm-from-scrapedinfo pid cid)]
+        pgm
+        (log/warnf "failed fetching pgm: %s/%s" pid cid))
+      (log/warnf "too late to fetch: %s/%s" pid cid))))
+

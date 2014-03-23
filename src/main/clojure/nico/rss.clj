@@ -1,156 +1,226 @@
 ;; -*- coding: utf-8-unix -*-
-(ns #^{:author "sgr"
-       :doc "ニコニコ生放送配信中の放送情報RSSより、放送情報を取得する。
-             RSSは文字数制限があるようで、タイトルや説明が切れることがある。
-             また、絵文字の類いがそのまま？RSSに混入するようなので、まずいものは除去する。"}
-  nico.rss
-  (:use [clojure.tools.logging])
-  (:require [clojure.xml :as xml]
-            [clojure.zip :as zip]
+(ns nico.rss
+  (:require [clojure.core.async :as ca]
             [clojure.data.zip :as dz]
             [clojure.data.zip.xml :as dzx]
+            [clojure.string :as cs]
+            [clojure.tools.logging :as log]
+            [clojure.xml :as xml]
+            [clojure.zip :as zip]
+            [nico.net :as net]
             [nico.pgm :as pgm]
-            [nico.api-updator :as api]
-            [nico.log :as l]
-            [net-utils :as n]
-            [str-utils :as s]
-            [time-utils :as tu])
+            [nico.string :as s])
   (:import [java.text SimpleDateFormat]
-           [java.util Locale]
-           [java.util.concurrent TimeUnit]))
+           [java.util Date Locale]
+           [java.util.concurrent TimeUnit]
+           [org.htmlcleaner HtmlCleaner]))
 
 (def ^{:private true} RETRY 0)
 (def ^{:private true} WAIT 5)
 
-(defn- get-nico-rss-aux [page]
+(defn- get-nico-rss-aux [url]
   (try
-    (n/with-http-res [raw-res (n/http-get (format "http://live.nicovideo.jp/recent/rss?p=%s" page))]
-      (try
-        (-> raw-res :body s/cleanup s/utf8stream xml/parse)
-        (catch Exception e
-          (error e (format "failed parsing RSS #%d, raw-response:\n%s" page (pr-str raw-res)))
-          nil)))
+    (net/with-http-res [raw-res (net/http-get url)]
+      (with-open [is (-> raw-res :body s/cleanup s/utf8stream)]
+        (xml/parse is)))
     (catch Exception e
-      (error e (format "failed fetching RSS #%d" page))
-      nil)))
+      (log/warnf "failed fetching RSS (%s)" url))))
 
-(defn- get-nico-rss [page]
-  (loop [c RETRY]
-    (if-let [rss (get-nico-rss-aux page)]
-      (l/with-trace (format "fetched RSS #%d tried %d times." page (- RETRY c))
-        rss)
-      (if (= 0 c)
-        (l/with-error (format "aborted fetching RSS #%d: reached limit." page)
-          {})
-        (do (.sleep TimeUnit/SECONDS WAIT)
-            (recur (dec c)))))))
+(defn- get-nico-rss [url]
+  (loop [rss (get-nico-rss-aux url), c RETRY]
+    (if (or rss (zero? c))
+      rss
+      (do
+        (.sleep TimeUnit/SECONDS WAIT)
+        (recur (get-nico-rss-aux url) (dec c))))))
 
 (defn- get-programs-count
   "get the total programs count."
-  ([] (get-programs-count (get-nico-rss 1)))
-  ([rss] (if-let [total-count (first (dzx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count dzx/text))]
-           (try
-             (Integer/parseInt total-count)
-             (catch NumberFormatException e
-               (error e (format "failed fetching RSS for get programs count: %s" rss))
-               0))
-           (do (warn (format "RSS parse error: %s" rss))
-               0))))
+  [rss]
+  (when-let [total-count (first (dzx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count dzx/text))]
+    (try
+      (Integer/parseInt total-count)
+      (catch NumberFormatException e
+        (log/errorf "failed fetching RSS for get programs count: %s" rss)))))
 
-(defn- get-child-elm [tag node]
-  (some #(if (= tag (:tag %)) %) (:content node)))
+(let [cleaner (HtmlCleaner.)]
+  (defn- remove-tag [^String s]
+    (when-not (cs/blank? s)
+      (locking cleaner
+        (->> (.clean cleaner s)
+             (#(.getAllElements % true))
+             (map #(.. % getText toString))
+             cs/join)))))
 
-(defn- get-child-content [tag node]
-  (s/unescape (first (:content (get-child-elm tag node))) :xml))
+(defn- child-elements [tag node]
+  (->> (:content node) (filter #(= tag (:tag %)))))
+
+(defn- child-content [tag node]
+  (-> (child-elements tag node) first :content first))
 
 (defn- get-child-attr [tag attr node]
-  (attr (:attrs (get-child-elm tag node))))
+  (-> (child-elements tag node) first :attrs attr))
+
+(defn- parse-date [s fmt]
+  (when-not (cs/blank? s)
+    (locking fmt
+      (.parse fmt s))))
 
 (let [fmt (SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")]
-  (defn- create-official-pgm [item fetched_at]
-    (let [id (keyword (get-child-content :guid item))
-          title (get-child-content :title item)
-          pubdate (if-let [start-time-str (get-child-content :nicolive:start_time item)]
-                    (try
-                      (locking fmt
-                        (.parse fmt start-time-str))
-                      (catch Exception e
-                        (error e (format "failed parsing str as date: %s" start-time-str))))
-                    (trace "start_time is nil"))
-          desc (if-let [s (get-child-content :description item)] (s/remove-tag s) "")
-          ;; category (get-child-content :category item) ; ない
-          link (get-child-content :link item)
-          thumbnail (get-child-attr :media:thumbnail :url item)
-          ;; owner_name (get-child-content :nicolive:owner_name item) ; ない
-          ;; member_only (Boolean/parseBoolean (get-child-content :nicolive:member_only item)) ; ない
-          ;; type (if-let [type-str (get-child-content :nicolive:type item)] ; Officialのみ
-          ;;        (condp = type-str
-          ;;          "community" :community
-          ;;          "channel" :channel
-          ;;          :official)
-          ;;        :official)
-          ;; comm_name (get-child-content :nicolive:community_name item) ; ない
-          ;; comm_id (keyword (get-child-content :nicolive:community_id item)) ; ない
-          ]
-      (when (and id title pubdate desc link thumbnail)
-        (nico.pgm.Pgm. id title pubdate desc nil link thumbnail nil false :official nil nil false fetched_at fetched_at)))))
+  (defn create-official-pgm [item fetched_at]
+    (try
+      (let [id (child-content :guid item)
+            title (-> (child-content :title item) (s/unescape :xml))
+            open_time (parse-date (child-content :nicolive:open_time item) fmt)
+            start_time (parse-date (child-content :nicolive:start_time item) fmt)
+            description (if-let [s (-> (child-content :description item) (s/unescape :xml))]
+                          (remove-tag s) "")
+            category "" ; ない
+            link (child-content :link item)
+            thumbnail (get-child-attr :media:thumbnail :url item)
+            owner_name "" ; ない
+            member_only false ; ない
+            type (if-let [type-str (child-content :nicolive:type item)] (keyword type-str) :official)
+            comm_name "" ; ない
+            comm_id nil] ; ない
+        (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
+          (nico.pgm.Pgm. id title open_time start_time description category link thumbnail owner_name
+                         member_only type comm_name comm_id fetched_at fetched_at)
+          (log/warnf "couldn't create pgm: [%s %s %s %s %s, %s %s]"
+                     id title description link thumbnail open_time start_time)))
+      (catch Exception e
+        (log/warnf "failed creating pgm from official RSS: %s" (pr-str item))))))
 
 (let [fmt (SimpleDateFormat. "EEE, dd MMM yyyy HH:mm:ss Z" Locale/ENGLISH)]
-  (defn- create-pgm [item fetched_at]
-    (let [id (keyword (get-child-content :guid item))
-          title (get-child-content :title item)
-          pubdate (if-let [pubdate-str (get-child-content :pubDate item)]
-                    (try
-                      (locking fmt
-                        (.parse fmt pubdate-str))
-                      (catch Exception e
-                        (error e (format "failed parsing str as date: %s" pubdate-str))))
-                    (trace "pubdate is nil"))
-          desc (if-let [s (get-child-content :description item)] (s/remove-tag s) "")
-          category (get-child-content :category item)
-          link (get-child-content :link item)
-          thumbnail (get-child-attr :media:thumbnail :url item)
-          ;;   (first (clojure.string/split (get-child-attr :media:thumbnail :url item) #"\?"))
-          owner_name (get-child-content :nicolive:owner_name item)
-          member_only (Boolean/parseBoolean (get-child-content :nicolive:member_only item))
-          type (if-let [type-str (get-child-content :nicolive:type item)]
-                 (condp = type-str
-                   "community" :community
-                   "channel" :channel
-                   :official)
-                 :official)
-          comm_name (get-child-content :nicolive:community_name item)
-          comm_id (keyword (get-child-content :nicolive:community_id item))]
-      (when (and id title pubdate desc link thumbnail)
-        (nico.pgm.Pgm. id title pubdate desc category link thumbnail owner_name false type comm_name comm_id false fetched_at fetched_at)))))
+  (defn create-pgm [item fetched_at]
+    (try
+      (let [id (child-content :guid item)
+            title (-> (child-content :title item) (s/unescape :xml))
+            open_time (parse-date (child-content :pubDate item) fmt)
+            start_time open_time
+            description (if-let [s (-> (child-content :description item) (s/unescape :xml))]
+                          (remove-tag s) "")
+            category (->> (child-elements :category item)
+                          (map #(-> % :content first))
+                          (cs/join ","))
+            link (child-content :link item)
+            thumbnail (get-child-attr :media:thumbnail :url item)
+            ;;thumbnail (-> (clojure.string/split  #"\?") first)
+            owner_name (child-content :nicolive:owner_name item)
+            member_only (-> (child-content :nicolive:member_only item) Boolean/parseBoolean)
+            type (if-let [type-str (child-content :nicolive:type item)] (keyword type-str) :official)
+            comm_name (child-content :nicolive:community_name item)
+            comm_id (child-content :nicolive:community_id item)]
+        (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
+          (nico.pgm.Pgm. id title open_time start_time description category link thumbnail owner_name
+                         member_only type comm_name comm_id fetched_at fetched_at)
+          (log/debugf "couldn't create pgm: [%s %s %s %s %s, %s %s]"
+                      id title description link thumbnail open_time start_time)))
+      (catch Exception e
+        (log/warnf e "failed creating pgm from RSS: %s" (pr-str item))))))
 
-(defn- get-programs-from-rss-aux [rss]
-  [(get-programs-count rss)
-   (let [nodes-child (dzx/xml-> (zip/xml-zip rss) :channel dz/children)
-         items (for [x nodes-child :when (= :item (:tag (first x)))] (first x))
-         now (tu/now)]
-     (if (< 0 (count items))
-       (remove
-        nil?
-        (for [item items]
-          (when-let [pgm (create-pgm item now)]
-            (if (some nil? (list (:id pgm) (:title pgm) (:pubdate pgm)))
-              (l/with-trace (format "Some nil properties found in: %s" (pr-str item))
-                (if (and (:id pgm) (:comm_id pgm) (nil? (pgm/get-pgm (:id pgm))))
-                  (api/request-fetch (name (:id pgm)) (name (:comm_id pgm)) now)
-                  (trace (format "abondoned fetching pgm for lack of ids or fetched already: %s" (pr-str pgm)))))
-              pgm))))
-       (trace (format "no items in rss: %s" (pr-str nodes-child)))))])
+(defn- items [rss]
+  (let [nodes-child (dzx/xml-> (zip/xml-zip rss) :channel dz/children)]
+    (for [x nodes-child :when (= :item (:tag (first x)))] (first x))))
 
-(defn get-programs-from-rss [page]
-  (loop [c RETRY
-         rss (get-nico-rss page)
-         [total pgms] (get-programs-from-rss-aux rss)]
-    (if (= 0 c)
-      [total (or pgms '())]
-      (if (or (>= 0 total) (nil? pgms))
-        (l/with-debug (format "retry fetching RSS #%d (%d) total number: %d, pgms: %d"
-                              page c total (if-not pgms 0 (count pgms)))
-          (.sleep TimeUnit/SECONDS WAIT)
-          (recur (dec c) (get-nico-rss page) (get-programs-from-rss-aux rss)))
-        [total pgms]))))
+(defn extract [rss pgm-fn]
+  (let [now (Date.)]
+    (->> (map #(pgm-fn % now) (items rss))
+         (filter #(and % (and (:id %) (:title %) (:open_time %) (:start_time %)))))))
+
+(defn- get-programs-from-rss [page]
+  (if (= page 0) ; page 0 は公式の番組取得。RSSフォーマットが異なる。
+    (let [rss (get-nico-rss "http://live.nicovideo.jp/rss")]
+      [nil (extract rss create-official-pgm)])
+    (let [rss (get-nico-rss (format "http://live.nicovideo.jp/recent/rss?p=%d" page))]
+      [(get-programs-count rss) (extract rss create-pgm)])))
+
+(defn boot
+  "ニコ生RSSを通じて番組情報を取得するfetcherを生成し、コントロールチャネルを返す。
+   引数oc-statusにはfetcherからの状態を受け取るチャネルを、
+   引数oc-dbにはfetcherが得た番組情報を受け取るチャネルをそれぞれ指定する。
+
+   アウトプットチャネルoc-statusには次のステータスが出力される。
+   :started-rss 開始した。
+          {:status :started-api}
+   :stopped-rss 終了した。
+          {:status :stopped-api}
+   :waiting-rss 次の取得サイクル開始まで待機中。待機間隔はWAITING-INTERVAL(秒)。
+          {:status :waiting-rss :rest [残り秒] :total [全体待機時間]}
+   :fetching-rss RSS取得中。得られた番組情報つき。
+          {:status :fetching-rss :page [取得したページ] :acc [今サイクルで取得した番組数計] :total [総番組数]}
+
+   アウトプットチャネルoc-dbには番組情報が出力される。
+   :add-pgms 番組情報追加。上の:fetching-rssと同時に発信される。
+          {:cmd :add-pgms :pgms [番組情報] :total [総番組数]}
+
+   コントロールチャネルは次のコマンドを受理する。
+   :act 今のfetcherの状態によって開始または終了するトグル動作。
+          {:cmd :act}
+
+   また、次のコマンドが内部的に使用される。
+   :fetch 指定されたページのRSSを取得する。
+          {:cmd :fetch :page [ページ番号] :acc [今サイクルでこれまでに取得した番組数計]}
+   :wait  1秒待機する。したがって回数＝秒数である。
+          {:cmd :wait, :rest [残り待機回数], :total [全体待機回数]})"
+  [oc-status oc-db]
+  (let [WAITING-INTERVAL 90
+        cc (ca/chan)]
+    (letfn [(fetch [page acc]
+              (ca/go
+                (let [[total pgms] (get-programs-from-rss page)
+                      acc (+ acc (count pgms))]
+                  (ca/>! oc-db {:cmd :add-pgms :pgms pgms :total total})
+                  (ca/>! oc-status {:status :fetching-rss :page page :acc acc :total total})
+                  (if (and total (or (<= total acc) (= 0 (count pgms))))
+                    (do
+                      (ca/>! oc-db {:cmd :finish})
+                      {:cmd :wait :rest WAITING-INTERVAL, :total WAITING-INTERVAL})
+                    {:cmd :fetch :page (inc page) :acc acc}))))
+            (wait [rest total]
+              (ca/go
+                (ca/>! oc-status {:status :waiting-rss :rest rest :total total})
+                (if (= 0 rest)
+                  {:cmd :fetch :page 0 :acc 0}
+                  (do
+                    (ca/<! (ca/timeout 1000))
+                    {:cmd :wait :rest (dec rest) :total total}))))]
+
+      (ca/go-loop [curr-op nil
+                   abort false]
+        (let [[c ch] (ca/alts! (->> [cc curr-op] (remove nil?)))]
+          (if c
+            (condp = (:cmd c)
+              :act (if curr-op
+                     (do
+                       (log/info "Stop RSS")
+                       (recur curr-op true))
+                     (do
+                       (log/info "Start RSS")
+                       (ca/>! oc-status {:status :started-rss})
+                       (recur (fetch 0 0) false)))
+              :fetch (let [{:keys [page acc]} c]
+                       (ca/close! ch)
+                       (if abort
+                         (do
+                           (ca/>! oc-status {:status :stopped-rss})
+                           (recur nil false))
+                         (recur (fetch page acc) false)))
+              :wait  (let [{:keys [rest total]} c]
+                       (ca/close! ch)
+                       (if abort
+                         (do
+                           (ca/>! oc-status {:status :stopped-rss})
+                           (recur nil false))
+                         (recur (wait rest total) false)))
+              (do
+                (log/warn "Unknown command " (pr-str c))
+                (recur curr-op abort)))
+
+            (cond ;; cがnilの場合
+             (not= ch cc) (do
+                            (log/warn "other channel closed: " (pr-str ch))
+                            (ca/close! ch)
+                            (recur nil abort))
+             :else (log/infof "Closed RSS control channel"))))))
+    cc))
