@@ -30,10 +30,10 @@
                    :constraints ["wrap 3, fill, ins 0 10 5 10"]
                    :items [[(sc/label :id :rss-status :text "stand-by") "grow"]
                            [(doto (sc/progress-bar :id :rss-progress :paint-string? true)
-                              (.setString "")) "grow"]
+                              (.setString "")) "growx"]
                            [rss-btn "spany 2, align right"]])
         cpanel (sm/mig-panel
-                :constraints ["wrap 3, fill, ins 0 10 10 10" "[33%][33%][34%]"]
+                :constraints ["wrap 3, fill, ins 10 10 10 10" "[33%][33%][34%]"]
                 :items [[status-panel "grow"][api-panel "grow"][rss-panel "grow"]])
         tpanel (sc/tabbed-panel :id :tabbed-panel :user-data {}
                                 :tabs [{:title "Listings" :tip "Nico program listings"
