@@ -50,5 +50,13 @@
                         :content content
                         :on-close :dispose)]
     (when (not= :mac (cf/system))
-      (.setIconImage frame (.createImage (Toolkit/getDefaultToolkit) (io/resource "icon.png"))))
+      (let [tk (Toolkit/getDefaultToolkit)]
+        (.setIconImages
+         frame
+         (map #(.createImage tk (io/resource %))
+              ["icon_16x16.png"
+               "icon_32x32.png"
+               "icon_64x64.png"
+               "icon_128x128.png"]
+              ))))
     frame))
