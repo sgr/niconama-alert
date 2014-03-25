@@ -330,7 +330,7 @@
             (when-let [p (get @(:ps-std db) k)]
               (jdbc/query db [p] :result-set-fn first :row-fn k)))
           (now [] (System/currentTimeMillis))]
-    (let [RATIO 1.05
+    (let [RATIO 1.1
           SEARCH-INTERVAL 5000
           SEARCH-LIMIT 50
           FREELIST-THRESHOLD 10
