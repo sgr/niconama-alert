@@ -76,10 +76,10 @@
       ))
   (testing "sql-kwd"
     (let [sql-kwd @#'nico.db/sql-kwd]
-      (is (= (sql-kwd "foo bar" #{:title :description})
-             "SELECT *, title || description AS ccol FROM pgms WHERE ((ccol LIKE '%foo%') AND (ccol LIKE '%bar%')) ORDER BY open_time DESC"))
-      (is (= (sql-kwd "foo bar" #{:title :description} 73)
-             "SELECT *, title || description AS ccol FROM pgms WHERE ((ccol LIKE '%foo%') AND (ccol LIKE '%bar%')) ORDER BY open_time DESC LIMIT 73"))
+      (is (= (sql-kwd "foo bar" #{:description :title})
+             "SELECT *, description || title AS ccol FROM pgms WHERE ((ccol LIKE '%foo%') AND (ccol LIKE '%bar%')) ORDER BY open_time DESC"))
+      (is (= (sql-kwd "foo bar" #{:description :title} 73)
+             "SELECT *, description || title AS ccol FROM pgms WHERE ((ccol LIKE '%foo%') AND (ccol LIKE '%bar%')) ORDER BY open_time DESC LIMIT 73"))
       (is (= (sql-kwd "foo bar" #{:title})
              "SELECT *, title AS ccol FROM pgms WHERE ((ccol LIKE '%foo%') AND (ccol LIKE '%bar%')) ORDER BY open_time DESC"))
       (is (thrown? java.lang.AssertionError (sql-kwd "foo bar" #{})))

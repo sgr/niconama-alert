@@ -1,6 +1,6 @@
 # niconama-alert.clj
 
-niconama-alert.clj is a desktop application for comfortable browsing [nico nico live](http://live.nicovideo.jp/). 
+niconama-alert.clj is a desktop application for comfortable [nico nico live](http://live.nicovideo.jp/) browsing. 
 
 Please see [Project homepage](http://sgr.github.io/niconama-alert/).
 
