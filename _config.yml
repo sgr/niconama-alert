@@ -1,7 +1,7 @@
 safe: true
 lsi: false
 pygments: true
-#baseurl: /niconama-alert
+baseurl: /niconama-alert
 gems:
 - jekyll-mentions
 - jemoji

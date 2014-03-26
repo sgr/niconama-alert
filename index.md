@@ -10,9 +10,9 @@ niconama-alert.clj は、[ニコニコ生放送](http://live.nicovideo.jp/) か�
 Screenshot
 ==========
 
-Windows: ![スクリーンショット(Windows)](../images/sc_win.png)
+Windows: ![スクリーンショット(Windows)]({{ site.baseurl }}/images/sc_win.png)
 
-Mac OS X: ![スクリーンショット(Mac OS X)](../images/sc_mac.png)
+Mac OS X: ![スクリーンショット(Mac OS X)]({{ site.baseurl }}/images/sc_mac.png)
 
 
 
