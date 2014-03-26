@@ -10,19 +10,19 @@ title: niconama-alert.clj tutorial
 
 初めて起動するとこのようなウィンドウが表示されます。
 
-![初めての起動画面](../images/sc_init.png)
+![初めての起動画面]({{ site.baseurl }}/images/sc_init.png)
 
 ウィンドウ下部右のRSSボタンを押してみましょう。
 すると番組情報の取得が開始されます。ステータスバーが右端に達すると取得終了です。
 
-![RSSボタンを押してみよう](../images/sc_rss_btn.png)
+![RSSボタンを押してみよう]({{ site.baseurl }}/images/sc_rss_btn.png)
 
 
 #検索してみよう{#search_basic}
 
 番組情報は取得されています。この中から検索してみます。"Search"タブを表示してみましょう。
 
-![Searchタブ](../images/sc_search_tab.png)
+![Searchタブ]({{ site.baseurl }}/images/sc_search_tab.png)
 
 * 左側の"Search target"で検索対象を選びましょう。ここでは"Title"をチェックします。
 * 右側の"Search condition"に検索したい番組タイトルに含まれていそうな単語を入力します。
@@ -30,7 +30,7 @@ title: niconama-alert.clj tutorial
 * 検索条件を入力するとウィンドウ中央の"Search"ボタンが有効になります。
   押して検索してみましょう。
 
-![検索例](../images/sc_search.png)
+![検索例]({{ site.baseurl }}/images/sc_search.png)
 
 検索結果は表示されたでしょうか？検索結果は時々刻々変わります。1件も得られなかった場合は他の言葉でも検索してみましょう。
 
@@ -42,13 +42,13 @@ title: niconama-alert.clj tutorial
 このボタンを押すと、チャンネルのタイトルを入力するタブが表示されます。
 ここでは"実況"と入力し、"OK"ボタンを押します。
 
-![キーワードチャンネルタイトル入力](../images/sc_add_kwd_ch.png)
+![キーワードチャンネルタイトル入力]({{ site.baseurl }}/images/sc_add_kwd_ch.png)
 
 では"Listings"タブに戻ってみましょう。
 すると先ほど入力した検索条件を持ったチャンネルが一列追加されているはずです。
 これで毎回検索しなくてもよくなりました。
 
-![キーワードチャンネル追加後](../images/sc_added_kwd_ch.png)
+![キーワードチャンネル追加後]({{ site.baseurl }}/images/sc_added_kwd_ch.png)
 
 また、"Alert"チェックを入れると、新しい番組が追加されるたびにデスクトップ上にアラートを表示します。
 
@@ -58,12 +58,12 @@ title: niconama-alert.clj tutorial
 ニコニコ動画のアカウントを持っている場合、そのアカウントでログインすることでアカウントのチャンネルが追加されます。
 "Channel"メニューから"Add user channel"を選択します。
 
-![ユーザーチャンネル追加メニュー](../images/sc_add_user_ch_menu.png)
+![ユーザーチャンネル追加メニュー]({{ site.baseurl }}/images/sc_add_user_ch_menu.png)
 
 すると、ログイン情報入力ダイアログが表示されます。
 ここにニコニコ動画のログイン情報を入力し、"OK"ボタンを押します。
 
-![ログイン情報入力ダイアログ](../images/sc_login_dlg.png)
+![ログイン情報入力ダイアログ]({{ site.baseurl }}/images/sc_login_dlg.png)
 
 すると、"Listings"タブに先ほどと同様にもう一列番組表が追加されているはずです。
 ここにはそのアカウントが登録しているコミュニティの現在の番組が表示されます。
@@ -81,7 +81,7 @@ title: niconama-alert.clj tutorial
 新しく検索を行う場合は"Search"タブで行いますが、既にあるキーワードチャンネルの検索条件を変更する場合は
 番組表上部の歯車ボタンを押すと、次のような検索条件ダイアログが表示されます。
 
-![検索条件ダイアログ](../images/sc_ss_dlg.png)
+![検索条件ダイアログ]({{ site.baseurl }}/images/sc_ss_dlg.png)
 
 以降の節では"Search"タブまたは検索条件ダイアログの"Search Condition"の詳細な記述方法を説明します。
 
