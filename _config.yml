@@ -1,0 +1,9 @@
+safe: true
+lsi: false
+pygments: true
+#baseurl: /niconama-alert
+gems:
+- jekyll-mentions
+- jemoji
+- jekyll-redirect-from
+
