@@ -62,10 +62,7 @@
           title (-> (html/select infobox [:h2 (html/attr= :itemprop "name") :> html/text-node])
                     first
                     (s/unescape :html))
-          description (->> (html/select infobox [(html/attr= :itemprop "description")])
-                           first xml-seq (map html/text)
-                           ;; 無駄な改行を取り除く↓
-                           cs/join cs/split-lines (remove cs/blank?) (cs/join "\n"))
+          description (-> (html/select xml [(html/attr= :property "og:description")]) first :attrs :content)
           [open_time start_time] (-> (html/select infobox [:div.kaijo :> :strong :> html/text-node])
                                      open-start-time)
           thumbnail (-> (html/select xml [(html/attr= :itemprop "thumbnail")])
