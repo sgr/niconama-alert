@@ -32,6 +32,7 @@ public class PgmPanelLayout implements LayoutManager2 {
     private int _width = 0;
     private int _height = 0;
     private Dimension _preferredLayoutSize = null;
+    private Boolean _valid = false;
 
     private Component _title = null;
     private Component _icon = null;
@@ -45,7 +46,8 @@ public class PgmPanelLayout implements LayoutManager2 {
 	if (_width != width) {
 	    log.log(Level.FINEST, MessageFormat.format("setWidth {0} -> {1}", _width, width));
 	    _width = width;
-	    updateSize();
+	    _valid = false;
+	    //updateSize();
 	}
     }
 
@@ -53,8 +55,13 @@ public class PgmPanelLayout implements LayoutManager2 {
 	if (_height != height) {
 	    log.log(Level.FINEST, MessageFormat.format("setHeight {0} -> {1}", _height, height));
 	    _height = height;
-	    updateSize();
+	    _valid = false;
+	    //updateSize();
 	}
+    }
+
+    public void needLayout() {
+	_valid = false;
     }
 
     // LayoutManager ここから
@@ -86,61 +93,66 @@ public class PgmPanelLayout implements LayoutManager2 {
     }
 
     public Dimension preferredLayoutSize(Container target) {
-	if (_preferredLayoutSize == null) {
-	    updateSize(target);
+	//log.log(Level.INFO, "preferredLayoutSize");
+	if (!_valid || _width == 0) {
+	    _preferredLayoutSize = preferredLayoutSizeAux(target);
 	}
 	return _preferredLayoutSize;
     }
 
     public void layoutContainer(Container target) {
-	// レイアウト先コンテナのサイズを確認する。
-	Insets insets = target.getInsets();
-	int width = (_width >= MIN_WIDTH ? _width : target.getWidth())
-	    - insets.left - insets.right - PAD - PAD;
-	int height = (_height >= MIN_HEIGHT ? _height : target.getHeight())
-	    - insets.top - insets.bottom - PAD - PAD;
-	int origin_x = insets.left + PAD;
-	int origin_y = insets.top + PAD;
+	//log.log(Level.INFO, "layoutContainer");
+	if (!_valid || _width == 0) {
+	    // レイアウト先コンテナのサイズを確認する。
+	    Insets insets = target.getInsets();
+	    int width = (_width >= MIN_WIDTH ? _width : target.getWidth())
+		- insets.left - insets.right - PAD - PAD;
+	    int height = (_height >= MIN_HEIGHT ? _height : target.getHeight())
+		- insets.top - insets.bottom - PAD - PAD;
+	    int origin_x = insets.left + PAD;
+	    int origin_y = insets.top + PAD;
 
-	if (width > 0) {
-	    // 時間、種別、コミュ限、アイコンラベルのレイアウト（これらはコンテナサイズだけで決められる）
-	    int leftWidth = width - PAD - ICON_SIZE.width;
-	    _type.setBounds(origin_x + leftWidth + PAD, origin_y,
-			    MINI_ICON_SIZE.width, MINI_ICON_SIZE.height);
-	    int time_w = 0;
-	    if (_only != null) {
-		_only.setBounds(origin_x + leftWidth + PAD + MINI_ICON_SIZE.width + MINI_PAD, origin_y,
+	    if (width > 0) {
+		// 時間、種別、コミュ限、アイコンラベルのレイアウト（これらはコンテナサイズだけで決められる）
+		int leftWidth = width - PAD - ICON_SIZE.width;
+		_type.setBounds(origin_x + leftWidth + PAD, origin_y,
 				MINI_ICON_SIZE.width, MINI_ICON_SIZE.height);
-		time_w = ICON_SIZE.width - MINI_ICON_SIZE.width - MINI_PAD - MINI_ICON_SIZE.width;
-	    } else {
-		time_w = ICON_SIZE.width - MINI_ICON_SIZE.width - MINI_PAD;
+		int time_w = 0;
+		if (_only != null) {
+		    _only.setBounds(origin_x + leftWidth + PAD + MINI_ICON_SIZE.width + MINI_PAD, origin_y,
+				    MINI_ICON_SIZE.width, MINI_ICON_SIZE.height);
+		    time_w = ICON_SIZE.width - MINI_ICON_SIZE.width - MINI_PAD - MINI_ICON_SIZE.width;
+		} else {
+		    time_w = ICON_SIZE.width - MINI_ICON_SIZE.width - MINI_PAD;
+		}
+		_time.setBounds(origin_x + width - time_w, origin_y, time_w, TIME_HEIGHT);
+		_icon.setBounds(origin_x + leftWidth + PAD, origin_y + TIME_HEIGHT + PAD,
+				ICON_SIZE.width, ICON_SIZE.height);
+
+		// 一番下、コミュニティラベルからレイアウト
+		_comm.setSize(width, 0);
+		int rest_h = height - (TIME_HEIGHT + PAD + ICON_SIZE.height + PAD + _comm.getPreferredSize().height);
+		int comm_h = _comm.getPreferredSize().height + (rest_h < 0 ? rest_h : 0);
+		_comm.setBounds(origin_x, PAD + height - comm_h, width, comm_h);
+
+		rest_h -= PAD;
+		int leftHeight = TIME_HEIGHT + PAD + ICON_SIZE.height + PAD + (rest_h > 0 ? rest_h : 0);
+
+		// パネル左側、タイトルと詳細ラベルのレイアウト
+		_title.setSize(leftWidth, 0);
+		int left_rest_h = leftHeight - _title.getPreferredSize().height;
+		int title_h = left_rest_h > 0 ? _title.getPreferredSize().height : leftHeight;
+		_title.setBounds(origin_x, origin_y, leftWidth, title_h);
+
+		left_rest_h -= PAD;
+		if (left_rest_h > 0) {
+		    _desc.setSize(leftWidth, 0);
+		    int desc_h = _desc.getPreferredSize().height;
+		    _desc.setBounds(origin_x, origin_y + title_h,
+				    leftWidth, desc_h > left_rest_h ? left_rest_h : desc_h);
+		}
 	    }
-	    _time.setBounds(origin_x + width - time_w, origin_y, time_w, TIME_HEIGHT);
-	    _icon.setBounds(origin_x + leftWidth + PAD, origin_y + TIME_HEIGHT + PAD,
-			    ICON_SIZE.width, ICON_SIZE.height);
-
-	    // 一番下、コミュニティラベルからレイアウト
-	    _comm.setSize(width, 0);
-	    int rest_h = height - (TIME_HEIGHT + PAD + ICON_SIZE.height + PAD + _comm.getPreferredSize().height);
-	    int comm_h = _comm.getPreferredSize().height + (rest_h < 0 ? rest_h : 0);
-	    _comm.setBounds(origin_x, PAD + height - comm_h, width, comm_h);
-
-	    rest_h -= PAD;
-	    int leftHeight = TIME_HEIGHT + PAD + ICON_SIZE.height + PAD + (rest_h > 0 ? rest_h : 0);
-
-	    // パネル左側、タイトルと詳細ラベルのレイアウト
-	    _title.setSize(leftWidth, 0);
-	    int left_rest_h = leftHeight - _title.getPreferredSize().height;
-	    int title_h = left_rest_h > 0 ? _title.getPreferredSize().height : leftHeight;
-	    _title.setBounds(origin_x, origin_y, leftWidth, title_h);
-
-	    left_rest_h -= PAD;
-	    if (left_rest_h > 0) {
-		_desc.setSize(leftWidth, 0);
-		int desc_h = _desc.getPreferredSize().height;
-		_desc.setBounds(origin_x, origin_y + title_h,
-				leftWidth, desc_h > left_rest_h ? left_rest_h : desc_h);
-	    }
+	    _valid = true;
 	}
     }
     // LayoutManager ここまで
@@ -195,7 +207,7 @@ public class PgmPanelLayout implements LayoutManager2 {
     public void invalidateLayout(Container target) {}
     // LayoutManager2 ここまで
 
-    private void updateSize(Container target) {
+    private Dimension preferredLayoutSizeAux(Container target) {
 	Dimension sz = null;
 	if (_width >= MIN_WIDTH && _height >= MIN_HEIGHT) {
 	    sz = new Dimension(_width, _height);
@@ -207,13 +219,13 @@ public class PgmPanelLayout implements LayoutManager2 {
 	    sz = calcSizeWithRestriction(width);
 	}
 	if (sz != null) {
-	    _preferredLayoutSize = sz;
+	    return sz;
 	} else {
-	    updateSize();
+	    return preferredLayoutSizeAux();
 	}
     }
 
-    private void updateSize() {
+    private Dimension preferredLayoutSizeAux() {
 	Dimension sz = null;
 	if (_width >= MIN_WIDTH && _height >= MIN_HEIGHT) {
 	    sz = new Dimension(_width, _height);
@@ -230,8 +242,7 @@ public class PgmPanelLayout implements LayoutManager2 {
 	if (sz == null) {
 	    sz = calcSizeNoRestriction();
 	}
-	_preferredLayoutSize = new Dimension(Math.max(sz.width, MIN_WIDTH),
-					     Math.max(sz.height, MIN_HEIGHT));
+	return new Dimension(Math.max(sz.width, MIN_WIDTH), Math.max(sz.height, MIN_HEIGHT));
     }
 
     private Dimension calcSizeWithRestriction(int width) {

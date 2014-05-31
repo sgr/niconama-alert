@@ -120,9 +120,17 @@ public class PgmPanel extends JPanel {
 		    String owner_name, String comm_name, String comm_id, int type,
 		    Boolean member_only, Date open_time, ImageIcon thumbnail) {
 	this();
+	setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, thumbnail);
+    }
+
+    public void setPgmInfo(String id, String title, String link, String description,
+			   String owner_name, String comm_name, String comm_id, int type,
+			   Boolean member_only, Date open_time, ImageIcon thumbnail) {
 	setId(id);
 	if (description.length() > 0) {
 	    setDescription(description);
+	} else {
+	    setDescription(" ");
 	}
 	setOpenTime(open_time);
 	setIcon(thumbnail);
@@ -152,6 +160,8 @@ public class PgmPanel extends JPanel {
 	} catch (Exception e) {
 	    log.log(Level.WARNING, MessageFormat.format("failed creating URI from {0} ({1})", comm_id, type), e);
 	}
+	invalidate();
+	_layout.needLayout();
     }
 
     public void setId(String id) {
@@ -196,6 +206,10 @@ public class PgmPanel extends JPanel {
     }
 
     public void setIcon(ImageIcon icon) {
+	if (_thumbnail != null) {
+	    _thumbnail.getImage().flush();
+	    _thumbnail = null;
+	}
 	_thumbnail = icon;
 	_iconLabel.setIcon(icon);
     }
@@ -242,6 +256,7 @@ public class PgmPanel extends JPanel {
 		_layout.setWidth(width);
 	    }
 	    invalidate();
+	    _layout.needLayout();
 	}
     }
 
@@ -257,6 +272,7 @@ public class PgmPanel extends JPanel {
 		_layout.setHeight(height);
 	    }
 	    invalidate();
+	    _layout.needLayout();
 	}
     }
 
