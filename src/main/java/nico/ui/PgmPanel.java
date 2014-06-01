@@ -64,9 +64,9 @@ public class PgmPanel extends JPanel {
 	    PgmPanel p = null;
 	    try {
 		p = cache.pop();
-		log.log(Level.INFO, MessageFormat.format("reused a PgmPanel from cache <- ({0})", cache.size()));
+		log.log(Level.FINE, MessageFormat.format("reused a PgmPanel from cache <- ({0})", cache.size()));
 	    } catch (EmptyStackException e) {
-		log.log(Level.INFO, MessageFormat.format("created a new PgmPanel ({0})", cache.size()));
+		log.log(Level.FINE, MessageFormat.format("created a new PgmPanel ({0})", cache.size()));
 		p = new PgmPanel();
 	    } finally {
 		return p;
@@ -92,7 +92,7 @@ public class PgmPanel extends JPanel {
 	_layout.needLayout();
 	synchronized(cache) {
 	    cache.push(this);
-	    log.log(Level.INFO, MessageFormat.format("released a PgmPanel into cache -> ({0})", cache.size()));
+	    log.log(Level.FINE, MessageFormat.format("released a PgmPanel into cache -> ({0})", cache.size()));
 	}
     }
 
