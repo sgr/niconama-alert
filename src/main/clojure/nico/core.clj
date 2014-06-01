@@ -123,7 +123,7 @@
               (-> (reduce #(assoc %1 (-> %2 sc/id-of name) %2) {} (.getComponents wpanel))
                   (get id)))
             (alert-panel [msg imgs]
-              (AlertPanel. msg imgs))
+              (AlertPanel/create msg imgs))
             (update-pgms [id pgms title alert] ; 更新後のリスト内の番組数を返す。
               (let [pgm-lst (sc/select (cpanel id) [:#lst])
                     pnls (.getComponents pgm-lst)]
