@@ -16,6 +16,8 @@ import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Stack;
+import java.util.EmptyStackException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.border.Border;
@@ -55,6 +57,45 @@ public class PgmPanel extends JPanel {
     private static final SimpleDateFormat sdf = new SimpleDateFormat("d MMM", Locale.ENGLISH);
     private static final SimpleDateFormat odf = new SimpleDateFormat("MM/dd HH:mm:ss");
 
+    private static Stack<PgmPanel> cache = new Stack<PgmPanel>();
+
+    public static PgmPanel create() {
+	synchronized(cache) {
+	    PgmPanel p = null;
+	    try {
+		p = cache.pop();
+		log.log(Level.INFO, MessageFormat.format("reused a PgmPanel from cache <- ({0})", cache.size()));
+	    } catch (EmptyStackException e) {
+		log.log(Level.INFO, MessageFormat.format("created a new PgmPanel ({0})", cache.size()));
+		p = new PgmPanel();
+	    } finally {
+		return p;
+	    }
+	}
+    }
+
+    public static PgmPanel create(String id, String title, String link, String description,
+				  String owner_name, String comm_name, String comm_id, int type,
+				  Boolean member_only, Date open_time, ImageIcon thumbnail) {
+	PgmPanel p = PgmPanel.create();
+	p.setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, thumbnail);
+	return p;
+    }
+
+    public void release() {
+	if (_thumbnail != null) {
+	    _thumbnail.getImage().flush();
+	    _thumbnail = null;
+	}
+	setHeight(0);
+	setWidth(0);
+	_layout.needLayout();
+	synchronized(cache) {
+	    cache.push(this);
+	    log.log(Level.INFO, MessageFormat.format("released a PgmPanel into cache -> ({0})", cache.size()));
+	}
+    }
+
     private PgmPanelLayout _layout = null;
 
     private String _id = null;
@@ -75,7 +116,7 @@ public class PgmPanel extends JPanel {
     private int _currWidth = 0;
     private int _currHeight = 0;
 
-    public PgmPanel() {
+    private PgmPanel() {
 	_titleLabel = new MultiLineLabel();
 	_iconLabel = new LinkLabel();
 	_descLabel = new MultiLineLabel(" ");
@@ -101,26 +142,6 @@ public class PgmPanel extends JPanel {
 
 	setForegroundColor(FOREGROUND_DEFAULT);
 	setBackgroundColor(BACKGROUND_DEFAULT);
-    }
-
-    /**
-     * @param id
-     * @param title
-     * @param link
-     * @param description
-     * @param owner_name
-     * @param comm_name
-     * @param comm_id
-     * @param type
-     * @param member_only
-     * @param open_time
-     * @param thumbnail
-     */
-    public PgmPanel(String id, String title, String link, String description,
-		    String owner_name, String comm_name, String comm_id, int type,
-		    Boolean member_only, Date open_time, ImageIcon thumbnail) {
-	this();
-	setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, thumbnail);
     }
 
     public void setPgmInfo(String id, String title, String link, String description,
@@ -161,7 +182,6 @@ public class PgmPanel extends JPanel {
 	    log.log(Level.WARNING, MessageFormat.format("failed creating URI from {0} ({1})", comm_id, type), e);
 	}
 	invalidate();
-	_layout.needLayout();
     }
 
     public void setId(String id) {
@@ -175,22 +195,26 @@ public class PgmPanel extends JPanel {
     public void setTitle(String title, URI pgmURI) {
 	Link[] ls = {new Link(0, title.length(), pgmURI)};
 	_titleLabel.setText(title, ls);
+	_layout.needLayout();
     }
 
     public void setDescription(String description) {
 	_descLabel.setText(description);
+	_layout.needLayout();
     }
 
     public void setComm(String commName, URI commURI, String ownerName) {
 	Link[] ls = {new Link(0, commName.length(), commURI)};
 	String s = String.format("%s（放送者：%s）", commName, ownerName);
 	_commLabel.setText(s, ls);
+	_layout.needLayout();
     }
 
     public void setComm(String commName, URI commURI) {
 	// チャンネルの場合放送者はnull
 	Link[] ls = {new Link(0, commName.length(), commURI)};
 	_commLabel.setText(commName, ls);
+	_layout.needLayout();
     }
 
     public void setOpenTime(Date open_time) {
@@ -199,6 +223,7 @@ public class PgmPanel extends JPanel {
 	synchronized (odf) {
 	    _timeLabel.setToolTipText(odf.format(open_time));
 	}
+	_layout.needLayout();
     }
 
     public Date getOpenTime() {
@@ -212,6 +237,7 @@ public class PgmPanel extends JPanel {
 	}
 	_thumbnail = icon;
 	_iconLabel.setIcon(icon);
+	_layout.needLayout();
     }
 
     public void setOnly(boolean only) {
@@ -220,6 +246,7 @@ public class PgmPanel extends JPanel {
 	    _onlyLabel.setIcon(MEMBER_ONLY_ICON);
 	    add(_onlyLabel, Slot.ONLY);
 	}
+	_layout.needLayout();
     }
 
     public void setType(int type) {
@@ -236,6 +263,7 @@ public class PgmPanel extends JPanel {
 	    icon = OFFICIAL_ICON;
 	}
 	_typeLabel.setIcon(icon);
+	_layout.needLayout();
     }
 
     public void setLinkHandlers(LinkHandlers lhdrs) {
@@ -256,7 +284,6 @@ public class PgmPanel extends JPanel {
 		_layout.setWidth(width);
 	    }
 	    invalidate();
-	    _layout.needLayout();
 	}
     }
 
@@ -272,7 +299,6 @@ public class PgmPanel extends JPanel {
 		_layout.setHeight(height);
 	    }
 	    invalidate();
-	    _layout.needLayout();
 	}
     }
 

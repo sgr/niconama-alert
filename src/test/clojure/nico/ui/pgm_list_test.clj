@@ -22,10 +22,10 @@
           "thumbnail" (si/icon "noimage.png")})
 
 (defn- pgm-panel [pgm]
-  (PgmPanel. (get pgm "id") (get pgm "title") (get pgm "link") (get pgm "description")
-             (get pgm "owner_name") (get pgm "comm_name") (get pgm "comm_id")
-             (get pgm "type") (get pgm "member_only") (get pgm "open_time")
-             (get pgm "thumbnail")))
+  (PgmPanel/create (get pgm "id") (get pgm "title") (get pgm "link") (get pgm "description")
+                   (get pgm "owner_name") (get pgm "comm_name") (get pgm "comm_id")
+                   (get pgm "type") (get pgm "member_only") (get pgm "open_time")
+                   (get pgm "thumbnail")))
 
 (defn- wait-closing [frame]
   (let [p (promise)]

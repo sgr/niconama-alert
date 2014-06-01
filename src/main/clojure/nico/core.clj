@@ -93,8 +93,7 @@
         browsers (atom nil)
         link-handlers (proxy [LinkHandlers] []
                         (getHandlerCount [] (count @browsers))
-                        (getHandler [idx] (nth @browsers idx)))
-        pgm-panel-cache (atom [])]
+                        (getHandler [idx] (nth @browsers idx)))]
     (letfn [(link-handler [[name cmd]]
               (proxy [LinkHandler] [(if (= :default name) "Default Browser" name)]
                 (browse [uri]
@@ -108,25 +107,11 @@
                 (str (.substring s 0 n) "\n＜省略しています＞")
                 s))
             (pgm-panel-aux [pgm]
-              (if-let [p (peek @pgm-panel-cache)]
-                (do
-                  (swap! pgm-panel-cache pop)
-                  (log/infof "reuseed panel from cache [%d]" (count @pgm-panel-cache))
-                  (doto p
-                    (.setPgmInfo (:id pgm) (:title pgm) (:link pgm)
-                                 (:description pgm) (:owner_name pgm)
-                                 (:comm_name pgm) (:comm_id pgm)
-                                 (:type pgm) (:member_only pgm) (:open_time pgm)
-                                 (si/icon (.getImage icache (:thumbnail pgm))))))
-                (PgmPanel. (:id pgm) (:title pgm) (:link pgm)
-                           (:description pgm) (:owner_name pgm)
-                           (:comm_name pgm) (:comm_id pgm)
-                           (:type pgm) (:member_only pgm) (:open_time pgm)
-                           (si/icon (.getImage icache (:thumbnail pgm))))))
-            (release-pgm-panel [panel]
-              (when panel
-                (swap! pgm-panel-cache conj panel)
-                (log/infof "returned panel to cache [%d]" (count @pgm-panel-cache))))
+              (PgmPanel/create (:id pgm) (:title pgm) (:link pgm)
+                               (:description pgm) (:owner_name pgm)
+                               (:comm_name pgm) (:comm_id pgm)
+                               (:type pgm) (:member_only pgm) (:open_time pgm)
+                               (si/icon (.getImage icache (:thumbnail pgm)))))
             (pgm-panel [pgm & {:keys [width height border]}]
               (let [p (pgm-panel-aux (if height pgm (update-in pgm [:description] trim 64)))]
                 (.setLinkHandlers p link-handlers)
@@ -159,8 +144,7 @@
                                           (if (= 1 cnt) "program is" "programs are") title)]
                           (da/alert (alert-panel msg imgs) 10000)))
                       (sc/invoke-now (doseq [rpnl rpnls] (.remove pgm-lst rpnl)))
-                      ;;(doseq [rpnl rpnls] (.dispose rpnl))
-                      (doseq [rpnl rpnls] (release-pgm-panel rpnl))
+                      (doseq [rpnl rpnls] (.release rpnl))
                       (let [npgm (.getComponentCount pgm-lst)
                             ctrl (sc/select (cpanel id) [:#control])]
                         (sc/invoke-now
@@ -239,7 +223,7 @@
                                     (.revalidate sresult-panel)
                                     (sc/config! add-ch-btn :enabled? (pos? nresults))
                                     (sc/config! search-btn :enabled? true))
-                                   (doseq [rpnl rpnls] (.dispose rpnl)))
+                                   (doseq [rpnl rpnls] (.release rpnl)))
               :waiting-rss (let [{:keys [rest total]} cmd]
                              (sc/invoke-later
                               (sc/config! rss-status :text "waiting")

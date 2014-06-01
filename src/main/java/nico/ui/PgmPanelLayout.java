@@ -44,19 +44,19 @@ public class PgmPanelLayout implements LayoutManager2 {
 
     public void setWidth(int width) {
 	if (_width != width) {
-	    log.log(Level.FINEST, MessageFormat.format("setWidth {0} -> {1}", _width, width));
+	    log.log(Level.INFO, MessageFormat.format("setWidth {0} -> {1}", _width, width));
 	    _width = width;
+	    updateSize();
 	    _valid = false;
-	    //updateSize();
 	}
     }
 
     public void setHeight(int height) {
 	if (_height != height) {
-	    log.log(Level.FINEST, MessageFormat.format("setHeight {0} -> {1}", _height, height));
+	    log.log(Level.INFO, MessageFormat.format("setHeight {0} -> {1}", _height, height));
 	    _height = height;
+	    updateSize();
 	    _valid = false;
-	    //updateSize();
 	}
     }
 
@@ -94,9 +94,10 @@ public class PgmPanelLayout implements LayoutManager2 {
 
     public Dimension preferredLayoutSize(Container target) {
 	//log.log(Level.INFO, "preferredLayoutSize");
-	if (!_valid || _width == 0) {
-	    _preferredLayoutSize = preferredLayoutSizeAux(target);
+	if (_preferredLayoutSize == null || !_valid || _width == 0) {
+	    updateSize(target);
 	}
+	log.log(Level.INFO, MessageFormat.format("preferredLayoutSize ({0})", _preferredLayoutSize));
 	return _preferredLayoutSize;
     }
 
@@ -207,25 +208,27 @@ public class PgmPanelLayout implements LayoutManager2 {
     public void invalidateLayout(Container target) {}
     // LayoutManager2 ここまで
 
-    private Dimension preferredLayoutSizeAux(Container target) {
+    private void updateSize(Container target) {
 	Dimension sz = null;
 	if (_width >= MIN_WIDTH && _height >= MIN_HEIGHT) {
 	    sz = new Dimension(_width, _height);
-	}
-	Insets insets = target.getInsets();
-	int width = (_width >= MIN_WIDTH ? _width : target.getWidth())
-	    - insets.left - insets.right - PAD - PAD;
-	if (width > 0) {
-	    sz = calcSizeWithRestriction(width);
-	}
-	if (sz != null) {
-	    return sz;
 	} else {
-	    return preferredLayoutSizeAux();
+	    Insets insets = target.getInsets();
+	    int width = (_width >= MIN_WIDTH ? _width : target.getWidth())
+		- insets.left - insets.right - PAD - PAD;
+	    if (width > 0) {
+		sz = calcSizeWithRestriction(width);
+	    }
+	}
+
+	if (sz != null) {
+	    _preferredLayoutSize = sz;
+	} else {
+	    updateSize();
 	}
     }
 
-    private Dimension preferredLayoutSizeAux() {
+    private void updateSize() {
 	Dimension sz = null;
 	if (_width >= MIN_WIDTH && _height >= MIN_HEIGHT) {
 	    sz = new Dimension(_width, _height);
@@ -242,7 +245,7 @@ public class PgmPanelLayout implements LayoutManager2 {
 	if (sz == null) {
 	    sz = calcSizeNoRestriction();
 	}
-	return new Dimension(Math.max(sz.width, MIN_WIDTH), Math.max(sz.height, MIN_HEIGHT));
+	_preferredLayoutSize = new Dimension(Math.max(sz.width, MIN_WIDTH), Math.max(sz.height, MIN_HEIGHT));
     }
 
     private Dimension calcSizeWithRestriction(int width) {
