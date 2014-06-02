@@ -1,7 +1,7 @@
 (defproject nicoalert "1.7.0"
   :description "NiconamaAlert.clj"
   :dependencies [[org.clojure/clojure "[1.6,)"]
-                 [org.clojure/core.async "0.1.267.0-0d7780-alpha"]
+                 [org.clojure/core.async "0.1.303.0-886421-alpha"]
                  [org.clojure/data.zip "0.1.1"]
                  [org.clojure/java.jdbc "[0.3,)"]
                  [org.clojure/math.numeric-tower "0.0.4"]
@@ -44,7 +44,7 @@
 ;;  :repositories [["sonatype-oss-public" {:url "https://oss.sonatype.org/content/groups/public/"}]]
   :jvm-opts ~(let [sys (.toLowerCase (System/getProperty "os.name"))]
                (condp re-find sys
-                 #"mac" ["-Xdock:name=NikonamaAlert.clj" "-Xdock:icon=resources/dempakun.png" "-XX:+TieredCompilation" "-XX:TieredStopAtLevel=1"]
+                 #"mac" ["-Xdock:name=NikonamaAlert.clj" "-Xdock:icon=resources/dempakun.png" "-XX:+TieredCompilation" "-XX:TieredStopAtLevel=1" "-XX:MaxPermSize=256m" "-Xmx1024m"]
                  ["-XX:+TieredCompilation" "-XX:TieredStopAtLevel=1"]))
   ;; Oracle's Java SE 7/8 for Mac OS X has a serious memory-leak bug.
   ;; <https://bugs.openjdk.java.net/browse/JDK-8029147>

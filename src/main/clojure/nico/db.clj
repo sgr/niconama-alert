@@ -353,116 +353,117 @@
                    npgms 0
                    last-searched (now)
                    acc-rm 0]
-        ;; 30分経って更新されてない番組情報は削除する
-        (let [threshold (int (* RATIO total))]
-          (when (and (pos? threshold) (> npgms threshold))
-            (clean! db (- npgms threshold))
-            (let [new-npgms (n-pgms db)
-                  last-updated (now-str)
-                  rm (- npgms new-npgms)
-                  new-acc-rm (+ acc-rm rm)]
-              (log/debugf "clean! [%d -> %d] acc-rm: %d" npgms new-npgms new-acc-rm)
-              (ca/>! oc-status {:status :db-stat :npgms new-npgms :last-updated last-updated})
-              (when (pos? rm)
-                (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
-              (recur db
-                     ;; niconico側が何らかの問題で異常に小さいtotalを渡してきた場合を考慮
-                     (if (>= new-npgms threshold) (int (* RATIO new-npgms)) total)
-                     new-npgms
-                     (if (pos? rm) (now) last-searched)
-                     new-acc-rm))))
+        (cond
+         (> npgms (int (* RATIO total)) 0) ;; 30分経って更新されてない番組情報は削除する
+         (let [threshold (int (* RATIO total))]
+           (clean! db (- npgms threshold))
+           (let [new-npgms (n-pgms db)
+                 last-updated (now-str)
+                 rm (- npgms new-npgms)
+                 new-acc-rm (+ acc-rm rm)]
+             (log/debugf "clean! [%d -> %d] acc-rm: %d" npgms new-npgms new-acc-rm)
+             (ca/>! oc-status {:status :db-stat :npgms new-npgms :last-updated last-updated})
+             (when (pos? rm)
+               (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
+             (recur db
+                    ;; niconico側が何らかの問題で異常に小さいtotalを渡してきた場合を考慮
+                    (if (>= new-npgms threshold) (int (* RATIO new-npgms)) total)
+                    new-npgms
+                    (if (pos? rm) (now) last-searched)
+                    new-acc-rm)))
 
-        ;; ここでacc-rm等を見て必要に応じてvacuumをかける
-        (when (and (pos? npgms) (>= acc-rm npgms))
-          (let [fc (pragma-query db :freelist_count)
-                pc (pragma-query db :page_count)]
-            (when (< FREELIST-THRESHOLD fc)
-              (execute! db [(:vacuum @(:ps-std db))] :transaction? false)
-              ;;(execute! db [(:reindex @(:ps-std db))] :transaction? false)
-              (execute! db [(:shrink_memory @(:ps-std db))] :transaction? false)
-              (log/infof "freelist / page: [%d, %d] -> [%d, %d]" fc pc
-                         (pragma-query db :freelist_count) (pragma-query db :page_count))
-              (recur db total npgms last-searched 0))))
+         
+         (and (pos? npgms) (>= acc-rm npgms)) ;; acc-rm等を見て必要に応じてvacuumをかける
+         (let [fc (pragma-query db :freelist_count)
+               pc (pragma-query db :page_count)]
+           (when (< FREELIST-THRESHOLD fc)
+             (execute! db [(:vacuum @(:ps-std db))] :transaction? false)
+             ;;(execute! db [(:reindex @(:ps-std db))] :transaction? false)
+             (execute! db [(:shrink_memory @(:ps-std db))] :transaction? false)
+             (log/infof "freelist / page: [%d, %d] -> [%d, %d]" fc pc
+                        (pragma-query db :freelist_count) (pragma-query db :page_count))
+             (recur db total npgms last-searched 0)))
 
-        (if-let [c (ca/<! cc)]
-          (condp = (:cmd c)
-            :create-db (do
-                         (create-db db)
-                         (reset! (:ps-std db) (reduce (fn [m [k q]] (assoc m k (pstmt db q))) {} QS-STD))
-                         (recur db 0 0 (now) 0))
-            :set-query-kwd (let [{:keys [id query target]} c
-                                 q (sql-kwd query target)]
-                             (when-let [p (get @(:ps db) id)] (.close p))
-                             (swap! (:ps db) assoc id (pstmt db q))
-                             (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
-                             (recur db total npgms last-searched acc-rm))
-            :set-query-user (let [{:keys [id comms]} c
-                                  q (sql-comms comms)]
+         :else
+         (if-let [c (ca/<! cc)]
+           (condp = (:cmd c)
+             :create-db (do
+                          (create-db db)
+                          (reset! (:ps-std db) (reduce (fn [m [k q]] (assoc m k (pstmt db q))) {} QS-STD))
+                          (recur db 0 0 (now) 0))
+             :set-query-kwd (let [{:keys [id query target]} c
+                                  q (sql-kwd query target)]
                               (when-let [p (get @(:ps db) id)] (.close p))
                               (swap! (:ps db) assoc id (pstmt db q))
                               (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
                               (recur db total npgms last-searched acc-rm))
-            :rem-query (let [id (:id c)]
-                         (swap! (:ps db) dissoc id)
-                         (recur db total npgms last-searched acc-rm))
-            :add-pgm  (let [[ins rm] (add! db (:pgm c))
-                            npgms (n-pgms db)
-                            last-updated (now-str)]
-                        (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated})
-                        (when (some pos? [ins rm])
-                          (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
-                        (recur db
-                               total
-                               npgms
-                               (if (some pos? [ins rm]) (now) last-searched)
-                               (+ acc-rm rm)))
-            :add-pgms (let [pgms (:pgms c)
-                            [ins rm] (loop [ains 0 arm 0 pgms pgms]
-                                       (if-let [pgm (first pgms)]
-                                         (let [[ins rm] (add! db pgm)]
-                                           (recur (+ ains ins) (+ arm rm) (rest pgms)))
-                                         [ains arm]))
-                            new-acc-rm (+ acc-rm rm)
-                            npgms (n-pgms db)
-                            last-updated (now-str)
-                            new-last-searched (let [now (now)]
-                                                (if (and (< SEARCH-INTERVAL (- now last-searched))
-                                                         (some pos? [ins rm]))
-                                                  now last-searched))]
-                        (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated})
-                        (when-not (= last-searched new-last-searched)
-                          (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
-                        (recur db
-                               (if-let [new-total (:total c)] new-total total)
-                               npgms
-                               new-last-searched
-                               new-acc-rm))
-            :finish (do
-                      (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
-                      (recur db total npgms (now) acc-rm))
-            :search-ondemand (let [{:keys [query target]} c
-                                   cnt (count-pgms db query target)
-                                   q (if (< SEARCH-LIMIT cnt)
-                                       (sql-kwd query target SEARCH-LIMIT)
-                                       (sql-kwd query target))
-                                   results (search-pgms db q)]
-                               (ca/>! oc-status {:status :searched-ondemand :cnt cnt :results results})
-                               (recur db total npgms last-searched acc-rm)) ;; ここではlast-searched更新しない
-            (do
-              (log/warnf "caught an unknown command[%s]" (pr-str c))
-              (recur db total npgms last-searched acc-rm)))
-          (do
-            (log/info "closed database control channel")
-            (try
-              (doseq [pstmt (vals @(:ps-std db))] (.close pstmt))
-              (doseq [pstmt (vals @(:ps db))] (.close pstmt))
-              (doseq [pstmt (.values (:ps-cache db))] (.close pstmt))
-              (catch Exception e
-                (log/warnf e "failed closing pstmts"))
-              (finally
-                (try
-                  (.close (:connection db))
-                  (catch Exception e
-                    (log/errorf e "failed closing connection"))))))))
+             :set-query-user (let [{:keys [id comms]} c
+                                   q (sql-comms comms)]
+                               (when-let [p (get @(:ps db) id)] (.close p))
+                               (swap! (:ps db) assoc id (pstmt db q))
+                               (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
+                               (recur db total npgms last-searched acc-rm))
+             :rem-query (let [id (:id c)]
+                          (swap! (:ps db) dissoc id)
+                          (recur db total npgms last-searched acc-rm))
+             :add-pgm  (let [[ins rm] (add! db (:pgm c))
+                             npgms (n-pgms db)
+                             last-updated (now-str)]
+                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated})
+                         (when (some pos? [ins rm])
+                           (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
+                         (recur db
+                                total
+                                npgms
+                                (if (some pos? [ins rm]) (now) last-searched)
+                                (+ acc-rm rm)))
+             :add-pgms (let [pgms (:pgms c)
+                             [ins rm] (loop [ains 0 arm 0 pgms pgms]
+                                        (if-let [pgm (first pgms)]
+                                          (let [[ins rm] (add! db pgm)]
+                                            (recur (+ ains ins) (+ arm rm) (rest pgms)))
+                                          [ains arm]))
+                             new-acc-rm (+ acc-rm rm)
+                             npgms (n-pgms db)
+                             last-updated (now-str)
+                             new-last-searched (let [now (now)]
+                                                 (if (and (< SEARCH-INTERVAL (- now last-searched))
+                                                          (some pos? [ins rm]))
+                                                   now last-searched))]
+                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated})
+                         (when-not (= last-searched new-last-searched)
+                           (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
+                         (recur db
+                                (if-let [new-total (:total c)] new-total total)
+                                npgms
+                                new-last-searched
+                                new-acc-rm))
+             :finish (do
+                       (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
+                       (recur db total npgms (now) acc-rm))
+             :search-ondemand (let [{:keys [query target]} c
+                                    cnt (count-pgms db query target)
+                                    q (if (< SEARCH-LIMIT cnt)
+                                        (sql-kwd query target SEARCH-LIMIT)
+                                        (sql-kwd query target))
+                                    results (search-pgms db q)]
+                                (ca/>! oc-status {:status :searched-ondemand :cnt cnt :results results})
+                                (recur db total npgms last-searched acc-rm)) ;; ここではlast-searched更新しない
+             (do
+               (log/warnf "caught an unknown command[%s]" (pr-str c))
+               (recur db total npgms last-searched acc-rm)))
+           (do
+             (log/info "closed database control channel")
+             (try
+               (doseq [pstmt (vals @(:ps-std db))] (.close pstmt))
+               (doseq [pstmt (vals @(:ps db))] (.close pstmt))
+               (doseq [pstmt (.values (:ps-cache db))] (.close pstmt))
+               (catch Exception e
+                 (log/warnf e "failed closing pstmts"))
+               (finally
+                 (try
+                   (.close (:connection db))
+                   (catch Exception e
+                     (log/errorf e "failed closing connection")))))))))
       (ca/>!! cc {:cmd :create-db})
       cc)))

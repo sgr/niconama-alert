@@ -160,7 +160,10 @@
                    alerts {}]
         (if-let [cmd (ca/<! cc)]
           ;;(log/tracef "UI-STATUS-LOOP: %s" (pr-str cmd))
-          (let [status (:status cmd)]
+          (let [status (:status cmd)
+                n-titles (atom titles)
+                n-npgms  (atom npgms)
+                n-alerts (atom alerts)]
             (condp = status
               ;; このコマンドはループの外で保持されているagentを更新する。
               :set-browsers (let [bs (:browsers cmd)]
@@ -169,13 +172,15 @@
 
               ;; 以下のコマンド群はループで管理している状態を更新する。
               :set-channel-alert (let [{:keys [id alert]} cmd]
-                                   (recur titles npgms (assoc alerts id alert)))
+                                   ;;(recur titles npgms (assoc alerts id alert)))
+                                   (swap! n-alerts assoc id alert))
               :set-channel-title (let [{:keys [id title]} cmd
                                        ctrl (sc/select (cpanel id) [:#control])
                                        npgm (or (get npgms id) 0)]
                                    (sc/invoke-later
                                     (sc/config! ctrl :border (format "%s (%d)" title npgm)))
-                                   (recur (assoc titles id title) npgms alerts))
+                                   ;;(recur (assoc titles id title) npgms alerts))
+                                   (swap! n-titles assoc id title))
               :dispose-channel (let [id (:id cmd)
                                      cp (cpanel id)
                                      pgm-lst (sc/select cp [:#lst])
@@ -183,14 +188,18 @@
                                  (sc/invoke-later
                                   (.removeAll pgm-lst)
                                   (.remove wpanel cp))
-                                 (doseq [rpnl rpnls] (.dispose rpnl))
-                                 (recur (dissoc titles id) (dissoc npgms id) (dissoc alerts id)))
+                                 (doseq [rpnl rpnls] (.release rpnl))
+                                 ;;(recur (dissoc titles id) (dissoc npgms id) (dissoc alerts id)))
+                                 (swap! n-titles dissoc id)
+                                 (swap! n-npgms  dissoc id)
+                                 (swap! n-alerts dissoc id))
               :searched (let [new-npgms (reduce (fn [m [id pgms]]
                                                   (let [title (get titles id)
                                                         alert (get alerts id)]
                                                   (assoc m id (update-pgms id pgms title alert))))
                                                 {} (:results cmd))]
-                          (recur titles (merge npgms new-npgms) alerts))
+                          ;;(recur titles (merge npgms new-npgms) alerts))
+                          (swap! n-npgms merge new-npgms))
 
               ;; 以下のコマンド群はUIの更新のみ行い、状態更新はない。
               :db-stat (let [{:keys [npgms last-updated]} cmd]
@@ -256,7 +265,7 @@
                             (sc/config! api-status :text "stopped")
                             (sc/config! api-rate :text "- programs/min"))
               (log/warnf "caught an unknown status: %s" (pr-str cmd)))
-            (recur titles npgms alerts))
+            (recur @n-titles @n-npgms @n-alerts))
           (log/info "closed status channel")))
       cc)))
 

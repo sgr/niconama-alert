@@ -219,15 +219,12 @@
               :restart (let [retry (:retry c)
                              cnt (count (:as user))]
                          (ca/close! listener)
-                         (if (> RETRY-LIMIT retry)
-                           (if (pos? cnt)
-                             (recur user rate (connect (-> (:as user) vals first) retry))
-                             (log/warnf "couldn't restart [%d]" cnt))
-                           (log/warnf "retry count reached limit [%d, %d]" retry RETRY-LIMIT))
-                         (if (pos? cnt)
-                           (ca/>! oc-status {:status :stopped-api})
-                           (ca/>! oc-status {:status :disabled-api}))
-                         (recur user rate nil))
+                         (ca/>! oc-status (if (pos? cnt)
+                                            {:status :stopped-api}
+                                            {:status :disabled-api}))
+                         (recur user rate
+                                (when (and (> RETRY-LIMIT retry) (pos? cnt))
+                                  (connect (-> (:as user) vals first) retry))))
               :connected (do
                            (ca/>!! oc-status {:status :started-api})
                            (recur user (assoc rate :ch (ca/timeout UPDATE-INTERVAL)) listener))
