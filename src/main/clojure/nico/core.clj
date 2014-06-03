@@ -178,7 +178,7 @@
                             ctrl (sc/select (cpanel id) [:#control])]
                         (sc/invoke-now
                          (sc/config! ctrl :border (format "%s (%d)" title npgm))
-                         (.revalidate pgm-lst))
+                         (.validate pgm-lst))
                         npgm))))))]
       ;; このループではUIに関する状態を管理する。
       ;; PgmPanelがリンクを開く際に共通して用いるブラウザ情報およびLinkHandlersは
@@ -249,7 +249,7 @@
                                     (sc/value! l-search-status s)
                                     (.removeAll sresult-panel)
                                     (doseq [pnl pnls] (.add sresult-panel pnl))
-                                    (.revalidate sresult-panel)
+                                    (.validate sresult-panel)
                                     (sc/config! add-ch-btn :enabled? (pos? nresults))
                                     (sc/config! search-btn :enabled? true))
                                    (doseq [rpnl rpnls] (.release rpnl)))

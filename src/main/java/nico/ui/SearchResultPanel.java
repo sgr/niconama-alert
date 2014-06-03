@@ -28,48 +28,48 @@ public class SearchResultPanel extends JPanel implements Scrollable {
 	setLayout(_layout);
 	_lastWidth = getWidth();
     }
-    @Override
-    public void revalidate() {
-	JComponent parentComponent = (JComponent)SwingUtilities.getAncestorOfClass(JComponent.class, this);
+    // @Override
+    // public void validate() {
+    // 	JComponent parentComponent = (JComponent)SwingUtilities.getAncestorOfClass(JComponent.class, this);
     
-	if (parentComponent != null) {
-	    parentComponent.revalidate();
-	    parentComponent.repaint();
-	} else {
-	    super.revalidate();
-	}
-    }
+    // 	if (parentComponent != null) {
+    // 	    parentComponent.validate();
+    // 	    parentComponent.repaint();
+    // 	} else {
+    // 	    super.validate();
+    // 	}
+    // }
 
     @Override
     public Component add(Component c) {
 	super.add(c);
-	revalidate();
+	validate();
 	return c;
     }
 
     @Override
     public Component add(Component c, int index) {
 	super.add(c, index);
-	revalidate();
+	validate();
 	return c;
     }
 
     @Override
     public void remove(Component c) {
 	super.remove(c);
-	revalidate();
+	validate();
     }
 
     @Override
     public void remove(int idx) {
 	super.remove(idx);
-	revalidate();
+	validate();
     }
 
     @Override
     public void removeAll() {
 	super.removeAll();
-	revalidate();
+	validate();
     }
 
     // Scrollable ここから
