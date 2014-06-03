@@ -68,7 +68,7 @@ public class ImageCache {
 	    @Override
 	    protected boolean removeEldestEntry(final Map.Entry<String, Image> entry) {
 		if (super.size() > capacity) {
-		    //entry.getValue().flush(); // 今は利用側でフラッシュするためコメントアウト
+		    entry.getValue().flush();
 		    log.log(Level.FINE, MessageFormat.format("removeEldestEntry: {0} > {1}", super.size(), capacity));
 		    return true;
 		} else {

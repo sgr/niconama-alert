@@ -26,7 +26,7 @@
                    :border "API listening status"
                    :constraints ["wrap 3, fill, ins 0 10 5 10"]
                    :items [[(sc/label :id :api-status :text "idle") "grow"]
-                           [(sc/label :id :api-rate :text "- programs/min") "grow"]
+                           [(sc/label :id :api-rate :text "No programs/min") "grow"]
                            [api-btn "spany 2, align right"]])
         rss-panel (sm/mig-panel
                    :border "RSS fetching status"

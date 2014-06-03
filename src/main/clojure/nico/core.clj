@@ -80,6 +80,33 @@
                 (.show pmenu cpanel (.getX btn-menu) (+ (.getY btn-menu) (.getHeight btn-menu)))))))
           (sc/invoke-now (add-head! wpanel cpanel 0)))))))
 
+(let [sb (StringBuilder.)
+      SEC-REST " sec rest"
+      PROGRESS " / "
+      PGMS-PERMIN " programs/min"
+      NPGMS " programs"
+      LAST-UPDATED "Last updated: "]
+  (defn waiting-progress-str [^long sec]
+    (locking sb
+      (.setLength sb 0)
+      (-> sb (.append sec) (.append SEC-REST) .toString)))
+  (defn fetching-progress-str [^long acc ^long total]
+    (locking sb
+      (.setLength sb 0)
+      (-> sb (.append acc) (.append PROGRESS) (.append total) .toString)))
+  (defn rate-api-str [^long rate]
+    (locking sb
+      (.setLength sb 0)
+      (-> sb (.append rate) (.append PGMS-PERMIN) .toString)))
+  (defn npgms-str [^long npgms]
+    (locking sb
+      (.setLength sb 0)
+      (-> sb (.append npgms) (.append NPGMS) .toString)))
+  (defn last-updated-str [^String at]
+    (locking sb
+      (.setLength sb 0)
+      (-> sb (.append LAST-UPDATED) (.append at) .toString))))
+
 (defn- status-channel [frame]
   (let [cc (ca/chan)
         icache (ImageCache. 512 5 3
@@ -93,7 +120,9 @@
         browsers (atom nil)
         link-handlers (proxy [LinkHandlers] []
                         (getHandlerCount [] (count @browsers))
-                        (getHandler [idx] (nth @browsers idx)))]
+                        (getHandler [idx] (nth @browsers idx)))
+        EMPTY-PROGRESS-STR ""
+        NO-PGMS-PERMIN-STR "No programs/min"]
     (letfn [(link-handler [[name cmd]]
               (proxy [LinkHandler] [(if (= :default name) "Default Browser" name)]
                 (browse [uri]
@@ -149,7 +178,7 @@
                             ctrl (sc/select (cpanel id) [:#control])]
                         (sc/invoke-now
                          (sc/config! ctrl :border (format "%s (%d)" title npgm))
-                         (.revalidate pgm-lst))
+                         (.validate pgm-lst))
                         npgm))))))]
       ;; このループではUIに関する状態を管理する。
       ;; PgmPanelがリンクを開く際に共通して用いるブラウザ情報およびLinkHandlersは
@@ -204,8 +233,8 @@
               ;; 以下のコマンド群はUIの更新のみ行い、状態更新はない。
               :db-stat (let [{:keys [npgms last-updated]} cmd]
                          (sc/invoke-later
-                          (sc/config! l-last-updated :text (format "Last updated: %s" last-updated))
-                          (sc/config! l-npgms :text (format "%d programs" npgms))))
+                          (sc/config! l-last-updated :text (last-updated-str last-updated))
+                          (sc/config! l-npgms :text (npgms-str npgms))))
               :fetching-rss (let [{:keys [page acc total]} cmd]
                               (sc/invoke-later
                                (sc/config! rss-status :text "fetching")
@@ -213,7 +242,7 @@
                                  (sc/config! rss-progress :value acc :max total)
                                  (sc/config! rss-progress :value acc))
                                (.setString rss-progress (if total
-                                                          (format "%d / %d" acc total)
+                                                          (fetching-progress-str acc total)
                                                           (str acc)))))
               :searched-ondemand (let [{:keys [cnt results]} cmd
                                        nresults (count results)
@@ -229,7 +258,7 @@
                                     (sc/value! l-search-status s)
                                     (.removeAll sresult-panel)
                                     (doseq [pnl pnls] (.add sresult-panel pnl))
-                                    (.revalidate sresult-panel)
+                                    (.validate sresult-panel)
                                     (sc/config! add-ch-btn :enabled? (pos? nresults))
                                     (sc/config! search-btn :enabled? true))
                                    (doseq [rpnl rpnls] (.release rpnl)))
@@ -237,33 +266,33 @@
                              (sc/invoke-later
                               (sc/config! rss-status :text "waiting")
                               (sc/config! rss-progress :value rest :max total)
-                              (.setString rss-progress (format "%d sec rest" rest))))
+                              (.setString rss-progress (waiting-progress-str rest))))
               :started-rss (sc/invoke-later
                             (sc/config! rss-status :text "running")
                             (sc/config! rss-progress :value 0 :max 100)
-                            (.setString rss-progress "")
+                            (.setString rss-progress EMPTY-PROGRESS-STR)
                             (sc/config! rss-btn :icon "stop.png"))
               :stopped-rss (sc/invoke-later
                             (sc/config! rss-status :text "stand-by")
                             (sc/config! rss-progress :value 0 :max 100)
-                            (.setString rss-progress "")
+                            (.setString rss-progress EMPTY-PROGRESS-STR)
                             (sc/config! rss-btn :icon "start.png"))
               :enabled-api  (sc/invoke-later (sc/config! api-btn :enabled? true))
               :disabled-api (sc/invoke-later (sc/config! api-btn :enabled? false))
               :starting-api (sc/invoke-later
                              (sc/config! api-btn :enabled? false)
                              (sc/config! api-status :text "starting")
-                             (sc/config! api-rate :text "- programs/min"))
+                             (sc/config! api-rate :text NO-PGMS-PERMIN-STR))
               :started-api (sc/invoke-later
                             (sc/config! api-btn :enabled? false)
                             (sc/config! api-status :text "listening")
-                            (sc/config! api-rate :text "- programs/min"))
+                            (sc/config! api-rate :text NO-PGMS-PERMIN-STR))
               :rate-api (sc/invoke-later
-                         (sc/config! api-rate :text (format "%d programs/min" (:rate cmd))))
+                         (sc/config! api-rate :text (rate-api-str (:rate cmd))))
               :stopped-api (sc/invoke-later
                             (sc/config! api-btn :enabled? true)
                             (sc/config! api-status :text "stopped")
-                            (sc/config! api-rate :text "- programs/min"))
+                            (sc/config! api-rate :text NO-PGMS-PERMIN-STR))
               (log/warnf "caught an unknown status: %s" (pr-str cmd)))
             (recur @n-titles @n-npgms @n-alerts))
           (log/info "closed status channel")))
