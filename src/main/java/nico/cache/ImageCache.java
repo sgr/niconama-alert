@@ -7,6 +7,7 @@ import java.awt.Toolkit;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.MalformedURLException;
@@ -216,6 +217,9 @@ public class ImageCache {
 		os.reset();
 	    } finally {
 		is.close();
+		if (conn instanceof HttpURLConnection) {
+		    ((HttpURLConnection)conn).disconnect();
+		}
 	    }
 	    if (os.size() > 0) {
 		return os.toByteArray();
@@ -257,6 +261,7 @@ public class ImageCache {
 				MessageFormat.format("scaled image: ({1}, {2}) -> ({3}, {4})",
 						     img.getWidth(null), img.getHeight(null),
 						     scaledImg.getWidth(null), scaledImg.getHeight(null)));
+			img.flush();
 			return scaledImg;
 		    } catch (Exception e) {
 			log.log(Level.WARNING,

@@ -89,6 +89,7 @@ public class AlertPanel extends JPanel implements MouseListener {
 					       AlertPanelLayout.ICON_SIZE.height,
 					       Image.SCALE_SMOOTH);
 	    _imgs.add(nimg);
+	    img.flush();
 	    add(new IconLabel(new ImageIcon(nimg)), Slot.ICON);
 	}
 	invalidate();
