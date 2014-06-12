@@ -258,14 +258,14 @@ public class ImageCache {
 		    try {
 			_mt.waitForID(scaledHandle);
 			log.log(Level.FINE,
-				MessageFormat.format("scaled image: ({1}, {2}) -> ({3}, {4})",
+				MessageFormat.format("scaled image: ({0}, {1}) -> ({2}, {3})",
 						     img.getWidth(null), img.getHeight(null),
 						     scaledImg.getWidth(null), scaledImg.getHeight(null)));
 			img.flush();
 			return scaledImg;
 		    } catch (Exception e) {
 			log.log(Level.WARNING,
-				MessageFormat.format("failed scaling image: ({1}, {2})",
+				MessageFormat.format("failed scaling image: ({0}, {1})",
 						     img.getWidth(null), img.getHeight(null)),
 				e);
 			return img;
