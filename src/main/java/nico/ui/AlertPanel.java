@@ -4,11 +4,14 @@ import java.awt.AWTEvent;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Font;
+import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.RenderingHints;
 import java.awt.Window;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.WindowEvent;
+import java.awt.image.BufferedImage;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -85,12 +88,19 @@ public class AlertPanel extends JPanel implements MouseListener {
 	}
 	_imgs.clear();
 	for (Image img : icons) {
-	    Image nimg = img.getScaledInstance(AlertPanelLayout.ICON_SIZE.width,
-					       AlertPanelLayout.ICON_SIZE.height,
-					       Image.SCALE_SMOOTH);
-	    _imgs.add(nimg);
+	    BufferedImage scaledImg = new BufferedImage(AlertPanelLayout.ICON_SIZE.width,
+							AlertPanelLayout.ICON_SIZE.height,
+							BufferedImage.TYPE_INT_ARGB);
+	    Graphics2D g = scaledImg.createGraphics();
+	    g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+	    g.drawImage(img, 0, 0, AlertPanelLayout.ICON_SIZE.width, AlertPanelLayout.ICON_SIZE.height, null);
+	    log.log(Level.FINE, MessageFormat.format("scaled image: ({0}, {1}) -> ({2}, {3})",
+						     img.getWidth(null), img.getHeight(null),
+						     scaledImg.getWidth(null), scaledImg.getHeight(null)));
+	    g.dispose();
 	    img.flush();
-	    add(new IconLabel(new ImageIcon(nimg)), Slot.ICON);
+	    _imgs.add(scaledImg);
+	    add(new IconLabel(new ImageIcon(scaledImg)), Slot.ICON);
 	}
 	invalidate();
     }

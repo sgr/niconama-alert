@@ -1,9 +1,12 @@
 // -*- coding: utf-8-unix -*-
 package nico.cache;
 import java.awt.Container;
+import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.MediaTracker;
+import java.awt.RenderingHints;
 import java.awt.Toolkit;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
@@ -252,15 +255,16 @@ public class ImageCache {
 		if ((img != null) &&
 		    (img.getWidth(null) > _width) ||
 		    (img.getHeight(null) > _height)) {
-		    Image scaledImg = img.getScaledInstance(_width, _height, Image.SCALE_SMOOTH);
-		    int scaledHandle = img.hashCode();
-		    _mt.addImage(scaledImg, scaledHandle);
 		    try {
-			_mt.waitForID(scaledHandle);
+			BufferedImage scaledImg = new BufferedImage(_width, _height, BufferedImage.TYPE_INT_ARGB);
+			Graphics2D g = scaledImg.createGraphics();
+			g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+			g.drawImage(img, 0, 0, _width, _height, null);
 			log.log(Level.FINE,
 				MessageFormat.format("scaled image: ({0}, {1}) -> ({2}, {3})",
 						     img.getWidth(null), img.getHeight(null),
 						     scaledImg.getWidth(null), scaledImg.getHeight(null)));
+			g.dispose();
 			img.flush();
 			return scaledImg;
 		    } catch (Exception e) {
@@ -269,8 +273,6 @@ public class ImageCache {
 						     img.getWidth(null), img.getHeight(null)),
 				e);
 			return img;
-		    } finally {
-			_mt.removeImage(scaledImg);
 		    }
 		} else {
 		    return img;
