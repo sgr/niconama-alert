@@ -1,8 +1,7 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.net
   (:require [clojure.tools.logging :as log]
-            [clj-http.client :as hc]
-            [clj-http.conn-mgr :as hcm]))
+            [clj-http.client :as hc]))
 
 (def ^{:private true} CONNECT-TIMEOUT 5000)
 
