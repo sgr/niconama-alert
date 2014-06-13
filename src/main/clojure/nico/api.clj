@@ -139,7 +139,7 @@
                          (log/info "******* Connection closed *******")
                          :disconnected)
                     0  (let [received (System/currentTimeMillis)]
-                         (if-let [[id cid uid] (parse-chat-str s)]
+                         (if-let [[id cid uid] (map s/nstr (parse-chat-str s))]
                            (ca/>!! cc {:cmd :pgm :pid (str "lv" id) :cid cid :uid uid :received received})
                            (log/debugf "it isn't chat: %s" s))
                          (recur (.read rdr) nil))
