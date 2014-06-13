@@ -52,14 +52,14 @@
              (map #(.. % getText toString))
              cs/join)))))
 
-(defn- child-elements [tag node]
+(defn- child-elements [node tag]
   (->> (:content node) (filter #(= tag (:tag %)))))
 
-(defn- child-content [tag node]
-  (-> (child-elements tag node) first :content first))
+(defn- child-content [node tag]
+  (-> node (child-elements tag) first :content first))
 
-(defn- get-child-attr [tag attr node]
-  (-> (child-elements tag node) first :attrs attr))
+(defn- get-child-attr [node tag attr]
+  (-> node (child-elements tag) first :attrs attr))
 
 (defn- parse-date [s fmt]
   (when-not (cs/blank? s)
@@ -69,55 +69,53 @@
 (let [fmt (SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")]
   (defn create-official-pgm [item fetched_at]
     (try
-      (let [id (child-content :guid item)
-            title (-> (child-content :title item) (s/unescape :xml))
-            open_time (parse-date (child-content :nicolive:open_time item) fmt)
-            start_time (parse-date (child-content :nicolive:start_time item) fmt)
-            description (if-let [s (-> (child-content :description item) (s/unescape :xml))]
-                          (remove-tag s) "")
+      (let [id (-> item (child-content :guid) s/nstr)
+            title (-> item (child-content :title) (s/unescape :xml) s/nstr)
+            open_time (-> item (child-content :nicolive:open_time) (parse-date fmt))
+            start_time (-> item (child-content :nicolive:start_time) (parse-date fmt))
+            description (-> item (child-content :description) (s/unescape :xml) remove-tag s/nstr)
             category "" ; ない
-            link (child-content :link item)
-            thumbnail (get-child-attr :media:thumbnail :url item)
+            link (-> item (child-content :link) s/nstr)
+            thumbnail (-> item (get-child-attr :media:thumbnail :url) s/nstr)
             owner_name "" ; ない
             member_only false ; ない
-            type (if-let [type-str (child-content :nicolive:type item)] (keyword type-str) :official)
+            type (if-let [type-str (child-content item :nicolive:type)] (keyword type-str) :official)
             comm_name "" ; ない
             comm_id nil] ; ない
         (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
           (nico.pgm.Pgm. id title open_time start_time description category link thumbnail owner_name
                          member_only type comm_name comm_id fetched_at fetched_at)
-          (log/warnf "couldn't create pgm: [%s %s %s %s %s, %s %s]"
+          (log/warnf "couldn't create official pgm: [%s %s %s %s %s, %s %s]"
                      id title description link thumbnail open_time start_time)))
       (catch Exception e
-        (log/warnf "failed creating pgm from official RSS: %s" (pr-str item))))))
+        (log/warnf "failed creating pgm from official RSS: %s" (-> item pr-str s/nstr))))))
 
 (let [fmt (SimpleDateFormat. "EEE, dd MMM yyyy HH:mm:ss Z" Locale/ENGLISH)]
   (defn create-pgm [item fetched_at]
     (try
-      (let [id (child-content :guid item)
-            title (-> (child-content :title item) (s/unescape :xml))
-            open_time (parse-date (child-content :pubDate item) fmt)
+      (let [id (-> item (child-content :guid) s/nstr)
+            title (-> item (child-content :title) (s/unescape :xml) s/nstr)
+            open_time (-> item (child-content :pubDate) (parse-date fmt))
             start_time open_time
-            description (if-let [s (-> (child-content :description item) (s/unescape :xml))]
-                          (remove-tag s) "")
-            category (->> (child-elements :category item)
+            description (-> item (child-content :description) (s/unescape :xml) remove-tag s/nstr)
+            category (->> (child-elements item :category)
                           (map #(-> % :content first))
-                          (cs/join ","))
-            link (child-content :link item)
-            thumbnail (get-child-attr :media:thumbnail :url item)
-            ;;thumbnail (-> (clojure.string/split  #"\?") first)
-            owner_name (child-content :nicolive:owner_name item)
-            member_only (-> (child-content :nicolive:member_only item) Boolean/parseBoolean)
-            type (if-let [type-str (child-content :nicolive:type item)] (keyword type-str) :official)
-            comm_name (child-content :nicolive:community_name item)
-            comm_id (child-content :nicolive:community_id item)]
+                          (cs/join ",")
+                          s/nstr)
+            link (-> item (child-content :link) s/nstr)
+            thumbnail (-> item (get-child-attr :media:thumbnail :url) s/nstr)
+            owner_name (-> item (child-content :nicolive:owner_name) s/nstr)
+            member_only (-> item (child-content :nicolive:member_only) Boolean/parseBoolean)
+            type (if-let [type-str (child-content item :nicolive:type)] (keyword type-str) :official)
+            comm_name (-> item (child-content :nicolive:community_name) s/nstr)
+            comm_id (-> item (child-content :nicolive:community_id) s/nstr)]
         (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
           (nico.pgm.Pgm. id title open_time start_time description category link thumbnail owner_name
                          member_only type comm_name comm_id fetched_at fetched_at)
           (log/debugf "couldn't create pgm: [%s %s %s %s %s, %s %s]"
                       id title description link thumbnail open_time start_time)))
       (catch Exception e
-        (log/warnf e "failed creating pgm from RSS: %s" (pr-str item))))))
+        (log/warnf e "failed creating pgm from RSS: %s" (-> item pr-str s/nstr))))))
 
 (defn- items [rss]
   (let [nodes-child (dzx/xml-> (zip/xml-zip rss) :channel dz/children)]

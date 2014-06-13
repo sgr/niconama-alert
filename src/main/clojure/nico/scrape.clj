@@ -55,46 +55,50 @@
 (defn extract-pgm [xml]
   (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts xml))]
     (log/warnf "frequently access error: %s" (pr-str node))
-    (let [link (-> (html/select xml [(html/attr= :property "og:url")]) first :attrs :content)
-          id (last-path-uri-str link)
-          base (-> (html/select xml [:base]) first :attrs :href)
-          infobox (first (html/select xml [:div.infobox]))
-          title (-> (html/select infobox [:h2 (html/attr= :itemprop "name") :> html/text-node])
+    (let [link (-> xml (html/select [(html/attr= :property "og:url")]) first :attrs :content)
+          id (-> link last-path-uri-str s/nstr)
+          base (-> xml (html/select [:base]) first :attrs :href)
+          infobox (-> xml (html/select [:div.infobox]) first)
+          title (-> infobox
+                    (html/select [:h2 (html/attr= :itemprop "name") :> html/text-node])
                     first
-                    (s/unescape :html))
-          description (-> (html/select xml [(html/attr= :property "og:description")]) first :attrs :content)
-          [open_time start_time] (-> (html/select infobox [:div.kaijo :> :strong :> html/text-node])
+                    (s/unescape :html)
+                    s/nstr)
+          description (-> xml (html/select [(html/attr= :property "og:description")]) first :attrs :content s/nstr)
+          [open_time start_time] (-> infobox
+                                     (html/select [:div.kaijo :> :strong :> html/text-node])
                                      open-start-time)
-          thumbnail (-> (html/select xml [(html/attr= :itemprop "thumbnail")])
-                        first :attrs :content)
+          thumbnail (-> xml (html/select [(html/attr= :itemprop "thumbnail")]) first :attrs :content s/nstr)
           member_only (if (first (html/select infobox [:h2.onlym])) true false)
           type (cond
                 (not (empty? (html/select infobox [:div.com]))) :community
                 (not (empty? (html/select infobox [:div.chan]))) :channel
                 :else :official)
           category (->> (html/select xml [:nobr :> :a.nicopedia :> html/text-node])
-                        (cs/join ","))
-          comm (-> (html/select infobox (condp = type
-                                          :community [:div.com]
-                                          :channel [:div.chan]
-                                          [:div.official])) ; こんなクラスはないから何も取れない
+                        (cs/join ",")
+                        s/nstr)
+          comm (-> infobox
+                   (html/select (condp = type
+                                  :community [:div.com]
+                                  :channel [:div.chan]
+                                  [:div.official])) ; こんなクラスはないから何も取れない
                    first)
           comm_id (when-let [selector (condp = type
                                         :community [:a.community]
                                         :channel [:div.shosai :> :a])]
-                    (-> (html/select xml selector) first :attrs :href last-path-uri-str))
+                    (-> xml (html/select selector) first :attrs :href last-path-uri-str s/nstr))
           comm_name (when-let [selector (condp = type
                                           :community [:div.shosai (html/attr= :itemprop "name")
                                                       :> html/text-node]
                                           :channel [:div.shosai :> :a :> html/text-node])]
-                      (-> (html/select comm selector) first (s/unescape :html)))
+                      (-> comm (html/select selector) first (s/unescape :html) s/nstr))
           owner_name (when-let [selector (condp = type
                                            :community [:strong.nicopedia_nushi
                                                        (html/attr= :itemprop "member")
                                                        :> html/text-node]
                                            :channel [:div.shosai (html/attr= :itemprop "name")
                                                      :> html/text-node])]
-                       (-> (html/select comm selector) first (s/unescape :html)))
+                       (-> comm (html/select selector) first (s/unescape :html) s/nstr))
           now (Date.)]
       (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
         (nico.pgm.Pgm. id title open_time start_time description category link thumbnail owner_name
