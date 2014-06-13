@@ -97,7 +97,7 @@ public class PgmPanelLayout implements LayoutManager2 {
 	if (_preferredLayoutSize == null || !_valid || _width == 0) {
 	    updateSize(target);
 	}
-	log.log(Level.FINEST, MessageFormat.format("preferredLayoutSize ({0})", _preferredLayoutSize));
+	//log.log(Level.FINEST, MessageFormat.format("preferredLayoutSize ({0})", _preferredLayoutSize));
 	return _preferredLayoutSize;
     }
 
