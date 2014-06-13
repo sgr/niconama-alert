@@ -141,12 +141,14 @@
 
     (ca/go-loop [npgms 0]
       (when-let [c (ca/<! oc-s)]
-        (condp = (:status c)
-          :db-stat  (recur (:npgms c))
-          :searched (log/info (format "SEARCHED [%d] (" npgms)
-                              (s/join "," (map (fn [[k v]] (format "%s=%d" k (count v))) (:results c)))
-                              ")"))
-        (recur npgms)))
+        (recur
+         (condp = (:status c)
+           :db-stat  (:npgms c)
+           :searched (do
+                       (log/info (format "SEARCHED [%d] (" npgms)
+                                 (s/join "," (map (fn [[k v]] (format "%s=%d" k (count v))) (:results c)))
+                                 ")")
+                       npgms)))))
 
     (ca/>!! cc-db {:cmd :set-query-kwd :id "fake0" :query "顔"
                    :target #{:owner_name :comm_name :title :description :category}})
