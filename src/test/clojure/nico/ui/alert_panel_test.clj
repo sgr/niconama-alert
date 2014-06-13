@@ -25,7 +25,7 @@
     (wait-closing
      (sc/frame
       :title "testing variable AlertPanel"
-      :content (AlertPanel. msg icns)
+      :content (AlertPanel/create msg icns)
       :size [640 :by 480]
       :on-close :dispose))))
 
@@ -35,7 +35,7 @@
     (wait-closing
      (sc/frame
       :title "testing fixed AlertPanel"
-      :content (doto (AlertPanel. msg icns)
+      :content (doto (AlertPanel/create msg icns)
                  (.setBorder (sb/line-border :color :red))
                  (.setSize 250 80))
       :size [640 :by 480]
