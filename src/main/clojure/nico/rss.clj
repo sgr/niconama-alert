@@ -45,7 +45,10 @@
 (let [cleaner (HtmlCleaner.)]
   (defn- remove-tag [^String s]
     (when-not (cs/blank? s)
-      (-> (.clean cleaner s) .getText .toString))))
+      (->> (.clean cleaner s)
+           (#(.getAllElements % true))
+           (map #(.. % getText toString))
+           cs/join))))
 
 (defn- child-elements [node tag]
   (->> (:content node) (filter #(= tag (:tag %)))))
