@@ -114,7 +114,7 @@ public class ImageCache {
 			    try {
 				return fetch(new URL(url));
 			    } catch (MalformedURLException e) {
-				log.log(Level.WARNING, MessageFormat.format("Malformed URL string: {0}", url), e);
+				log.log(Level.WARNING, MessageFormat.format("Malformed URL string: {0}", url));
 				return null;
 			    }
 			}
@@ -216,7 +216,7 @@ public class ImageCache {
 		    os.write(tmpBuf, 0, len);
 		}
 	    } catch (Exception e) {
-		log.log(Level.WARNING, MessageFormat.format("failed reading data from: {0}", url.toString()), e);
+		log.log(Level.WARNING, MessageFormat.format("failed reading data from: {0} ({1})", url.toString(), e.getMessage()));
 		os.reset();
 	    } finally {
 		is.close();
@@ -233,7 +233,7 @@ public class ImageCache {
 	    log.log(Level.FINE, MessageFormat.format("requested resource is not found: {0}", url.toString()));
 	    throw e;
 	} catch (Exception e) {
-	    log.log(Level.WARNING, MessageFormat.format("failed connecting the resource: {0}", url.toString()), e);
+	    log.log(Level.WARNING, MessageFormat.format("failed connecting the resource: {0} ({1})", url.toString(), e.getMessage()));
 	    return null;
 	}
     }
@@ -268,7 +268,7 @@ public class ImageCache {
 			img.flush();
 			return scaledImg;
 		    } catch (Exception e) {
-			log.log(Level.WARNING,
+			log.log(Level.SEVERE,
 				MessageFormat.format("failed scaling image: ({0}, {1})",
 						     img.getWidth(null), img.getHeight(null)),
 				e);
@@ -278,13 +278,13 @@ public class ImageCache {
 		    return img;
 		}
 	    } catch (Exception e) {
-		log.log(Level.WARNING, MessageFormat.format("failed creating image from bytes[{0}]", data.length), e);
+		log.log(Level.SEVERE, MessageFormat.format("failed creating image from bytes[{0}]", data.length), e);
 		return null;
 	    } finally {
 		_mt.removeImage(img);
 	    }
 	} catch (Exception e) {
-	    log.log(Level.WARNING, MessageFormat.format("failed fetching image from bytes [{0}]", data.length), e);
+	    log.log(Level.WARNING, MessageFormat.format("failed fetching image from bytes [{0}] ({1})", data.length, e.getMessage()));
 	    return null;
 	}
     }

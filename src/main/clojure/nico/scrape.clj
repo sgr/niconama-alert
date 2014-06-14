@@ -115,7 +115,7 @@
                           rdr (-> is clean serialize (StringReader.))]
                 (extract-pgm (html/xml-resource rdr)))
               (catch Exception e
-                (log/warnf e "failed fetching pgm info: %s" pid))))]
+                (log/warnf "failed fetching pgm info: %s, %s" pid (.getMessage e)))))]
     (loop [cnt 0]
       (if (< cnt LIMIT-RETRY)
         (if-let [pgm (fetch-pgm-aux pid cid)]

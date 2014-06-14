@@ -79,7 +79,7 @@
       (when (and c (= :chat (:tag chat)))
         (.split ^String (first c) ",")))
     (catch Exception e
-      (log/warnf e "parse error: %s" chat-str))))
+      (log/warnf "parse error: %s" chat-str))))
 
 (defn boot
   "ニコ生アラートAPIを通じて番組情報を取得するリスナーを生成し、コントロールチャネルを返す。
@@ -153,7 +153,7 @@
                   (log/debug "DISCONNECTED")
                   {:cmd :restart :retry 0}
                   (catch Exception e
-                    (log/warnf e "DISCONNECTED caused by: %s" (class e))
+                    (log/warnf "DISCONNECTED caused by: %s" (class e))
                     {:cmd :restart :retry (inc retry)}))))
             (gen-comms [alert-statuses]
                 (apply set/union (map :comms (vals alert-statuses))))]
