@@ -5,7 +5,8 @@
             [clojure.set :as set]
             [clojure.string :as s]
             [clojure.tools.logging :as log]
-            [input-parser.cond-parser :as cp])
+            [input-parser.cond-parser :as cp]
+            [nico.scrape :as scrape])
   (:import [java.sql DriverManager PreparedStatement Statement]
            [java.util Date LinkedHashMap]
            [org.apache.commons.lang3.time FastDateFormat]))
@@ -432,14 +433,11 @@
                          (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated})
                          (when-not (= last-searched new-last-searched)
                            (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
-                         (recur db
-                                (if-let [new-total (:total c)] new-total total)
-                                npgms
-                                new-last-searched
-                                new-acc-rm))
-             :finish (do
+                         (recur db total npgms new-last-searched new-acc-rm))
+             :finish (let [new-total (scrape/scrape-total)]
+                       (log/infof "PGMS-TOTAL: %d -> %d" total new-total)
                        (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
-                       (recur db total npgms (now) acc-rm))
+                       (recur db (or new-total total) npgms (now) acc-rm))
              :search-ondemand (let [{:keys [query target]} c
                                     cnt (count-pgms db query target)
                                     q (if (< SEARCH-LIMIT cnt)

@@ -13,6 +13,7 @@
            [org.htmlcleaner CompactXmlSerializer HtmlCleaner TagNode]))
 
 (def ^{:private true} BASE-URL "http://live.nicovideo.jp/watch/")
+(def ^{:private true} COUNT-URL "http://live.nicovideo.jp/timetable")
 (def ^{:private true} INTERVAL-RETRY 5)
 (def ^{:private true} LIMIT-RETRY 5)
 
@@ -24,12 +25,10 @@
       serializer (CompactXmlSerializer. (.getProperties cleaner))
       CS "utf-8"]
   (defn- clean [^InputStream is]
-    (locking cleaner
-      (.clean cleaner is CS)))
+    (.clean cleaner is CS))
 
   (defn- serialize [tag-node]
-    (locking serializer
-      (.getAsString serializer tag-node CS))))
+    (.getAsString serializer tag-node CS)))
 
 (defn- last-path-uri-str [s-uri]
   (when-not (cs/blank? s-uri)
@@ -139,3 +138,15 @@
         (log/warnf "failed fetching pgm: %s/%s" pid cid))
       (log/warnf "too late to fetch: %s/%s" pid cid))))
 
+(defn scrape-total
+  "ニコ生の総番組数を取得する。"
+  []
+  (try
+    (with-open [is (-> COUNT-URL (net/http-get {:as :stream}) :body)
+                rdr (-> is clean serialize (StringReader.))]
+      (when-let [cnt (-> (html/xml-resource rdr)
+                         (html/select [:div.score_search :strong.count :> html/text-node])
+                         first)]
+        (Integer/parseInt cnt)))
+    (catch Exception e
+      (log/warnf "failed scraping total count: %s" (.getMessage e)))))

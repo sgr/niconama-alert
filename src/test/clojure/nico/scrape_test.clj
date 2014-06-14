@@ -36,3 +36,6 @@
     (let [ids (read-string (slurp (io/resource "sample-scrape-id")))
           pgm (apply fetch-pgm ids)]
       (log/infof "PGM[%s,%s]: %s" (first ids) (second ids) (pr-str pgm)))))
+
+(deftest ^{:scrape-total true} scrape-total-test
+  (is (number? (scrape-total))))
