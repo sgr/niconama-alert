@@ -133,7 +133,7 @@
                       (.start (ProcessBuilder. cmd)))))))
             (trim [s n]
               (if (and (instance? String s) (pos? n) (< n (.length s)))
-                (str (.substring s 0 n) "\n＜省略しています＞")
+                (-> (str (.substring s 0 n) "\n＜省略しています＞") String.)
                 s))
             (pgm-panel-aux [pgm]
               (PgmPanel/create (:id pgm) (:title pgm) (:link pgm)
@@ -201,14 +201,12 @@
 
               ;; 以下のコマンド群はループで管理している状態を更新する。
               :set-channel-alert (let [{:keys [id alert]} cmd]
-                                   ;;(recur titles npgms (assoc alerts id alert)))
                                    (swap! n-alerts assoc id alert))
               :set-channel-title (let [{:keys [id title]} cmd
                                        ctrl (sc/select (cpanel id) [:#control])
                                        npgm (or (get npgms id) 0)]
                                    (sc/invoke-later
                                     (sc/config! ctrl :border (format "%s (%d)" title npgm)))
-                                   ;;(recur (assoc titles id title) npgms alerts))
                                    (swap! n-titles assoc id title))
               :dispose-channel (let [id (:id cmd)
                                      cp (cpanel id)
@@ -218,7 +216,6 @@
                                   (.removeAll pgm-lst)
                                   (.remove wpanel cp))
                                  (doseq [rpnl rpnls] (.release rpnl))
-                                 ;;(recur (dissoc titles id) (dissoc npgms id) (dissoc alerts id)))
                                  (swap! n-titles dissoc id)
                                  (swap! n-npgms  dissoc id)
                                  (swap! n-alerts dissoc id))
@@ -227,7 +224,6 @@
                                                         alert (get alerts id)]
                                                   (assoc m id (update-pgms id pgms title alert))))
                                                 {} (:results cmd))]
-                          ;;(recur titles (merge npgms new-npgms) alerts))
                           (swap! n-npgms merge new-npgms))
 
               ;; 以下のコマンド群はUIの更新のみ行い、状態更新はない。
