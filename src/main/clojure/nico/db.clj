@@ -280,7 +280,7 @@
   "番組情報を保持するDBインスタンスを生成し、コントロールチャネルを返す。
    アウトプットチャネルoc-statusには次のステータスが出力される。
    :db-stat
-          {:status :db-stat :npgms 6428 :last-updated [最終更新日時文字列]}
+          {:status :db-stat :npgms [DBに格納されている総番組数] :last-updated [最終更新日時文字列] :total [ニコ生から得た総番組数]}
    :searched :searchによる検索結果。
           {:status :searched :results {key: [チャネルID], val: [検索された番組情報のリスト]}}
    :searched-ondemand :search-ondemandによる検索結果。
@@ -362,7 +362,7 @@
                  rm (- npgms new-npgms)
                  new-acc-rm (+ acc-rm rm)]
              (log/debugf "clean! [%d -> %d] acc-rm: %d" npgms new-npgms new-acc-rm)
-             (ca/>! oc-status {:status :db-stat :npgms new-npgms :last-updated last-updated})
+             (ca/>! oc-status {:status :db-stat :npgms new-npgms :last-updated last-updated :total total})
              (when (pos? rm)
                (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
              (recur db
@@ -409,7 +409,7 @@
              :add-pgm  (let [[ins rm] (add! db (:pgm c))
                              npgms (n-pgms db)
                              last-updated (now-str)]
-                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated})
+                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated :total total})
                          (when (some pos? [ins rm])
                            (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
                          (recur db
@@ -430,7 +430,7 @@
                                                  (if (and (< SEARCH-INTERVAL (- now last-searched))
                                                           (some pos? [ins rm]))
                                                    now last-searched))]
-                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated})
+                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated :total total})
                          (when-not (= last-searched new-last-searched)
                            (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
                          (recur db total npgms new-last-searched new-acc-rm))

@@ -82,7 +82,7 @@
 
 (let [sb (StringBuilder.)
       SEC-REST " sec rest"
-      PROGRESS " / "
+      PER " / "
       PGMS-PERMIN " programs/min"
       NPGMS " programs"
       LAST-UPDATED "Last updated: "]
@@ -93,15 +93,17 @@
   (defn fetching-progress-str [^long acc ^long total]
     (locking sb
       (.setLength sb 0)
-      (-> sb (.append acc) (.append PROGRESS) (.append total) .toString)))
+      (-> sb (.append acc) (.append PER) (.append total) .toString)))
   (defn rate-api-str [^long rate]
     (locking sb
       (.setLength sb 0)
       (-> sb (.append rate) (.append PGMS-PERMIN) .toString)))
-  (defn npgms-str [^long npgms]
+  (defn npgms-str [^long npgms ^long total]
     (locking sb
       (.setLength sb 0)
-      (-> sb (.append npgms) (.append NPGMS) .toString)))
+      (if (pos? total)
+        (-> sb (.append npgms) (.append PER) (.append total) (.append NPGMS) .toString)
+        (-> sb (.append npgms) (.append NPGMS) .toString))))
   (defn last-updated-str [^String at]
     (locking sb
       (.setLength sb 0)
@@ -227,10 +229,10 @@
                           (swap! n-npgms merge new-npgms))
 
               ;; 以下のコマンド群はUIの更新のみ行い、状態更新はない。
-              :db-stat (let [{:keys [npgms last-updated]} cmd]
+              :db-stat (let [{:keys [npgms last-updated total]} cmd]
                          (sc/invoke-later
                           (sc/config! l-last-updated :text (last-updated-str last-updated))
-                          (sc/config! l-npgms :text (npgms-str npgms))))
+                          (sc/config! l-npgms :text (npgms-str npgms total))))
               :fetching-rss (let [{:keys [page acc total]} cmd]
                               (sc/invoke-later
                                (sc/config! rss-status :text "fetching")
