@@ -7,8 +7,8 @@
             [clojure.tools.logging :as log]
             [input-parser.cond-parser :as cp])
   (:import [java.sql DriverManager PreparedStatement Statement]
-           [java.text SimpleDateFormat]
-           [java.util Date LinkedHashMap]))
+           [java.util Date LinkedHashMap]
+           [org.apache.commons.lang3.time FastDateFormat]))
 
 ;; DDL ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -273,8 +273,7 @@
       (log/errorf e "failed add!: %s" (pr-str pgm))
       [0 0])))
 
-(let [fmt (SimpleDateFormat. "HH:mm:ss")]
-  (defn now-str [] (locking fmt (.format fmt (Date.)))))
+(defn now-str [] (-> (FastDateFormat/getInstance "HH:mm:ss") (.format (System/currentTimeMillis))))
 
 (defn boot
   "番組情報を保持するDBインスタンスを生成し、コントロールチャネルを返す。

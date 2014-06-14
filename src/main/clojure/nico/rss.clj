@@ -10,13 +10,12 @@
             [nico.net :as net]
             [nico.pgm :as pgm]
             [nico.string :as s])
-  (:import [java.text SimpleDateFormat]
-           [java.util Date Locale]
+  (:import [java.util Date Locale]
            [java.util.concurrent TimeUnit]
+           [org.apache.commons.lang3.time FastDateFormat]
            [org.htmlcleaner HtmlCleaner]))
 
-(def ^{:private true} RETRY 0)
-(def ^{:private true} WAIT 5)
+(def ^{:private true} RETRY 2)
 
 (defn- get-nico-rss-aux [url]
   (try
@@ -27,12 +26,12 @@
       (log/warnf "failed fetching RSS (%s)" url))))
 
 (defn- get-nico-rss [url]
-  (loop [rss (get-nico-rss-aux url), c RETRY]
+  (loop [rss (get-nico-rss-aux url), c RETRY wait 1]
     (if (or rss (zero? c))
       rss
       (do
-        (.sleep TimeUnit/SECONDS WAIT)
-        (recur (get-nico-rss-aux url) (dec c))))))
+        (.sleep TimeUnit/SECONDS wait)
+        (recur (get-nico-rss-aux url) (dec c) (inc wait))))))
 
 (defn- get-programs-count
   "get the total programs count."
@@ -61,12 +60,15 @@
 (defn- get-child-attr [node tag attr]
   (-> node (child-elements tag) first :attrs attr))
 
-(defn- parse-date [s fmt]
-  (when-not (cs/blank? s)
-    (locking fmt
-      (.parse fmt s))))
+(defn- parse-date
+  ([s fmt]
+     (when-not (cs/blank? s)
+       (-> (FastDateFormat/getInstance fmt) (.parse s))))
+  ([s fmt locale]
+     (when-not (cs/blank? s)
+       (-> (FastDateFormat/getInstance fmt locale) (.parse s)))))
 
-(let [fmt (SimpleDateFormat. "yyyy-MM-dd HH:mm:ss")]
+(let [fmt "yyyy-MM-dd HH:mm:ss"]
   (defn create-official-pgm [item fetched_at]
     (try
       (let [id (-> item (child-content :guid) s/nstr)
@@ -90,12 +92,13 @@
       (catch Exception e
         (log/warnf "failed creating pgm from official RSS: %s" (-> item pr-str s/nstr))))))
 
-(let [fmt (SimpleDateFormat. "EEE, dd MMM yyyy HH:mm:ss Z" Locale/ENGLISH)]
+(let [fmt "EEE, dd MMM yyyy HH:mm:ss Z"
+      locale Locale/ENGLISH]
   (defn create-pgm [item fetched_at]
     (try
       (let [id (-> item (child-content :guid) s/nstr)
             title (-> item (child-content :title) (s/unescape :xml) s/nstr)
-            open_time (-> item (child-content :pubDate) (parse-date fmt))
+            open_time (-> item (child-content :pubDate) (parse-date fmt locale))
             start_time open_time
             description (-> item (child-content :description) (s/unescape :xml) remove-tag s/nstr)
             category (->> (child-elements item :category)
@@ -115,7 +118,7 @@
           (log/debugf "couldn't create pgm: [%s %s %s %s %s, %s %s]"
                       id title description link thumbnail open_time start_time)))
       (catch Exception e
-        (log/warnf e "failed creating pgm from RSS: %s" (-> item pr-str s/nstr))))))
+        (log/warnf "failed creating pgm from RSS: %s" (-> item pr-str s/nstr))))))
 
 (defn- items [rss]
   (let [nodes-child (dzx/xml-> (zip/xml-zip rss) :channel dz/children)]

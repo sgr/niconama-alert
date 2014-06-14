@@ -13,7 +13,6 @@ import java.awt.Window;
 import java.io.IOException;
 import java.net.URI;
 import java.text.MessageFormat;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Stack;
@@ -27,6 +26,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.text.html.HTMLEditorKit;
+import org.apache.commons.lang3.time.FastDateFormat;
 
 import com.github.sgr.slide.Link;
 import com.github.sgr.slide.LinkHandler;
@@ -54,8 +54,8 @@ public class PgmPanel extends JPanel {
     public static ImageIcon OFFICIAL_ICON = new ImageIcon(Thread.currentThread().getContextClassLoader().getResource("official.png"));
 
     private static final Logger log = Logger.getLogger(PgmPanel.class.getCanonicalName());
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("d MMM", Locale.ENGLISH);
-    private static final SimpleDateFormat odf = new SimpleDateFormat("MM/dd HH:mm:ss");
+    private static final FastDateFormat sdf = FastDateFormat.getInstance("d MMM", Locale.ENGLISH);
+    private static final FastDateFormat odf = FastDateFormat.getInstance("MM/dd HH:mm:ss");
 
     private static Stack<PgmPanel> cache = new Stack<PgmPanel>();
 
@@ -220,9 +220,7 @@ public class PgmPanel extends JPanel {
     public void setOpenTime(Date open_time) {
 	_open_time = open_time;
 	_timeLabel.setText(relativeTimeString(_open_time));
-	synchronized (odf) {
-	    _timeLabel.setToolTipText(odf.format(open_time));
-	}
+	_timeLabel.setToolTipText(odf.format(open_time));
 	_layout.needLayout();
     }
 
@@ -342,9 +340,7 @@ public class PgmPanel extends JPanel {
 	} else if (diff < 86400000) {
 	    return String.format("%dh %s", diff / 3600000, s);
 	} else {
-	    synchronized (sdf) {
-		return sdf.format(d);
-	    }
+	    return sdf.format(d);
 	}
     }
 
