@@ -260,11 +260,11 @@
                                     (sc/config! add-ch-btn :enabled? (pos? nresults))
                                     (sc/config! search-btn :enabled? true))
                                    (doseq [rpnl rpnls] (.release rpnl)))
-              :waiting-rss (let [{:keys [rest total]} cmd]
+              :waiting-rss (let [{:keys [sec total]} cmd]
                              (sc/invoke-later
                               (sc/config! rss-status :text "waiting")
-                              (sc/config! rss-progress :value rest :max total)
-                              (.setString rss-progress (waiting-progress-str rest))))
+                              (sc/config! rss-progress :value sec :max total)
+                              (.setString rss-progress (waiting-progress-str sec))))
               :started-rss (sc/invoke-later
                             (sc/config! rss-status :text "running")
                             (sc/config! rss-progress :value 0 :max 100)

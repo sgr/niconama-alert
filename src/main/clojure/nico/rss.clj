@@ -148,7 +148,7 @@
    :stopped-rss 終了した。
           {:status :stopped-api}
    :waiting-rss 次の取得サイクル開始まで待機中。待機間隔はWAITING-INTERVAL(秒)。
-          {:status :waiting-rss :rest [残り秒] :total [全体待機時間]}
+          {:status :waiting-rss :sec [残り秒] :total [全体待機時間]}
    :fetching-rss RSS取得中。得られた番組情報つき。
           {:status :fetching-rss :page [取得したページ] :acc [今サイクルで取得した番組数計] :total [総番組数]}
 
@@ -166,7 +166,7 @@
    :fetch 指定されたページのRSSを取得する。
           {:cmd :fetch :page [ページ番号] :cats [カテゴリごとの取得数計と総番組数からなるマップ]}
    :wait  1秒待機する。したがって回数＝秒数である。
-          {:cmd :wait, :rest [残り待機回数], :total [全体待機回数]})"
+          {:cmd :wait, :sec [残り待機回数], :total [全体待機回数]})"
   [oc-status oc-db]
   (let [WAITING-INTERVAL 90
         cc (ca/chan)]
@@ -206,17 +206,17 @@
                     (if (zero? npgms)
                       (do
                         (ca/>! oc-db {:cmd :finish})
-                        {:cmd :wait :rest WAITING-INTERVAL, :total WAITING-INTERVAL})
+                        {:cmd :wait :sec WAITING-INTERVAL, :total WAITING-INTERVAL})
                       {:cmd :fetch :page (inc page) :cats ncats})))))
-            (wait [rest total]
+            (wait [sec total]
               (ca/go
-                (ca/>! oc-status {:status :waiting-rss :rest rest :total total})
-                (if (= 0 rest)
+                (ca/>! oc-status {:status :waiting-rss :sec sec :total total})
+                (if (zero? sec)
                   {:cmd :fetch :page 0 :cats nil}
                   (do
-                    ;;(ca/<! (ca/timeout 1000))
-                    (-> TimeUnit/MILLISECONDS (.sleep 1000))
-                    {:cmd :wait :rest (dec rest) :total total}))))]
+                    ;;(-> TimeUnit/MILLISECONDS (.sleep 1000))
+                    (ca/<! (ca/timeout 1000))
+                    {:cmd :wait :sec (dec sec) :total total}))))]
 
       (ca/go-loop [curr-op nil
                    abort false]
@@ -238,13 +238,13 @@
                            (ca/>! oc-status {:status :stopped-rss})
                            (recur nil false))
                          (recur (fetch page cats) false)))
-              :wait  (let [{:keys [rest total]} c]
+              :wait  (let [{:keys [sec total]} c]
                        (when curr-op (ca/close! curr-op))
                        (if abort
                          (do
                            (ca/>! oc-status {:status :stopped-rss})
                            (recur nil false))
-                         (recur (wait rest total) false)))
+                         (recur (wait sec total) false)))
               (do
                 (log/warn "Unknown command " (pr-str c))
                 (recur curr-op abort)))
