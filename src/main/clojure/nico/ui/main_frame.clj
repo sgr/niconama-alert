@@ -36,7 +36,7 @@
                               (.setString "")) "growx"]
                            [rss-btn "spany 2, align right"]])
         cpanel (sm/mig-panel
-                :constraints ["wrap 3, fill, ins 10 10 10 10" "[33%][33%][34%]"]
+                :constraints ["wrap 3, fill, ins 10 10 10 10"]
                 :items [[status-panel "grow"][api-panel "grow"][rss-panel "grow"]])
         tpanel (sc/tabbed-panel :id :tabbed-panel :user-data {}
                                 :tabs [{:title "Listings" :tip "Nico program listings"

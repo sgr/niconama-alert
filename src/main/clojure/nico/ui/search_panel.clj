@@ -48,19 +48,19 @@
       (sc/border-panel
        :user-data search-spec ;; ここでエージェントへの参照を保持することで上からuser-dataでアクセスできる
        :north (sm/mig-panel
-               :constraints ["wrap 2" "[:400:500][]"]
+               :constraints ["fill, wrap 2" "[:400:400][]"]
                :items [[(sm/mig-panel
                          :border "Search target"
-                         :constraints ["wrap 3, ins 10 15 10 15" "[33%][33%][33%]"]
+                         :constraints ["wrap 3, ins 10 15 10 15"]
                          :items [[c-title][c-desc][c-owner][c-cat][c-comm]])
                         "grow"]
                        [(sm/mig-panel
                          :border "Search condition"
-                         :constraints ["fill, ins 10 10 10 10" "[100%]"]
+                         :constraints ["fill, ins 10 10 10 10"]
                          :items [[(sc/scrollable cond-text) "grow"]])
                         "grow"]
                        [(sm/mig-panel
-                         :constraints ["wrap 2, fill, ins 0 0 5 0" "[50%][50%]"]
+                         :constraints ["wrap 2, fill, ins 0 0 5 0"]
                          :items [[search-btn "align right"][add-ch-btn]
                                  [(sc/label :id :l-search-status :text " ") "span 2, al 50%"]])
                         "span 2, grow"]])
