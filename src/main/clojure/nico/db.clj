@@ -174,29 +174,19 @@
   (dorun (map-indexed (fn [i param] (.setObject pstmt (inc i) param)) params)))
 
 (defn- execute! [db pstmt-params & {:keys [transaction?] :or {transaction? true}}]
-  {:pre [(pos? (count pstmt-params)) (instance? PreparedStatement (first pstmt-params))]}
-  (if (= 1 (count pstmt-params))
-     (if transaction?
-       (jdbc/with-db-transaction [db db]
-         (.executeUpdate (first pstmt-params)))
-       (try
-         (.executeUpdate (first pstmt-params))
-         (catch Exception e
-           (log/errorf e "failed execute!"))))
-     (let [pstmt (first pstmt-params)
-           params (rest pstmt-params)]
-       (set-params! pstmt params)
-       (if transaction?
-         (jdbc/with-db-transaction [db db]
-           (let [result (.executeUpdate pstmt)]
-             (.clearParameters pstmt)
-             result))
-         (try
-           (let [result (.executeUpdate pstmt)]
-             (.clearParameters pstmt)
-             result)
-           (catch Exception e
-             (log/errorf e "failed execute!")))))))
+  {:pre [(pos? (count pstmt-params))
+         (instance? PreparedStatement (first pstmt-params))]}
+  (let [pstmt (first pstmt-params)
+        params (rest pstmt-params)]
+    (when params (set-params! pstmt params))
+    (try
+      (if transaction?
+        (jdbc/with-db-transaction [db db] (.executeUpdate pstmt))
+        (.executeUpdate pstmt))
+      (catch Exception e
+        (log/errorf e "failed execute!"))
+      (finally
+        (.clearParameters pstmt)))))
 
 (defn- add!*
   "番組情報をDBに登録する。[追加レコード数 既存レコード削除数]を返す。
@@ -410,34 +400,26 @@
                           (swap! (:ps db) dissoc id)
                           (recur db total npgms last-cleaned last-searched acc-rm))
              :add-pgm  (let [[ins rm] (add! db (:pgm c))
-                             npgms (n-pgms db)
-                             last-updated (now-str)]
-                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated :total total})
+                             npgms (n-pgms db)]
+                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated (now-str) :total total})
                          (when (some pos? [ins rm])
                            (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
-                         (recur db
-                                total
-                                npgms
-                                last-cleaned
-                                (if (some pos? [ins rm]) (now) last-searched)
-                                (+ acc-rm rm)))
+                         (recur db total npgms last-cleaned (if (some pos? [ins rm]) (now) last-searched) (+ acc-rm rm)))
              :add-pgms (let [pgms (:pgms c)
                              [ins rm] (loop [ains 0 arm 0 pgms pgms]
                                         (if-let [pgm (first pgms)]
                                           (let [[ins rm] (add! db pgm)]
                                             (recur (+ ains ins) (+ arm rm) (rest pgms)))
                                           [ains arm]))
-                             new-acc-rm (+ acc-rm rm)
                              npgms (n-pgms db)
-                             last-updated (now-str)
                              new-last-searched (let [now (now)]
                                                  (if (and (< SEARCH-INTERVAL (- now last-searched))
                                                           (some pos? [ins rm]))
                                                    now last-searched))]
-                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated last-updated :total total})
+                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated (now-str) :total total})
                          (when-not (= last-searched new-last-searched)
                            (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
-                         (recur db total npgms last-cleaned new-last-searched new-acc-rm))
+                         (recur db total npgms last-cleaned new-last-searched (+ acc-rm rm)))
              :finish (let [new-total (scrape/scrape-total)]
                        (log/infof "PGMS-TOTAL: %d -> %d" total new-total)
                        (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
