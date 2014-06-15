@@ -13,7 +13,6 @@ import java.awt.Window;
 import java.io.IOException;
 import java.net.URI;
 import java.text.MessageFormat;
-import java.util.Date;
 import java.util.Locale;
 import java.util.Stack;
 import java.util.EmptyStackException;
@@ -64,9 +63,9 @@ public class PgmPanel extends JPanel {
 	    PgmPanel p = null;
 	    try {
 		p = cache.pop();
-		log.log(Level.FINE, MessageFormat.format("reused a PgmPanel from cache <- ({0})", cache.size()));
+		log.log(Level.FINEST, MessageFormat.format("reused a PgmPanel from cache <- ({0})", cache.size()));
 	    } catch (EmptyStackException e) {
-		log.log(Level.FINE, MessageFormat.format("created a new PgmPanel ({0})", cache.size()));
+		log.log(Level.FINEST, MessageFormat.format("created a new PgmPanel ({0})", cache.size()));
 		p = new PgmPanel();
 	    } finally {
 		return p;
@@ -76,7 +75,7 @@ public class PgmPanel extends JPanel {
 
     public static PgmPanel create(String id, String title, String link, String description,
 				  String owner_name, String comm_name, String comm_id, int type,
-				  Boolean member_only, Date open_time, ImageIcon thumbnail) {
+				  int member_only, long open_time, ImageIcon thumbnail) {
 	PgmPanel p = PgmPanel.create();
 	p.setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, thumbnail);
 	return p;
@@ -99,7 +98,7 @@ public class PgmPanel extends JPanel {
     private PgmPanelLayout _layout = null;
 
     private String _id = null;
-    private Date _open_time = null;
+    private long _open_time = 0;
     private ImageIcon _thumbnail = null;
 
     private MultiLineLabel _titleLabel = null;
@@ -146,7 +145,7 @@ public class PgmPanel extends JPanel {
 
     public void setPgmInfo(String id, String title, String link, String description,
 			   String owner_name, String comm_name, String comm_id, int type,
-			   Boolean member_only, Date open_time, ImageIcon thumbnail) {
+			   int member_only, long open_time, ImageIcon thumbnail) {
 	setId(id);
 	if (description.length() > 0) {
 	    setDescription(description);
@@ -156,7 +155,7 @@ public class PgmPanel extends JPanel {
 	setOpenTime(open_time);
 	setIcon(thumbnail);
 	setType(type);
-	setOnly(member_only);
+	setOnly(member_only == 0 ? false : true);
 
 	try {
 	    URI pgmURI = new URI(link);
@@ -217,14 +216,14 @@ public class PgmPanel extends JPanel {
 	_layout.needLayout();
     }
 
-    public void setOpenTime(Date open_time) {
+    public void setOpenTime(long open_time) {
 	_open_time = open_time;
 	_timeLabel.setText(relativeTimeString(_open_time));
-	_timeLabel.setToolTipText(odf.format(open_time));
+	_timeLabel.setToolTipText(odf.format(_open_time));
 	_layout.needLayout();
     }
 
-    public Date getOpenTime() {
+    public long getOpenTime() {
 	return _open_time;
     }
 
@@ -322,15 +321,13 @@ public class PgmPanel extends JPanel {
     }
 
     public void paint(Graphics g) {
-	if (_open_time != null) {
-	    _timeLabel.setText(relativeTimeString(_open_time));
-	}
+	_timeLabel.setText(relativeTimeString(_open_time));
 	super.paint(g);
     }
 
-    private String relativeTimeString(Date d) {
+    private String relativeTimeString(long d) {
 	long now = System.currentTimeMillis();
-	long diff = now - d.getTime();
+	long diff = now - d;
 	String s = diff >= 0 ? "" : "later";
 	diff = Math.abs(diff);
 	if (diff < 60000) {

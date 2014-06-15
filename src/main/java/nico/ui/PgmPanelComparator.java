@@ -11,10 +11,10 @@ public class PgmPanelComparator implements Comparator<PgmPanel> {
 
     public int compare(PgmPanel o1, PgmPanel o2) {
 	if (_origin >= 0) {
-	    return (int)(Math.abs(_origin - o1.getOpenTime().getTime()) -
-			 Math.abs(_origin - o2.getOpenTime().getTime()));
+	    return (int)(Math.abs(_origin - o1.getOpenTime()) -
+			 Math.abs(_origin - o2.getOpenTime()));
 	} else {
-	    return (int)(o2.getOpenTime().getTime() - o1.getOpenTime().getTime());
+	    return (int)(o2.getOpenTime() - o1.getOpenTime());
 	}
     }
 }

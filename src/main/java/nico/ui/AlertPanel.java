@@ -40,9 +40,9 @@ public class AlertPanel extends JPanel implements MouseListener {
 	    AlertPanel p = null;
 	    try {
 		p = cache.pop();
-		log.log(Level.FINE, MessageFormat.format("reused a AlertPanel from cache <- ({0})", cache.size()));
+		log.log(Level.FINEST, MessageFormat.format("reused a AlertPanel from cache <- ({0})", cache.size()));
 	    } catch (EmptyStackException e) {
-		log.log(Level.FINE, MessageFormat.format("created a new AlertPanel ({0})", cache.size()));
+		log.log(Level.FINEST, MessageFormat.format("created a new AlertPanel ({0})", cache.size()));
 		p = new AlertPanel();
 	    } finally {
 		return p;

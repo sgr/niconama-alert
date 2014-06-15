@@ -1,14 +1,16 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.db
   (:require [clojure.core.async :as ca]
+            [clojure.data :as cd]
             [clojure.java.jdbc :as jdbc]
             [clojure.set :as set]
             [clojure.string :as s]
             [clojure.tools.logging :as log]
             [input-parser.cond-parser :as cp]
+            [nico.pgm :as pgm]
             [nico.scrape :as scrape])
   (:import [java.sql DriverManager PreparedStatement Statement]
-           [java.util Date LinkedHashMap]
+           [java.util LinkedHashMap]
            [org.apache.commons.lang3.time FastDateFormat]))
 
 ;; DDL ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -20,7 +22,7 @@
 (def ^{:private true} CCOL "ccol") ;; concatenated column
 
 (defn- create-db [db]
-  (letfn [(varchar [len] (format "varchar(%d)" len))]
+  (letfn [(varchar [len] (format "VARCHAR(%d)" len))]
     (jdbc/db-do-commands
      db true
      (jdbc/create-table-ddl
@@ -34,8 +36,8 @@
       [:link (varchar 42)]
       [:thumbnail (varchar 64)]
       [:owner_name (varchar 64)]
-      [:member_only :boolean]
-      [:type :smallint] ; 0: community 1: channel 2: official
+      [:member_only :smallint] ; true: 1, false: 0
+      [:type :smallint] ; community: 0, channel: 1, official: 2
       [:comm_id (varchar 10)]
       [:comm_name (varchar 64)]
       [:fetched_at :timestamp]
@@ -52,25 +54,6 @@
     ;; "CREATE INDEX idx_pgms_comm_name ON pgms(comm_name)"
     ;; "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"
     "PRAGMA journal_mode = OFF"))
-
-(defn- updates [m f ks]
-  {:pre [(map? m)]}
-  (let [nks (set/intersection (-> m keys set) (set ks))]
-    (reduce #(if (contains? %1 %2)
-               (assoc %1 %2 (f (get %1 %2)))
-               %1)
-            m nks)))
-
-(defn- to-row [pgm]
-  (letfn [(timetol [^Date d] (.getTime d))]
-    (-> (updates pgm {false 0 true 1} [:member_only])
-        (updates {:community 0 :channel 1 :official 2} [:type])
-        (updates timetol [:open_time :start_time :fetched_at :updated_at]))))
-
-(defn- to-pgm [row]
-  (letfn [(date [^long l] (Date. l))]
-    (-> (updates row {0 false 1 true} [:member_only])
-        (updates date [:open_time :start_time :fetched_at :updated_at]))))
 
 ;; Query generator ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -128,12 +111,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defmulti greater? (fn [new old] [(class new) (class old)]))
-(defmethod greater? [String String] [ns os] (> (count ns) (count os)))
-(defmethod greater? [Number Number] [nn on] (> nn on))
-;; By undefining default method, it thrown IllegalArgumentException for unallowed argument types
-;; (defmethod greater? :default [n o] false)
-
 (def QS-STD
   {:pgms-with-id "SELECT * FROM pgms WHERE id=?"
    :pgms-with-comm "SELECT * FROM pgms WHERE comm_id=?"
@@ -141,7 +118,7 @@
    :clean (str "DELETE FROM pgms WHERE id IN "
                "(SELECT id FROM pgms WHERE open_time < ? AND updated_at < ? ORDER BY updated_at LIMIT ?)")
    :insert (str "INSERT INTO pgms ( "
-                (s/join "," (map name (nico.pgm.Pgm/getBasis)))
+                (s/join "," (nico.pgm.Pgm/getBasis))
                 " ) VALUES ( "
                 (s/join "," (-> (nico.pgm.Pgm/getBasis) count (repeat "?")))
                 " )")
@@ -151,6 +128,8 @@
    :vacuum         "VACUUM"
    :reindex        "REINDEX"
    :shrink_memory  "PRAGMA shrink_memory"})
+
+(def PGM-KEYS (map keyword (nico.pgm.Pgm/getBasis)))
 
 (defn- pstmt [db q]
   (cond (and (string? q) (not (s/blank? q))) (jdbc/prepare-statement (jdbc/db-connection db) q)
@@ -198,15 +177,17 @@
   (letfn [(pgms-with-id [id] (jdbc/query db [(:pgms-with-id @(:ps-std db)) id]))
           (pgms-with-comm [comm-id] (jdbc/query db [(:pgms-with-comm @(:ps-std db)) comm-id]))
           (insert! [db r]
-            (execute! db (-> [(:insert @(:ps-std db)) (vals r)] flatten vec)))
+            (execute! db (-> [(:insert @(:ps-std db)) (map #(get r %) PGM-KEYS)] flatten vec)))
           (delete! [db id]
             (execute! db [(:delete-with-id @(:ps-std db)) id]))
           (diff-row [new old]
-            (reduce (fn [m k] (let [nv (get new k) ov (get old k)]
-                                (if (and nv ov (greater? (get new k) (get old k)))
-                                  (assoc m k (get new k))
-                                  m)))
-                    {} (keys old)))
+            (let [[only-new only-old both] (cd/diff new old)]
+              (reduce (fn [m [k v]]
+                        (assoc m k (condp instance? v
+                                     String (max (count v) (count (get old k)))
+                                     Long (max v (get old k))
+                                     v)))
+                      {} only-new)))
           (update-query [diff]
             (str "UPDATE pgms SET "
                  (s/join "," (map (fn [[k v]] (str (name k) "=" (if (nil? v) "NULL" "?"))) diff))
@@ -214,47 +195,47 @@
           (update! [db id diff]
             (let [q (update-query diff)
                   p (cached-pstmt db q)]
-                ;;(log/tracef "UPDATE[%s] <- %s" id (pr-str (keys diff)))
+              ;;(log/infof "UPDATE[%s] <- %s" id (pr-str (keys diff)))
               (execute! db (-> [p (vals diff) id] flatten vec))))]
-    (let [r (to-row pgm)
-          id (:id r)
+
+    (let [id (:id pgm)
           irs (pgms-with-id id)]
       (condp = (count irs)
-        1 (let [diff (diff-row r (first irs))]
+        1 (let [diff (diff-row pgm (first irs))]
             (when-not (empty? diff)
               (update! db id diff))
             [0 0])
-        0 (if (s/blank? (:comm_id r)) ; 公式の番組はcomm_idがない
+        0 (if (s/blank? (:comm_id pgm)) ; 公式の番組はcomm_idがない
             (jdbc/with-db-transaction [db db]
               ;;(log/tracef "INSERT[%s]" id)
-              (insert! db r)
+              (insert! db pgm)
               [1 0])
-            (let [crs (pgms-with-comm (:comm_id r))]
+            (let [crs (pgms-with-comm (:comm_id pgm))]
               (condp = (count crs)
                 0 (jdbc/with-db-transaction [db db]
                     ;;(log/tracef "INSERT[%s]" id)
-                    (insert! db r)
+                    (insert! db pgm)
                     [1 0])
                 1 (let [cr (first crs)]
                     (if (= id (:id cr))
-                      (let [diff (diff-row r cr)]
+                      (let [diff (diff-row pgm cr)]
                         (when-not (empty? diff)
                           (update! db id diff))
                         [0 0])
-                      (if (> (:open_time r) (:open_time cr))
+                      (if (> (:open_time pgm) (:open_time cr))
                         (jdbc/with-db-transaction [db db]
                           ;;(log/tracef "DELETE[%s] & INSERT[%s]" (:id cr) id)
                           (delete! db (:id cr))
-                          (insert! db r)
+                          (insert! db pgm)
                           [1 1])
                         [0 0])))
                 (do
                   (log/errorf "too many pgms (%d) has same comm_id (%s): %s -> %s"
-                              (count crs) (:comm_id r) (pr-str r) (pr-str crs))
+                              (count crs) (:comm_id pgm) (pr-str pgm) (pr-str crs))
                   [0 0]))))
         (do
           (log/errorf "too many pgms (%d) has same id (%s): %s -> %s"
-                      (count irs) (:id r) (pr-str r) (pr-str irs))
+                      (count irs) (:id pgm) (pr-str pgm) (pr-str irs))
           [0 0])))))
 
 (defn- add! [db pgm]
@@ -301,7 +282,7 @@
           {:cmd :create-db}"
   [oc-status]
   (letfn [(search-pgms [db q]
-            (jdbc/query db [(if (instance? PreparedStatement q) q (cached-pstmt db q))] :row-fn to-pgm))
+            (jdbc/query db [(if (instance? PreparedStatement q) q (cached-pstmt db q))] :row-fn pgm/map->Pgm))
           (search-pgms-by-queries [db]
             (reduce (fn [m [id q]] (assoc m id (search-pgms db q))) {} @(:ps db)))
           (count-pgms [db query target]
@@ -428,9 +409,8 @@
                                     cnt (count-pgms db query target)
                                     q (if (< SEARCH-LIMIT cnt)
                                         (sql-kwd query target SEARCH-LIMIT)
-                                        (sql-kwd query target))
-                                    results (search-pgms db q)]
-                                (ca/>! oc-status {:status :searched-ondemand :cnt cnt :results results})
+                                        (sql-kwd query target))]
+                                (ca/>! oc-status {:status :searched-ondemand :cnt cnt :results (search-pgms db q)})
                                 (recur db total npgms last-cleaned last-searched acc-rm)) ;; ここではlast-searched更新しない
              (do
                (log/warnf "caught an unknown command[%s]" (pr-str c))

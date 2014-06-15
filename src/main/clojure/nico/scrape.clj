@@ -5,10 +5,11 @@
             [clojure.tools.logging :as log]
             [net.cgrand.enlive-html :as html]
             [nico.net :as net]
+            [nico.pgm :as pgm]
             [nico.string :as s])
   (:import [java.io InputStream StringReader]
            [java.net URI]
-           [java.util Calendar Date GregorianCalendar Locale TimeZone]
+           [java.util Calendar GregorianCalendar Locale TimeZone]
            [java.util.concurrent TimeUnit]
            [org.htmlcleaner CompactXmlSerializer HtmlCleaner TagNode]))
 
@@ -49,7 +50,7 @@
                         (GregorianCalendar. yyyy (dec MM) dd ohh omm)]))]
     (when (and (= 23 ohh) (= 0 shh)) ;; 開場23:5x、開演00:0xの場合
       (.add sc Calendar/DAY_OF_MONTH 1))
-    [(.getTime oc) (.getTime sc)]))
+    [(-> oc .getTime .getTime) (-> sc .getTime .getTime)]))
 
 (defn extract-pgm [xml]
   (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts xml))]
@@ -68,11 +69,11 @@
                                      (html/select [:div.kaijo :> :strong :> html/text-node])
                                      open-start-time)
           thumbnail (-> xml (html/select [(html/attr= :itemprop "thumbnail")]) first :attrs :content s/nstr)
-          member_only (if (first (html/select infobox [:h2.onlym])) true false)
+          member_only (if (first (html/select infobox [:h2.onlym])) 1 0)
           type (cond
-                (not (empty? (html/select infobox [:div.com]))) :community
-                (not (empty? (html/select infobox [:div.chan]))) :channel
-                :else :official)
+                (not (empty? (html/select infobox [:div.com]))) 0
+                (not (empty? (html/select infobox [:div.chan]))) 1
+                :else 2)
           category (->> (html/select xml [:nobr :> :a.nicopedia :> html/text-node])
                         (cs/join ",")
                         s/nstr)
@@ -98,10 +99,10 @@
                                            :channel [:div.shosai (html/attr= :itemprop "name")
                                                      :> html/text-node])]
                        (-> comm (html/select selector) first (s/unescape :html) s/nstr))
-          now (Date.)]
+          now (System/currentTimeMillis)]
       (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
-        (nico.pgm.Pgm. id title open_time start_time description category link thumbnail owner_name
-                       member_only type comm_name comm_id now now)
+        (pgm/->Pgm id title open_time start_time description category link thumbnail owner_name
+                   member_only type comm_name comm_id now now)
         (log/warnf "couldn't create pgm from scraped data: [%s %s %s %s %s, %s %s]"
                    id title description link thumbnail open_time start_time)))))
 

@@ -10,7 +10,7 @@
             [nico.net :as net]
             [nico.pgm :as pgm]
             [nico.string :as s])
-  (:import [java.util Date Locale]
+  (:import [java.util Locale]
            [java.util.concurrent TimeUnit]
            [org.apache.commons.lang3.time FastDateFormat]
            [org.htmlcleaner HtmlCleaner]))
@@ -59,10 +59,10 @@
 (defn- parse-date
   ([s fmt]
      (when-not (cs/blank? s)
-       (-> (FastDateFormat/getInstance fmt) (.parse s))))
+       (-> (FastDateFormat/getInstance fmt) (.parse s) .getTime)))
   ([s fmt locale]
      (when-not (cs/blank? s)
-       (-> (FastDateFormat/getInstance fmt locale) (.parse s)))))
+       (-> (FastDateFormat/getInstance fmt locale) (.parse s) .getTime))))
 
 (let [fmt "yyyy-MM-dd HH:mm:ss"]
   (defn create-official-pgm [item fetched_at]
@@ -76,13 +76,17 @@
             link (-> item (child-content :link) s/nstr)
             thumbnail (-> item (get-child-attr :media:thumbnail :url) s/nstr)
             owner_name "" ; ない
-            member_only false ; ない
-            type (if-let [type-str (child-content item :nicolive:type)] (keyword type-str) :official)
+            member_only 0 ; ない
+            type (if-let [type-str (child-content item :nicolive:type)]
+                   (condp = type-str
+                     "community" 0
+                     "channel" 1
+                     2) 2) ; "official"
             comm_name "" ; ない
             comm_id nil] ; ない
         (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
-          (nico.pgm.Pgm. id title open_time start_time description category link thumbnail owner_name
-                         member_only type comm_name comm_id fetched_at fetched_at)
+          (pgm/->Pgm id title open_time start_time description category link thumbnail owner_name
+                     member_only type comm_name comm_id fetched_at fetched_at)
           (log/warnf "couldn't create official pgm: [%s %s %s %s %s, %s %s]"
                      id title description link thumbnail open_time start_time)))
       (catch Exception e
@@ -104,13 +108,17 @@
             link (-> item (child-content :link) s/nstr)
             thumbnail (-> item (get-child-attr :media:thumbnail :url) s/nstr)
             owner_name (-> item (child-content :nicolive:owner_name) s/nstr)
-            member_only (-> item (child-content :nicolive:member_only) Boolean/parseBoolean)
-            type (if-let [type-str (child-content item :nicolive:type)] (keyword type-str) :official)
+            member_only (-> item (child-content :nicolive:member_only) Boolean/parseBoolean {true 1 false 0})
+            type (if-let [type-str (child-content item :nicolive:type)]
+                   (condp = type-str
+                     "community" 0
+                     "channel" 1
+                     2) 2) ; "official"
             comm_name (-> item (child-content :nicolive:community_name) s/nstr)
             comm_id (-> item (child-content :nicolive:community_id) s/nstr)]
         (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
-          (nico.pgm.Pgm. id title open_time start_time description category link thumbnail owner_name
-                         member_only type comm_name comm_id fetched_at fetched_at)
+          (pgm/->Pgm id title open_time start_time description category link thumbnail owner_name
+                     member_only type comm_name comm_id fetched_at fetched_at)
           (log/debugf "couldn't create pgm: [%s %s %s %s %s, %s %s]"
                       id title description link thumbnail open_time start_time)))
       (catch Exception e
@@ -121,7 +129,7 @@
     (for [x nodes-child :when (= :item (:tag (first x)))] (first x))))
 
 (defn extract [rss pgm-fn]
-  (let [now (Date.)]
+  (let [now (System/currentTimeMillis)]
     (->> (map #(pgm-fn % now) (items rss))
          (filter #(and % (and (:id %) (:title %) (:open_time %) (:start_time %)))))))
 
