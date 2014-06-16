@@ -71,9 +71,9 @@
           thumbnail (-> xml (html/select [(html/attr= :itemprop "thumbnail")]) first :attrs :content s/nstr)
           member_only (if (first (html/select infobox [:h2.onlym])) 1 0)
           type (cond
-                (not (empty? (html/select infobox [:div.com]))) 0
-                (not (empty? (html/select infobox [:div.chan]))) 1
-                :else 2)
+                (not (empty? (html/select infobox [:div.com]))) :community
+                (not (empty? (html/select infobox [:div.chan]))) :channel
+                :else :official)
           category (->> (html/select xml [:nobr :> :a.nicopedia :> html/text-node])
                         (cs/join ",")
                         s/nstr)
@@ -102,7 +102,7 @@
           now (System/currentTimeMillis)]
       (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
         (pgm/->Pgm id title open_time start_time description category link thumbnail owner_name
-                   member_only type comm_name comm_id now now)
+                   member_only ({:community 0 :channel 1 :official 2} type) comm_name comm_id now now)
         (log/warnf "couldn't create pgm from scraped data: [%s %s %s %s %s, %s %s]"
                    id title description link thumbnail open_time start_time)))))
 

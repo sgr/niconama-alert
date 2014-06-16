@@ -91,43 +91,9 @@
       (is (thrown? java.lang.AssertionError (sql-kwd "foo bar" #{:title} 0)))
       )))
 
-(deftest row-pgm-test
-  (testing "updates"
-    (let [updates @#'nico.db/updates]
-      (is (= {:foo 1 :bar 2 :baz 2} (updates {:foo 0 :bar 1 :baz 2} inc [:foo :bar])))
-      (is (= {:foo 0 :bar 1 :baz 2} (updates {:foo 0 :bar 1 :baz 2} inc [])))
-      (is (= {} (updates {} inc [])))
-      (is (thrown? java.lang.AssertionError (updates nil inc [:foo :bar])))
-      (is (thrown? java.lang.AssertionError (updates nil inc nil)))
-      (is (thrown? java.lang.AssertionError (updates [] inc [:foo :bar])))
-      ))
-  (testing "pgm -> row"
-    (let [to-row @#'nico.db/to-row
-          now (Date.)
-          nowl (.getTime now)
-          pgm (nico.pgm.Pgm. "lv987654321" "タイトル" now now "番組説明" "一般,やってみた,ゲーム" "http://live.nicovideo.jp/watch/lv987654321" "http://icon.nimg.jp/community/111/co9999999.jpg?1388028442" "放送社名" false :community "コミュニティ名" "co9999999" now now)]
-      (is (= (nico.pgm.Pgm. "lv987654321" "タイトル" nowl nowl "番組説明" "一般,やってみた,ゲーム" "http://live.nicovideo.jp/watch/lv987654321" "http://icon.nimg.jp/community/111/co9999999.jpg?1388028442" "放送社名" 0 0 "コミュニティ名" "co9999999" nowl nowl)
-             (to-row pgm)))))
-  (testing "row -> pgm"
-    (let [to-pgm @#'nico.db/to-pgm
-          now (Date.)
-          nowl (.getTime now)
-          row {:id "lv987654321" :title "タイトル" :open_time nowl :start_time nowl :description "番組説明" :category "一般,やってみた,ゲーム" :link "http://live.nicovideo.jp/watch/lv987654321" :thumbnail "http://icon.nimg.jp/community/111/co9999999.jpg?1388028442" :owner_name "放送社名" :member_only 0 :type 0 :comm_name "コミュニティ名" :comm_id "co9999999" :fetched_at nowl :updated_at nowl}]
-      (is (= {:id "lv987654321" :title "タイトル" :open_time now :start_time now :description "番組説明" :category "一般,やってみた,ゲーム" :link "http://live.nicovideo.jp/watch/lv987654321" :thumbnail "http://icon.nimg.jp/community/111/co9999999.jpg?1388028442" :owner_name "放送社名" :member_only false :type 0 :comm_name "コミュニティ名" :comm_id "co9999999" :fetched_at now :updated_at now}
-             (to-pgm row)))
-      )))
-
-(deftest greater?-test
-  (is (true? (greater? "abcde" "abc")))
-  (is (true? (greater? 10 -100000)))
-  (is (false? (greater? "abc" "abcde")))
-  (is (false? (greater? -100000 10)))
-  (is (thrown? IllegalArgumentException (greater? 1 "abcde")))
-  )
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn- set-pgm-time [^Date d pgm]
+(defn- set-pgm-time [d pgm]
   (assoc pgm :id (format "lv%d" (rand-int Integer/MAX_VALUE)) :open_time d :fetched_at d :updated_at d))
 
 (deftest ^{:stress true :db true :data true} db-test
@@ -145,10 +111,11 @@
          (condp = (:status c)
            :db-stat  (:npgms c)
            :searched (do
-                       (log/info (format "SEARCHED [%d] (" npgms)
+                       (log/info (format " searched [%d] (" npgms)
                                  (s/join "," (map (fn [[k v]] (format "%s=%d" k (count v))) (:results c)))
                                  ")")
-                       npgms)))))
+                       npgms)
+           (log/errorf "Unknown command [%s]" (pr-str c))))))
 
     (ca/>!! cc-db {:cmd :set-query-kwd :id "fake0" :query "顔"
                    :target #{:owner_name :comm_name :title :description :category}})
@@ -160,20 +127,14 @@
                    :target #{:owner_name :comm_name :title :description :category}})
 
     (dotimes [n 100000]
-      (log/infof "test %d" n)
-      (let [l (- (System/currentTimeMillis) 1800000)
-            d (Date. l)]
-        (ca/>!! cc-db {:cmd :add-pgms :total TOTAL
-                       :pgms (map #(set-pgm-time d %) pgms-official)})
+      (log/infof "ADD-PGMS (%d)" n)
+      (let [l (- (System/currentTimeMillis) 1800000)]
+        (ca/>!! cc-db {:cmd :add-pgms :pgms (map #(set-pgm-time l %) pgms-official)})
         (doall
          (map-indexed
-          (fn [i pgms]
-            (let [ll (- l i)
-                  d (Date. ll)
-                  npgms (map #(set-pgm-time d %) pgms)]
-              (ca/>!! cc-db {:cmd :add-pgms :total TOTAL :pgms npgms})))
+          (fn [i pgms] (ca/>!! cc-db {:cmd :add-pgms :pgms (map #(set-pgm-time (- l i) %) pgms)}))
           pgmss))
-        (ca/>!! cc-db {:cmd :finish})
+        (ca/>!! cc-db {:cmd :finish :total TOTAL})
         ))
 
     (ca/close! cc-db)

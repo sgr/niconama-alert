@@ -7,8 +7,7 @@
             [clojure.string :as s]
             [clojure.tools.logging :as log]
             [input-parser.cond-parser :as cp]
-            [nico.pgm :as pgm]
-            [nico.scrape :as scrape])
+            [nico.pgm :as pgm])
   (:import [java.sql DriverManager PreparedStatement Statement]
            [java.util LinkedHashMap]
            [org.apache.commons.lang3.time FastDateFormat]))
@@ -265,7 +264,7 @@
    :add-pgms 番組情報をまとめて登録する。
           {:cmd :add-pgms :pgms [番組情報のリスト]}
    :finish RSS取得が一巡したことを知らせる。このタイミングで更新用検索をかける。
-          {:cmd :finish}
+          {:cmd :finish :total [ニコ生から得た総番組数]}
    :search 番組情報を検索する。結果はアウトプットチャネルに返す。
           {:cmd :search :queries {:id [チャネルID] :where [検索クエリ]}}
    :search-ondemand 番組情報を検索する。結果はアウトプットチャネルに返す。
@@ -401,7 +400,7 @@
                          (when-not (= last-searched new-last-searched)
                            (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
                          (recur db total npgms last-cleaned new-last-searched (+ acc-rm rm)))
-             :finish (let [new-total (scrape/scrape-total)]
+             :finish (let [new-total (:total c)]
                        (log/infof "PGMS-TOTAL: %d -> %d" total new-total)
                        (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
                        (recur db (or new-total total) npgms last-cleaned (now) acc-rm))

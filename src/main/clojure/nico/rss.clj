@@ -9,6 +9,7 @@
             [clojure.zip :as zip]
             [nico.net :as net]
             [nico.pgm :as pgm]
+            [nico.scrape :as scrape]
             [nico.string :as s])
   (:import [java.util Locale]
            [java.util.concurrent TimeUnit]
@@ -164,7 +165,7 @@
    :add-pgms 番組情報追加。上の:fetching-rssと同時に発信される。
           {:cmd :add-pgms :pgms [番組情報] :total [総番組数]}
    :finish 今回のRSS取得サイクルが一巡したことを教える。
-          {:cmd :finish}
+          {:cmd :finish :total [ニコ生から得た総番組数]}
 
    コントロールチャネルは次のコマンドを受理する。
    :act 今のfetcherの状態によって開始または終了するトグル動作。
@@ -212,8 +213,8 @@
                       (ca/>! oc-db {:cmd :add-pgms :pgms pgms})
                       (ca/>! oc-status {:status :fetching-rss :page page :acc sacc :total stotal}))
                     (if (zero? npgms)
-                      (do
-                        (ca/>! oc-db {:cmd :finish})
+                      (let [real-total (scrape/scrape-total)]
+                        (ca/>! oc-db {:cmd :finish :total (or real-total stotal)})
                         {:cmd :wait :sec WAITING-INTERVAL, :total WAITING-INTERVAL})
                       {:cmd :fetch :page (inc page) :cats ncats})))))
             (wait [sec total]
