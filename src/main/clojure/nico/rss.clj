@@ -200,7 +200,7 @@
                                       (let [[ntotal pgms] (get-programs-from-rss page (name category))]
                                         (-> m
                                             (assoc category [(+ acc (count pgms))
-                                                             (if (pos? ntotal) ntotal total)])
+                                                             (if (and (number? ntotal) (pos? ntotal)) ntotal total)])
                                             (update-in [:pgms] concat pgms)))
                                       (assoc m category [acc total])))
                                   {} cats)
