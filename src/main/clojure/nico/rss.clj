@@ -136,13 +136,15 @@
 
 
 (defn- get-programs-from-rss
-  ([page]
-     (if (zero? page) ; page 0 は公式の番組取得。RSSフォーマットが異なる。
-       (if-let [rss (get-nico-rss "http://live.nicovideo.jp/rss")]
-         [nil (extract rss create-official-pgm)] [nil []])
-       (if-let [rss (get-nico-rss (format "http://live.nicovideo.jp/recent/rss?p=%d" page))]
-         [(get-programs-count rss) (extract rss create-pgm)] [nil []])))
-  ([page category]
+  ([] ; ページなしは公式の番組取得。RSSフォーマットが異なる。
+     (if-let [rss (get-nico-rss "http://live.nicovideo.jp/rss")]
+       (extract rss create-official-pgm) []))
+  ([page] ; pageは1以上。0で問い合わせると1と同じ結果が返るみたい。また、カテゴリ無しはcommonカテゴリと同じ結果が返るみたい。
+     {:pre [(pos? page)]}
+     (if-let [rss (get-nico-rss (format "http://live.nicovideo.jp/recent/rss?p=%d" page))]
+       [(get-programs-count rss) (extract rss create-pgm)] [nil []]))
+  ([page category] ; pageは1以上。0で問い合わせると1と同じ結果が返るみたい。
+     {:pre [(pos? page)]}
      (if-let [rss (get-nico-rss (format "http://live.nicovideo.jp/recent/rss?tab=%s&p=%d" category page))]
        [(get-programs-count rss) (extract rss create-pgm)] [nil []])))
 
@@ -172,56 +174,59 @@
           {:cmd :act}
 
    また、次のコマンドが内部的に使用される。
-   :fetch 指定されたページのRSSを取得する。
-          {:cmd :fetch :page [ページ番号] :cats [カテゴリごとの取得数計と総番組数からなるマップ]}
+   :fetch 指定されたページのRSSを取得する。0ページと1ページ以降は異なる。
+          {:cmd :fetch} ; 0ページ目は公式・チャンネルの番組
+          {:cmd :fetch :page [ページ番号] :ototal [公式・チャンネルの番組数] :cats [カテゴリごとの取得数計と総番組数からなるマップ]}
    :wait  1秒待機する。したがって回数＝秒数である。
           {:cmd :wait, :sec [残り待機回数], :total [全体待機回数]})"
   [oc-status oc-db]
   (let [WAITING-INTERVAL 90
         cc (ca/chan)]
 
-    (letfn [(fetch [page cats]
-              (ca/go
-                (if (zero? page)
-                  (let [[total pgms] (get-programs-from-rss page)
-                        npgms (count pgms)]
-                    (when (pos? npgms)
-                      (ca/>! oc-db {:cmd :add-pgms :pgms pgms :total nil})
-                      (ca/>! oc-status {:status :fetching-rss :page page :acc npgms :total nil}))
-                    {:cmd :fetch :page 1 :cats {:common [0 0] ; 一般
-                                                :try    [0 0] ; やってみた
-                                                :live   [0 0] ; ゲーム
-                                                :req    [0 0] ; 動画紹介
-                                                :r18    [0 0] ; R-18
-                                                :face   [0 0] ; 顔出し
-                                                :totu   [0 0]}}) ; 凸待ち
-                  (let [n (reduce (fn [m [category [acc total]]]
-                                    (if (or (= 1 page) (< acc total))
-                                      (let [[ntotal pgms] (get-programs-from-rss page (name category))]
-                                        (-> m
-                                            (assoc category [(+ acc (count pgms))
-                                                             (if (and (number? ntotal) (pos? ntotal)) ntotal total)])
-                                            (update-in [:pgms] concat pgms)))
-                                      (assoc m category [acc total])))
-                                  {} cats)
-                        ncats (dissoc n :pgms)
-                        pgms (:pgms n)
-                        npgms (count pgms)
-                        sacc (apply + (for [[category [acc total]] ncats] acc))
-                        stotal (apply + (for [[category [acc total]] ncats] total))]
-                    (when (pos? npgms)
-                      (ca/>! oc-db {:cmd :add-pgms :pgms pgms})
-                      (ca/>! oc-status {:status :fetching-rss :page page :acc sacc :total stotal}))
-                    (if (zero? npgms)
-                      (let [real-total (scrape/scrape-total)]
-                        (ca/>! oc-db {:cmd :finish :total (or real-total stotal)})
-                        {:cmd :wait :sec WAITING-INTERVAL, :total WAITING-INTERVAL})
-                      {:cmd :fetch :page (inc page) :cats ncats})))))
+    (letfn [(fetch
+              ([]
+                 (ca/go
+                   (let [pgms (get-programs-from-rss)
+                         npgms (count pgms)]
+                     (when (pos? npgms)
+                       (ca/>! oc-db {:cmd :add-pgms :pgms pgms :total nil})
+                       (ca/>! oc-status {:status :fetching-rss :page 0 :acc npgms :total nil}))
+                     {:cmd :fetch :page 1 :ototal npgms :cats {:common [0 0] ; 一般
+                                                               :try    [0 0] ; やってみた
+                                                               :live   [0 0] ; ゲーム
+                                                               :req    [0 0] ; 動画紹介
+                                                               :r18    [0 0] ; R-18
+                                                               :face   [0 0] ; 顔出し
+                                                               :totu   [0 0]}}))) ; 凸待ち
+              ([page ototal cats]
+                 (ca/go
+                   (let [n (reduce (fn [m [category [acc total]]]
+                                     (if (or (= 1 page) (< acc total))
+                                       (let [[ntotal pgms] (get-programs-from-rss page (name category))]
+                                         (-> m
+                                             (assoc category [(+ acc (count pgms))
+                                                              (if (and (number? ntotal) (pos? ntotal)) ntotal total)])
+                                             (update-in [:pgms] concat pgms)))
+                                       (assoc m category [acc total])))
+                                   {} cats)
+                         pgms (:pgms n)
+                         ncats (dissoc n :pgms)
+                         npgms (count pgms)
+                         sacc (apply + (for [[category [acc total]] ncats] acc))
+                         stotal (apply + (for [[category [acc total]] ncats] total))]
+                     (when (pos? npgms)
+                       (ca/>! oc-db {:cmd :add-pgms :pgms pgms})
+                       (ca/>! oc-status {:status :fetching-rss :page page :acc sacc :total stotal}))
+                     (if (pos? npgms)
+                       {:cmd :fetch :page (inc page) :ototal ototal :cats ncats}
+                       (let [real-total (scrape/scrape-total)]
+                         (ca/>! oc-db {:cmd :finish :total (+ ototal (or real-total stotal))})
+                         {:cmd :wait :sec WAITING-INTERVAL, :total WAITING-INTERVAL}))))))
             (wait [sec total]
               (ca/go
                 (ca/>! oc-status {:status :waiting-rss :sec sec :total total})
                 (if (zero? sec)
-                  {:cmd :fetch :page 0 :cats nil}
+                  {:cmd :fetch}
                   (do
                     ;;(-> TimeUnit/MILLISECONDS (.sleep 1000))
                     (ca/<! (ca/timeout 1000))
@@ -239,14 +244,16 @@
                      (do
                        (log/info "Start RSS")
                        (ca/>! oc-status {:status :started-rss})
-                       (recur (fetch 0 nil) false)))
-              :fetch (let [{:keys [page cats]} c]
+                       (recur (fetch) false)))
+              :fetch (let [{:keys [page ototal cats]} c]
                        (when curr-op (ca/close! curr-op))
                        (if abort
                          (do
                            (ca/>! oc-status {:status :stopped-rss})
                            (recur nil false))
-                         (recur (fetch page cats) false)))
+                         (if (and page ototal cats)
+                           (recur (fetch page ototal cats) false)
+                           (recur (fetch) false))))
               :wait  (let [{:keys [sec total]} c]
                        (when curr-op (ca/close! curr-op))
                        (if abort
