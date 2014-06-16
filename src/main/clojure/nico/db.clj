@@ -347,16 +347,16 @@
                     (if (pos? rm) now last-searched)
                     new-acc-rm)))
          
-         (and (pos? npgms) (>= acc-rm npgms)) ;; acc-rm等を見て必要に応じてvacuumをかける
+         (and (pos? npgms) (>= acc-rm npgms) ;; acc-rm等を見て必要に応じてvacuumをかける
+              (< FREELIST-THRESHOLD (pragma-query db :freelist_count)))
          (let [fc (pragma-query db :freelist_count)
                pc (pragma-query db :page_count)]
-           (when (< FREELIST-THRESHOLD fc)
-             (execute! db [(:vacuum @(:ps-std db))] :transaction? false)
-             ;;(execute! db [(:reindex @(:ps-std db))] :transaction? false)
-             (execute! db [(:shrink_memory @(:ps-std db))] :transaction? false)
-             (log/infof "freelist / page: [%d, %d] -> [%d, %d]" fc pc
-                        (pragma-query db :freelist_count) (pragma-query db :page_count))
-             (recur db total npgms last-cleaned last-searched 0)))
+           (execute! db [(:vacuum @(:ps-std db))] :transaction? false)
+           ;;(execute! db [(:reindex @(:ps-std db))] :transaction? false)
+           (execute! db [(:shrink_memory @(:ps-std db))] :transaction? false)
+           (log/infof "freelist / page: [%d, %d] -> [%d, %d]" fc pc
+                      (pragma-query db :freelist_count) (pragma-query db :page_count))
+           (recur db total npgms last-cleaned last-searched 0))
 
          :else
          (if-let [c (ca/<! cc)]
