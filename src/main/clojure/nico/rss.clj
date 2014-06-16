@@ -165,7 +165,9 @@
 
    アウトプットチャネルoc-dbには番組情報が出力される。
    :add-pgms 番組情報追加。上の:fetching-rssと同時に発信される。
-          {:cmd :add-pgms :pgms [番組情報] :total [総番組数]}
+          {:cmd :add-pgms :pgms [番組情報] :total [カテゴリごとの総番組数の合計。実際の総番組数より大きいが取得数を表す。]}
+   :set-total 総番組数を設定する。
+          {:cmd :set-total :total [公式・チャンネルの番組数 + ニコ生から得た総番組数] }
    :finish 今回のRSS取得サイクルが一巡したことを教える。
           {:cmd :finish :total [ニコ生から得た総番組数]}
 
@@ -176,7 +178,7 @@
    また、次のコマンドが内部的に使用される。
    :fetch 指定されたページのRSSを取得する。0ページと1ページ以降は異なる。
           {:cmd :fetch} ; 0ページ目は公式・チャンネルの番組
-          {:cmd :fetch :page [ページ番号] :ototal [公式・チャンネルの番組数] :cats [カテゴリごとの取得数計と総番組数からなるマップ]}
+          {:cmd :fetch :page [ページ番号] :cats [カテゴリごとの取得数計と総番組数からなるマップ]}
    :wait  1秒待機する。したがって回数＝秒数である。
           {:cmd :wait, :sec [残り待機回数], :total [全体待機回数]})"
   [oc-status oc-db]
@@ -187,18 +189,20 @@
               ([]
                  (ca/go
                    (let [pgms (get-programs-from-rss)
-                         npgms (count pgms)]
+                         npgms (count pgms)
+                         real-total (scrape/scrape-total)]
                      (when (pos? npgms)
+                       (ca/>! oc-db {:cmd :set-total :total (+ npgms real-total)})
                        (ca/>! oc-db {:cmd :add-pgms :pgms pgms :total nil})
                        (ca/>! oc-status {:status :fetching-rss :page 0 :acc npgms :total nil}))
-                     {:cmd :fetch :page 1 :ototal npgms :cats {:common [0 0] ; 一般
-                                                               :try    [0 0] ; やってみた
-                                                               :live   [0 0] ; ゲーム
-                                                               :req    [0 0] ; 動画紹介
-                                                               :r18    [0 0] ; R-18
-                                                               :face   [0 0] ; 顔出し
-                                                               :totu   [0 0]}}))) ; 凸待ち
-              ([page ototal cats]
+                     {:cmd :fetch :page 1 :cats {:common [0 0] ; 一般
+                                                 :try    [0 0] ; やってみた
+                                                 :live   [0 0] ; ゲーム
+                                                 :req    [0 0] ; 動画紹介
+                                                 :r18    [0 0] ; R-18
+                                                 :face   [0 0] ; 顔出し
+                                                 :totu   [0 0]}}))) ; 凸待ち
+              ([page cats]
                  (ca/go
                    (let [n (reduce (fn [m [category [acc total]]]
                                      (if (or (= 1 page) (< acc total))
@@ -218,10 +222,8 @@
                        (ca/>! oc-db {:cmd :add-pgms :pgms pgms})
                        (ca/>! oc-status {:status :fetching-rss :page page :acc sacc :total stotal}))
                      (if (pos? npgms)
-                       {:cmd :fetch :page (inc page) :ototal ototal :cats ncats}
-                       (let [real-total (scrape/scrape-total)]
-                         (ca/>! oc-db {:cmd :finish :total (+ ototal (or real-total stotal))})
-                         {:cmd :wait :sec WAITING-INTERVAL, :total WAITING-INTERVAL}))))))
+                       {:cmd :fetch :page (inc page) :cats ncats}
+                       {:cmd :wait :sec WAITING-INTERVAL, :total WAITING-INTERVAL})))))
             (wait [sec total]
               (ca/go
                 (ca/>! oc-status {:status :waiting-rss :sec sec :total total})
@@ -245,14 +247,14 @@
                        (log/info "Start RSS")
                        (ca/>! oc-status {:status :started-rss})
                        (recur (fetch) false)))
-              :fetch (let [{:keys [page ototal cats]} c]
+              :fetch (let [{:keys [page cats]} c]
                        (when curr-op (ca/close! curr-op))
                        (if abort
                          (do
                            (ca/>! oc-status {:status :stopped-rss})
                            (recur nil false))
-                         (if (and page ototal cats)
-                           (recur (fetch page ototal cats) false)
+                         (if (and page cats)
+                           (recur (fetch page cats) false)
                            (recur (fetch) false))))
               :wait  (let [{:keys [sec total]} c]
                        (when curr-op (ca/close! curr-op))

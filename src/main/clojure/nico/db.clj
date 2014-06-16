@@ -263,8 +263,10 @@
           {:cmd :add-pgm :pgm [番組情報]}
    :add-pgms 番組情報をまとめて登録する。
           {:cmd :add-pgms :pgms [番組情報のリスト]}
+   :set-total 総番組数を設定する。この情報を元にDB内の古い番組情報を削除する。
+          {:cmd :set-total :total [ニコ生から得た総番組数]}
    :finish RSS取得が一巡したことを知らせる。このタイミングで更新用検索をかける。
-          {:cmd :finish :total [ニコ生から得た総番組数]}
+          {:cmd :finish}
    :search 番組情報を検索する。結果はアウトプットチャネルに返す。
           {:cmd :search :queries {:id [チャネルID] :where [検索クエリ]}}
    :search-ondemand 番組情報を検索する。結果はアウトプットチャネルに返す。
@@ -400,10 +402,13 @@
                          (when-not (= last-searched new-last-searched)
                            (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
                          (recur db total npgms last-cleaned new-last-searched (+ acc-rm rm)))
-             :finish (let [new-total (:total c)]
-                       (log/infof "PGMS-TOTAL: %d -> %d" total new-total)
+             :set-total (let [new-total (:total c)]
+                          (log/infof "SET-TOTAL: %d -> %d" total new-total)
+                          (recur db (or new-total total) npgms last-cleaned last-searched acc-rm))
+             :finish (do
                        (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
-                       (recur db (or new-total total) npgms last-cleaned (now) acc-rm))
+                       (System/gc)
+                       (recur db total npgms last-cleaned (now) acc-rm))
              :search-ondemand (let [{:keys [query target]} c
                                     cnt (count-pgms db query target)
                                     q (if (< SEARCH-LIMIT cnt)
