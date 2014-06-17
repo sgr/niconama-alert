@@ -327,6 +327,7 @@
                    last-cleaned (now) ; 最終削除時刻。削除頻度を上げ過ぎないために用いる。
                    last-searched (now) ; 最終検索時刻。オンデマンド検索は含まない。検索頻度を上げ過ぎないために用いる。
                    acc-rm 0] ; 累積削除数。vacuumタイミングを決めるのに用いる。
+        ;;(System/gc)
         (cond
          (and (> npgms (int (* RATIO total)) 0) ;; 30分経って更新されてない番組情報は削除する
               (< CLEAN-INTERVAL (- (now) last-cleaned)))
@@ -407,7 +408,6 @@
                           (recur db (or new-total total) npgms last-cleaned last-searched acc-rm))
              :finish (do
                        (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
-                       (System/gc)
                        (recur db total npgms last-cleaned (now) acc-rm))
              :search-ondemand (let [{:keys [query target]} c
                                     cnt (count-pgms db query target)

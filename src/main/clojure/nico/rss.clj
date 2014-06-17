@@ -131,7 +131,8 @@
 
 (defn extract [rss pgm-fn]
   (let [now (System/currentTimeMillis)]
-    (->> (map #(pgm-fn % now) (items rss))
+    (->> (items rss)
+         (map #(pgm-fn % now))
          (filter #(and % (and (:id %) (:title %) (:open_time %) (:start_time %)))))))
 
 
@@ -190,7 +191,7 @@
                  (ca/go
                    (let [pgms (get-programs-from-rss)
                          npgms (count pgms)
-                         real-total (scrape/scrape-total)]
+                         real-total (or (scrape/scrape-total) 0)]
                      (when (pos? npgms)
                        (ca/>! oc-db {:cmd :set-total :total (+ npgms real-total)})
                        (ca/>! oc-db {:cmd :add-pgms :pgms pgms :total nil})
@@ -204,33 +205,29 @@
                                                  :totu   [0 0]}}))) ; 凸待ち
               ([page cats]
                  (ca/go
-                   (let [n (reduce (fn [m [category [acc total]]]
-                                     (if (or (= 1 page) (< acc total))
-                                       (let [[ntotal pgms] (get-programs-from-rss page (name category))]
-                                         (-> m
-                                             (assoc category [(+ acc (count pgms))
-                                                              (if (and (number? ntotal) (pos? ntotal)) ntotal total)])
-                                             (update-in [:pgms] concat pgms)))
-                                       (assoc m category [acc total])))
-                                   {} cats)
-                         pgms (:pgms n)
-                         ncats (dissoc n :pgms)
+                   (let [[ncats pgms] (reduce (fn [[m pgms] [category [acc total]]]
+                                                (if (or (= 1 page) (< acc total))
+                                                  (let [[ctotal cpgms] (get-programs-from-rss page (name category))]
+                                                    [(assoc m category [(+ acc (count cpgms))
+                                                                        (if ((every-pred number? pos?) ctotal) ctotal total)])
+                                                     (concat pgms cpgms)]
+                                                    [(assoc m category [acc total]) pgms])))
+                                              [{} []] cats)
                          npgms (count pgms)
-                         sacc (apply + (for [[category [acc total]] ncats] acc))
-                         stotal (apply + (for [[category [acc total]] ncats] total))]
+                         sacc (->> ncats vals (map first) (apply +))
+                         stotal (->> ncats vals (map second) (apply +))]
                      (when (pos? npgms)
                        (ca/>! oc-db {:cmd :add-pgms :pgms pgms})
                        (ca/>! oc-status {:status :fetching-rss :page page :acc sacc :total stotal}))
                      (if (pos? npgms)
                        {:cmd :fetch :page (inc page) :cats ncats}
-                       {:cmd :wait :sec WAITING-INTERVAL, :total WAITING-INTERVAL})))))
+                       {:cmd :wait :sec WAITING-INTERVAL :total WAITING-INTERVAL})))))
             (wait [sec total]
               (ca/go
                 (ca/>! oc-status {:status :waiting-rss :sec sec :total total})
                 (if (zero? sec)
                   {:cmd :fetch}
                   (do
-                    ;;(-> TimeUnit/MILLISECONDS (.sleep 1000))
                     (ca/<! (ca/timeout 1000))
                     {:cmd :wait :sec (dec sec) :total total}))))]
 
@@ -271,6 +268,7 @@
              (not= ch cc) (do
                             (log/warn "other channel closed: " (pr-str ch))
                             (ca/close! ch)
+                            (ca/>! oc-status {:status :stopped-rss})
                             (recur nil abort))
              :else (log/infof "Closed RSS control channel"))))))
 
