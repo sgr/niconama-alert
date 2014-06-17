@@ -186,42 +186,51 @@
   (let [WAITING-INTERVAL 90
         cc (ca/chan)]
 
-    (letfn [(fetch
+    (letfn [(fetch-aux
               ([]
-                 (ca/go
-                   (let [pgms (get-programs-from-rss)
-                         npgms (count pgms)
-                         real-total (or (scrape/scrape-total) 0)]
-                     (when (pos? npgms)
-                       (ca/>! oc-db {:cmd :set-total :total (+ npgms real-total)})
-                       (ca/>! oc-db {:cmd :add-pgms :pgms pgms :total nil})
-                       (ca/>! oc-status {:status :fetching-rss :page 0 :acc npgms :total nil}))
-                     {:cmd :fetch :page 1 :cats {:common [0 0] ; 一般
-                                                 :try    [0 0] ; やってみた
-                                                 :live   [0 0] ; ゲーム
-                                                 :req    [0 0] ; 動画紹介
-                                                 :r18    [0 0] ; R-18
-                                                 :face   [0 0] ; 顔出し
-                                                 :totu   [0 0]}}))) ; 凸待ち
+                 (let [pgms (get-programs-from-rss)
+                       npgms (count pgms)
+                       real-total (or (scrape/scrape-total) 0)]
+                   (when (pos? npgms)
+                     (ca/>!! oc-db {:cmd :set-total :total (+ npgms real-total)})
+                     (ca/>!! oc-db {:cmd :add-pgms :pgms pgms :total nil})
+                     (ca/>!! oc-status {:status :fetching-rss :page 0 :acc npgms :total nil}))
+                   {:cmd :fetch :page 1 :cats {:common [0 0] ; 一般
+                                               :try    [0 0] ; やってみた
+                                               :live   [0 0] ; ゲーム
+                                               :req    [0 0] ; 動画紹介
+                                               :r18    [0 0] ; R-18
+                                               :face   [0 0] ; 顔出し
+                                               :totu   [0 0]}})) ; 凸待ち
               ([page cats]
-                 (ca/go
-                   (let [[ncats pgms] (reduce (fn [[m pgms] [category [acc total]]]
-                                                (if (or (= 1 page) (< acc total))
-                                                  (let [[ctotal cpgms] (get-programs-from-rss page (name category))]
-                                                    [(assoc m category [(+ acc (count cpgms))
-                                                                        (if ((every-pred number? pos?) ctotal) ctotal total)])
-                                                     (concat pgms cpgms)]
-                                                    [(assoc m category [acc total]) pgms])))
-                                              [{} []] cats)
-                         npgms (count pgms)
-                         sacc (->> ncats vals (map first) (apply +))
-                         stotal (->> ncats vals (map second) (apply +))]
-                     (when (pos? npgms)
-                       (ca/>! oc-db {:cmd :add-pgms :pgms pgms})
-                       (ca/>! oc-status {:status :fetching-rss :page page :acc sacc :total stotal}))
-                     (if (pos? npgms)
-                       {:cmd :fetch :page (inc page) :cats ncats}
-                       {:cmd :wait :sec WAITING-INTERVAL :total WAITING-INTERVAL})))))
+                 (let [[ncats pgms] (reduce (fn [[m pgms] [category [acc total]]]
+                                              (if (or (= 1 page) (< acc total))
+                                                (let [[ctotal cpgms] (get-programs-from-rss page (name category))]
+                                                  [(assoc m category [(+ acc (count cpgms))
+                                                                      (if ((every-pred number? pos?) ctotal) ctotal total)])
+                                                   (concat pgms cpgms)])
+                                                [(assoc m category [acc total]) pgms]))
+                                            [{} []] cats)
+                       npgms (count pgms)
+                       sacc (->> ncats vals (map first) (apply +))
+                       stotal (->> ncats vals (map second) (apply +))]
+                   (when (pos? npgms)
+                     (ca/>!! oc-db {:cmd :add-pgms :pgms pgms})
+                     (ca/>!! oc-status {:status :fetching-rss :page page :acc sacc :total stotal}))
+                   (if (pos? npgms)
+                     {:cmd :fetch :page (inc page) :cats ncats}
+                     {:cmd :wait :sec WAITING-INTERVAL :total WAITING-INTERVAL}))))
+            (fetch
+              ([] (ca/go (try
+                           (fetch-aux)
+                           (catch Exception e
+                             (log/warnf "failed fetching official RSS: %s" (.getMessage e))
+                             {:cmd :fetch}))))
+              ([page cats] (ca/go (try
+                                    (fetch-aux page cats)
+                                    (catch Exception e
+                                      (log/warnf "failed fetching user RSSs: %s" (.getMessage e))
+                                      {:cmd :fetch :page page :cats cats})))))
             (wait [sec total]
               (ca/go
                 (ca/>! oc-status {:status :waiting-rss :sec sec :total total})
