@@ -192,8 +192,9 @@ public class PgmPanel extends JPanel {
     }
 
     public void setTitle(String title, URI pgmURI) {
-	Link[] ls = {new Link(0, title.length(), pgmURI)};
-	_titleLabel.setText(title, ls);
+	String aTitle = (title == null || title.equals("")) ? "<タイトルなし>" : title;
+	Link[] ls = {new Link(0, aTitle.length(), pgmURI)};
+	_titleLabel.setText(aTitle, ls);
 	_layout.needLayout();
     }
 
@@ -203,8 +204,9 @@ public class PgmPanel extends JPanel {
     }
 
     public void setComm(String commName, URI commURI, String ownerName) {
-	Link[] ls = {new Link(0, commName.length(), commURI)};
-	String s = String.format("%s（放送者：%s）", commName, ownerName);
+	String aCommName = (commName == null || commName.equals("")) ? "<コミュニティ名なし>" : commName;
+	Link[] ls = {new Link(0, aCommName.length(), commURI)};
+	String s = String.format("%s（放送者：%s）", aCommName, ownerName);
 	_commLabel.setText(s, ls);
 	_layout.needLayout();
     }
