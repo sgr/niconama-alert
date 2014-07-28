@@ -1,5 +1,6 @@
 safe: true
 lsi: false
+markdown: kramdown
 pygments: true
 baseurl: /niconama-alert
 gems:
