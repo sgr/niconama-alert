@@ -6,8 +6,8 @@ title: niconama-alert.clj download
 こちらよりお使いのOS用のバイナリをダウンロードします。
 対応OS用のバイナリがない場合は、[ソースコードからのビルド](#howtobuild)をご覧ください。
 
-* [1.7.0 Windows 用インストーラー](https://docs.google.com/uc?export=download&id=0BwIJLE1B4O3mM21Kbk12MlBjWEE) (Windows 7で動作確認)
-* [1.7.0 Mac OS X 用 DMG イメージ](https://docs.google.com/uc?export=download&id=0BwIJLE1B4O3mcjNBcUd1X3g4d0U) (Mac OS X 10.9.2で動作確認)
+* [1.7.1 Windows 用インストーラー](https://docs.google.com/uc?export=download&id=0BwIJLE1B4O3mRWd0OUhOLUxBUW8) (Windows 7で動作確認)
+* [1.7.1 Mac OS X 用 DMG イメージ](https://docs.google.com/uc?export=download&id=0BwIJLE1B4O3mTmtqV0Nja0FkNzg) (Mac OS X 10.9.2で動作確認)
 
 補足 (Mac OS)
 ==============
