@@ -6,7 +6,7 @@ title: niconama-alert.clj tutorial
 * auto-gen TOC:
 {:toc}
 
-#初めての起動{#boot_initially}
+#初めての起動 {#boot_initially}
 
 初めて起動するとこのようなウィンドウが表示されます。
 
@@ -18,7 +18,7 @@ title: niconama-alert.clj tutorial
 ![RSSボタンを押してみよう]({{ site.baseurl }}/images/sc_rss_btn.png)
 
 
-#検索してみよう{#search_basic}
+#検索してみよう {#search_basic}
 
 番組情報は取得されています。この中から検索してみます。"Search"タブを表示してみましょう。
 
@@ -35,7 +35,7 @@ title: niconama-alert.clj tutorial
 検索結果は表示されたでしょうか？検索結果は時々刻々変わります。1件も得られなかった場合は他の言葉でも検索してみましょう。
 
 
-#検索条件をチャンネルとして残す{#save_as_channel}
+#検索条件をチャンネルとして残す {#save_as_channel}
 
 この検索条件を毎回入力しなくてもいいよう、チャンネルとして保存します。
 "Search"ボタンの隣に"save as keyword ch"ボタンがあります。
@@ -53,7 +53,7 @@ title: niconama-alert.clj tutorial
 また、"Alert"チェックを入れると、新しい番組が追加されるたびにデスクトップ上にアラートを表示します。
 
 
-#ログインしてみよう{#login}
+#ログインしてみよう {#login}
 
 ニコニコ動画のアカウントを持っている場合、そのアカウントでログインすることでアカウントのチャンネルが追加されます。
 "Channel"メニューから"Add user channel"を選択します。
@@ -72,7 +72,7 @@ title: niconama-alert.clj tutorial
 ログインするとウィンドウ下部中央のAPIボタンを押せるようになります。
 
 
-#詳細な検索条件を書いてみよう{#search_advanced}
+#詳細な検索条件を書いてみよう {#search_advanced}
 
 さて、上述のような手順を経て実際にniconama-alert.cljを使いはじめると、
 番組表に表示される番組が自分のほしいものと異なることがあります。
@@ -87,7 +87,7 @@ title: niconama-alert.clj tutorial
 
 
 
-##いずれかの単語を含む番組を検索する(or){#search_or}
+##いずれかの単語を含む番組を検索する(or) {#search_or}
 
 [検索してみよう](#search_basic) では単語を増やすことは全ての単語を含んだものを検索する、すなわち絞り込みを意味していました。
 逆に広げたい、例えば入力した単語のうちいずれか一つでも含んでいればよい、という条件にしたい場合は次のように記述します。
@@ -100,7 +100,7 @@ title: niconama-alert.clj tutorial
 単語の前後が括弧でくくられ、前方の括弧の後に"or"がつくようになりました。
 
 
-###単語の表記に関する注意{#notice_word}
+###単語の表記に関する注意 {#notice_word}
 
 * このページの例では各単語を""で囲んでいますが、niconama-alert.cljでは囲まずに書いても構いません。
   ただし、"Major League Baseball"のように空白を含んだ語をひとかたまりに扱ってほしい場合は囲む必要があります。
@@ -109,7 +109,7 @@ title: niconama-alert.clj tutorial
   ただし、いわゆる全角と半角は区別されます。両方を指定する場合はor条件で列挙することになります。
 
 
-##全ての単語を含む番組を検索する(and){#search_and}
+##全ての単語を含む番組を検索する(and) {#search_and}
 
 実は上の [いずれかの単語を含む番組を検索する(or)](#search_or) で紹介した括弧を使った書き方が正式な検索条件の記述方法です。
 [検索してみよう](#search_basic) で紹介した単語を列挙する記述方法は次の絞り込み条件の簡略記法です。
@@ -123,7 +123,7 @@ title: niconama-alert.clj tutorial
 このようにorやandを補うことによって、自分のほしい情報をより正確に表現することができるようになります。
 
 
-##条件の組み合わせを試してみよう{#complex_cond}
+##条件の組み合わせを試してみよう {#complex_cond}
 
 なぜ正式な検索条件記述では括弧を用いるのでしょうか？
 それは、括弧でくくることでandやorの対象や及ぶ範囲が明確になるためです[^prefix_notation]。
@@ -140,7 +140,7 @@ andとorの組み合わせはよく行われます[^qe]。
 {% endhighlight %}
 
 
-##条件をひっくり返す(not){#search_not}
+##条件をひっくり返す(not) {#search_not}
 
 特にorを使って検索を行っていると、検索結果に自分の興味のないものがいくつも含まれることがあります。
 ほしいものを正確に限定できるならandで絞り込むことができますが、逆に要らないものだけは限定できる、という場合もあるでしょう。
