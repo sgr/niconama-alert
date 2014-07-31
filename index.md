@@ -3,9 +3,11 @@ layout: default
 title: niconama-alert.clj project homepage
 ---
 
-niconama-alert.clj は、[ニコニコ生放送](http://live.nicovideo.jp/) からあなたが設定した条件にマッチする番組や、
-あなたの所属するコミュニティの番組を表示するデスクトップアプリケーションです。
-さらにお気に入りの番組を見逃さないよう、番組情報を取得した時点でデスクトップ上にアラートを表示させることもできます。
+niconama-alert.clj は、[ニコニコ生放送](http://live.nicovideo.jp/) から
+あなたの所属するコミュニティや設定した条件にもとづく生放送を一覧表示する番組表機能と、
+お気に入りの番組を見逃さないようデスクトップ上にリアルタイム表示するニコ生アラート機能を持った
+デスクトップアプリケーションです。
+
 
 Screenshot
 ==========
@@ -13,7 +15,6 @@ Screenshot
 Windows: ![スクリーンショット(Windows)]({{ site.baseurl }}/images/sc_win.png)
 
 Mac OS X: ![スクリーンショット(Mac OS X)]({{ site.baseurl }}/images/sc_mac.png)
-
 
 
 License
