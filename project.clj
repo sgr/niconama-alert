@@ -1,21 +1,21 @@
-(defproject nicoalert "1.7.1"
+(defproject nicoalert "1.7.2"
   :description "NiconamaAlert.clj"
-  :dependencies [[org.clojure/clojure "[1.6,)"]
-                 [org.clojure/core.async "0.1.303.0-886421-alpha"]
+  :dependencies [[org.clojure/clojure "1.6.0"]
+                 [org.clojure/core.async "0.1.319.0-6b1aca-alpha"]
                  [org.clojure/data.zip "0.1.1"]
-                 [org.clojure/java.jdbc "[0.3,)"]
+                 [org.clojure/java.jdbc "0.3.5"]
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [org.clojure/tools.logging "0.3.0"]
-                 [seesaw "[1.4,)"]
-                 [slide "[0.2,)"]
-                 [clj-http "[0.9,)"]
+                 [seesaw "1.4.4"]
+                 [slide "0.2.1"]
+                 [clj-http "1.0.0"]
                  [config-file "0.1.0"]
-                 [desktop-alert "[0.5,)"]
+                 [desktop-alert "0.5.1"]
                  [input-parser "0.1.1"]
-                 [enlive "[1.1,)"]
-                 [org.xerial/sqlite-jdbc "3.7.15-M1"]
-                 [org.apache.commons/commons-lang3 "[3,)"]
-                 [net.sourceforge.htmlcleaner/htmlcleaner "[2,)"]]
+                 [enlive "1.1.5"]
+                 [org.xerial/sqlite-jdbc "3.8.5-pre1"]
+                 [org.apache.commons/commons-lang3 "3.3.2"]
+                 [net.sourceforge.htmlcleaner/htmlcleaner "2.8"]]
   :exclusions [org.apache.ant/ant]
   :profiles {:dev
              {:resource-paths ["resources" "test-data"]}

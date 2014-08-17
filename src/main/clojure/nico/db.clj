@@ -40,7 +40,8 @@
       [:comm_id (varchar 10)]
       [:comm_name (varchar 64)]
       [:fetched_at :timestamp]
-      [:updated_at :timestamp]))
+      [:updated_at :timestamp]
+      :table-spec "WITHOUT ROWID"))
     ;; No indices are needed on in-memory database.
     ;; "CREATE INDEX idx_pgms_id ON pgms(id)"
     ;; "CREATE INDEX idx_pgms_title ON pgms(title)"

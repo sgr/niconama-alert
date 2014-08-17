@@ -111,7 +111,7 @@
 
 (defn- status-channel [frame]
   (let [cc (ca/chan)
-        icache (ImageCache. 512 5 3
+        icache (ImageCache. 2048 5 3
                             (.width PgmPanelLayout/ICON_SIZE)
                             (.height PgmPanelLayout/ICON_SIZE)
                             (ImageIO/read (io/resource "noimage.png")))
