@@ -153,35 +153,38 @@
             (cpanel [id]
               (-> (reduce #(assoc %1 (-> %2 sc/id-of name) %2) {} (.getComponents wpanel))
                   (get id)))
-            (alert-panel [msg imgs]
-              (AlertPanel/create msg imgs))
+            (do-alert [msg thumbs duration]
+              (let [imgs (map (fn [thumbnail] (.getImage icache thumbnail)) thumbs)
+                    apanel (AlertPanel/create msg imgs)]
+                (da/alert apanel 10000)))
             (update-pgms [id pgms title alert] ; 更新後のリスト内の番組数を返す。
               (let [pgm-lst (sc/select (cpanel id) [:#lst])
                     pnls (.getComponents pgm-lst)]
                 (loop [pids (->> pnls (map #(.getId %)) set)
-                       imgs []
+                       thumbs []
                        pgms pgms]
-                  (if-let [pgm (first pgms)] ; pgmのうちまだ無いものを追加する。
+                  (if-let [pgm (first pgms)]
+                    ;; pgmのうちまだ無いものをパネルを作って追加する
                     (if (contains? pids (:id pgm))
-                      (recur (disj pids (:id pgm)) imgs (rest pgms))
-                      (let [new-pnl (pgm-panel pgm)
-                            img (.getImage icache (:thumbnail pgm))]
-                        (sc/invoke-now (.add pgm-lst new-pnl))
-                        (recur pids (conj imgs img) (rest pgms))))
-                    (let [cnt (count imgs) ; pgmsを全て追加し終わった
+                      (recur (disj pids (:id pgm)) thumbs (rest pgms))
+                      (do
+                        (sc/invoke-later (.add pgm-lst (pgm-panel pgm)))
+                        (recur pids (conj thumbs (:thumbnail pgm)) (rest pgms))))
+                    ;; pgmsを全て追加し終わった→不要なパネルの削除とアラート
+                    (let [cnt (count thumbs)
                           rpnls (doall (filter #(when (contains? pids (.getId %)) %) pnls))]
                       (when (and alert (pos? cnt))
                         (let [msg (format "%d %s added to \"%s\"" cnt
                                           (if (= 1 cnt) "program is" "programs are") title)]
-                          (da/alert (alert-panel msg imgs) 10000)))
-                      (sc/invoke-now (doseq [rpnl rpnls] (.remove pgm-lst rpnl)))
-                      (doseq [rpnl rpnls] (.release rpnl))
-                      (let [npgm (.getComponentCount pgm-lst)
-                            ctrl (sc/select (cpanel id) [:#control])]
-                        (sc/invoke-now
-                         (sc/config! ctrl :border (format "%s (%d)" title npgm))
-                         (.validate pgm-lst))
-                        npgm))))))]
+                          (ca/go (do-alert msg thumbs 10000))))
+                      (sc/invoke-later
+                       (doseq [rpnl rpnls] (.remove pgm-lst rpnl))
+                       (doseq [rpnl rpnls] (.release rpnl))
+                       (.validate pgm-lst))
+                      (sc/invoke-now
+                       (let [npgms (.getComponentCount pgm-lst)]
+                         (sc/config! (sc/select (cpanel id) [:#control]) :border (format "%s (%d)" title npgms))
+                         npgms)))))))]
       ;; このループではUIに関する状態を管理する。
       ;; PgmPanelがリンクを開く際に共通して用いるブラウザ情報およびLinkHandlersは
       ;; ループの外で保持するが(browsers, link-handlers)、
