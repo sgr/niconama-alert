@@ -211,7 +211,7 @@
                                   (recur {:comms new-comms :as new-as :queue new-q} rate listener))
               :start (if (and (nil? listener) (pos? (count (:as user))))
                        (do
-                         (ca/>! oc-status {:status :disabled-api})
+                         (ca/>! oc-status {:status :starting-api})
                          (recur user rate (connect (-> (:as user) vals first) 0)))
                        (do
                          (log/warnf "couldn't start [%d, %s]" (count (:as user)) (pr-str listener))
@@ -220,13 +220,13 @@
                              cnt (count (:as user))]
                          (ca/close! listener)
                          (ca/>! oc-status (if (pos? cnt)
-                                            {:status :stopped-api}
-                                            {:status :disabled-api}))
+                                            {:status :disabled-api}
+                                            {:status :stopped-api}))
                          (recur user rate
                                 (when (and (> RETRY-LIMIT retry) (pos? cnt))
                                   (connect (-> (:as user) vals first) retry))))
               :connected (do
-                           (ca/>!! oc-status {:status :started-api})
+                           (ca/>! oc-status {:status :started-api})
                            (recur user (assoc rate :ch (ca/timeout UPDATE-INTERVAL)) listener))
               :pgm (let [{:keys [pid cid uid received]} c]
                      (when (contains? (:comms user) cid)
