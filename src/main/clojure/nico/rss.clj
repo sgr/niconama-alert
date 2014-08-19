@@ -166,7 +166,7 @@
 
    アウトプットチャネルoc-dbには番組情報が出力される。
    :add-pgms 番組情報追加。上の:fetching-rssと同時に発信される。
-          {:cmd :add-pgms :pgms [番組情報] :total [カテゴリごとの総番組数の合計。実際の総番組数より大きいが取得数を表す。]}
+          {:cmd :add-pgms :pgms [番組情報] :force-search [番組情報検索するか]}
    :set-total 総番組数を設定する。
           {:cmd :set-total :total [公式・チャンネルの番組数 + ニコ生から得た総番組数] }
    :finish 今回のRSS取得サイクルが一巡したことを教える。
@@ -193,7 +193,7 @@
                        real-total (or (scrape/scrape-total) 0)]
                    (when (pos? npgms)
                      (ca/>!! oc-db {:cmd :set-total :total (+ npgms real-total)})
-                     (ca/>!! oc-db {:cmd :add-pgms :pgms pgms :total nil})
+                     (ca/>!! oc-db {:cmd :add-pgms :pgms pgms :force-search true})
                      (ca/>!! oc-status {:status :fetching-rss :page 0 :acc npgms :total nil}))
                    {:cmd :fetch :page 1 :cats {:common [0 0] ; 一般
                                                :try    [0 0] ; やってみた
@@ -214,12 +214,14 @@
                        npgms (count pgms)
                        sacc (->> ncats vals (map first) (apply +))
                        stotal (->> ncats vals (map second) (apply +))]
-                   (when (pos? npgms)
-                     (ca/>!! oc-db {:cmd :add-pgms :pgms pgms})
-                     (ca/>!! oc-status {:status :fetching-rss :page page :acc sacc :total stotal}))
                    (if (pos? npgms)
-                     {:cmd :fetch :page (inc page) :cats ncats}
-                     {:cmd :wait :sec WAITING-INTERVAL :total WAITING-INTERVAL}))))
+                     (do
+                       (ca/>!! oc-db {:cmd :add-pgms :pgms pgms :force-search false})
+                       (ca/>!! oc-status {:status :fetching-rss :page page :acc sacc :total stotal})
+                       {:cmd :fetch :page (inc page) :cats ncats})
+                     (do
+                       (ca/>!! oc-db {:cmd :add-pgms :pgms pgms :force-search true})
+                       {:cmd :wait :sec WAITING-INTERVAL :total WAITING-INTERVAL})))))
             (fetch
               ([] (ca/go (try
                            (fetch-aux)
