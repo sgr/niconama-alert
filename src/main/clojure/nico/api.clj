@@ -109,6 +109,8 @@
           {:cmd :login :id [チャネルID] :email [メールアドレス] :passwd [パスワード]}
    :start リスナーを開始。有効なalert-statusが登録されていない場合は無視される。
           {:cmd :start}
+   :restart リスナーを再起動。
+          {:cmd :restart :retry [リトライ回数]}
    :set-alert-status alert-statusを登録する。これはget-alert-statusで取得できるmapである。
           {:cmd :set-alert-status, :id [チャネルID], :alert-status [alert-statusオブジェクト]}
    :rem-alert-status alert-statusを削除する。
@@ -121,7 +123,7 @@
   [oc-status oc-db]
   (let [UPDATE-INTERVAL 5000
         FETCH-INTERVAL 10000
-        RETRY-LIMIT 10
+        RETRY-LIMIT 20
         cc (ca/chan)
         cc-fetcher (ca/chan (ca/dropping-buffer 64))]
     (letfn [(listen [alert-status]
@@ -136,7 +138,7 @@
                 (loop [c (.read rdr) s nil]
                   (condp = c
                     -1 (do
-                         (log/info "******* Connection closed *******")
+                         (log/info "******* CONNECTION CLOSED *******")
                          :disconnected)
                     0  (let [received (System/currentTimeMillis)]
                          (if-let [[id cid uid] (map s/nstr (parse-chat-str s))]
@@ -222,6 +224,9 @@
                          (ca/>! oc-status (if (pos? cnt)
                                             {:status :disabled-api}
                                             {:status :stopped-api}))
+                         (when (pos? cnt)
+                           (log/infof "retry connecting via API (%d)" cnt)
+                           (ca/<! (ca/timeout (* cnt 1500))))
                          (recur user rate
                                 (when (and (> RETRY-LIMIT retry) (pos? cnt))
                                   (connect (-> (:as user) vals first) retry))))
