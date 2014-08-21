@@ -221,7 +221,7 @@
               :restart (let [retry (:retry c)
                              cnt (count (:as user))]
                          (ca/close! listener)
-                         (ca/>! oc-status (if (pos? cnt)
+                         (ca/>! oc-status (if (and (> RETRY-LIMIT retry) (pos? cnt))
                                             {:status :disabled-api}
                                             {:status :stopped-api}))
                          (when (pos? cnt)
