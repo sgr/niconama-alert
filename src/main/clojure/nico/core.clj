@@ -154,8 +154,8 @@
               (-> (reduce #(assoc %1 (-> %2 sc/id-of name) %2) {} (.getComponents wpanel))
                   (get id)))
             (do-alert [msg thumbs duration]
-              (let [imgs (map (fn [thumbnail] (.getImage icache thumbnail)) thumbs)
-                    apanel (AlertPanel/create msg imgs)]
+              (let [imgs (doall (map #(.getImage icache %) thumbs))
+                    apanel (do (AlertPanel/create msg imgs))]
                 (da/alert apanel 10000)))
             (update-pgms [id pgms title alert] ; 更新後のリスト内の番組数を返す。
               (let [pgm-lst (sc/select (cpanel id) [:#lst])
