@@ -224,11 +224,10 @@
                          (ca/>! oc-status (if (and (> RETRY-LIMIT retry) (pos? cnt))
                                             {:status :disabled-api}
                                             {:status :stopped-api}))
-                         (when (pos? cnt)
-                           (log/infof "retry connecting via API (%d)" cnt)
-                           (ca/<! (ca/timeout (* cnt 1500))))
                          (recur user rate
                                 (when (and (> RETRY-LIMIT retry) (pos? cnt))
+                                  (log/infof "retry connecting via API (%d)" retry)
+                                  (ca/<! (ca/timeout (* retry 1500)))
                                   (connect (-> (:as user) vals first) retry))))
               :connected (do
                            (ca/>! oc-status {:status :started-api})
