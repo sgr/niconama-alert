@@ -22,6 +22,7 @@ import java.util.logging.Logger;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.border.LineBorder;
 import javax.swing.SwingConstants;
 
 import com.github.sgr.slide.MultiLineLabel;
@@ -77,6 +78,7 @@ public class AlertPanel extends JPanel implements MouseListener {
 
     private MultiLineLabel _msgLabel = null;
     private ArrayList<Image> _imgs = new ArrayList<Image>();
+    private AlertPanelLayout _layout = null;
 
     public void setAlertInfo(String msg, List<Image> icons) {
 	removeAll();
@@ -88,27 +90,42 @@ public class AlertPanel extends JPanel implements MouseListener {
 	}
 	_imgs.clear();
 	for (Image img : icons) {
-	    BufferedImage scaledImg = new BufferedImage(AlertPanelLayout.ICON_SIZE.width,
-							AlertPanelLayout.ICON_SIZE.height,
-							BufferedImage.TYPE_INT_ARGB);
-	    Graphics2D g = scaledImg.createGraphics();
-	    g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-	    g.drawImage(img, 0, 0, AlertPanelLayout.ICON_SIZE.width, AlertPanelLayout.ICON_SIZE.height, null);
-	    log.log(Level.FINE, MessageFormat.format("scaled image: ({0}, {1}) -> ({2}, {3})",
-						     img.getWidth(null), img.getHeight(null),
-						     scaledImg.getWidth(null), scaledImg.getHeight(null)));
-	    g.dispose();
-	    img.flush();
+	    Image scaledImg = getScaledImageA(img, AlertPanelLayout.ICON_SIZE.width, AlertPanelLayout.ICON_SIZE.height);
 	    _imgs.add(scaledImg);
 	    add(new IconLabel(new ImageIcon(scaledImg)), Slot.ICON);
 	}
-	invalidate();
+	validate();
+    }
+
+    private Image getScaledImageA(Image sourceImage, int width, int height) {
+	return sourceImage.getScaledInstance(width, height, Image.SCALE_AREA_AVERAGING);
+    }
+
+    private Image getScaledImageB(Image sourceImage, int width, int height) {
+	BufferedImage scaledImg = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+	Graphics2D g = scaledImg.createGraphics();
+	g.setRenderingHint(RenderingHints.KEY_ALPHA_INTERPOLATION, RenderingHints.VALUE_ALPHA_INTERPOLATION_QUALITY);
+	g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+	g.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_QUALITY);
+	g.setRenderingHint(RenderingHints.KEY_DITHERING, RenderingHints.VALUE_DITHER_ENABLE);
+	g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+	g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+	g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+	g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+	g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_NORMALIZE);
+	g.drawImage(sourceImage, 0, 0, width, height, null);
+	log.log(Level.FINE, MessageFormat.format("scaled image (B): ({0}, {1}) -> ({2}, {3})",
+						 sourceImage.getWidth(null), sourceImage.getHeight(null),
+						 scaledImg.getWidth(null), scaledImg.getHeight(null)));
+	g.dispose();
+	return scaledImg;
     }
 
     private AlertPanel() {
 	_msgLabel = new MultiLineLabel();
 	_msgLabel.setFont(FONT_MSG);
-	setLayout(new AlertPanelLayout());
+	_layout = new AlertPanelLayout();
+	setLayout(_layout);
 	add(_msgLabel, Slot.MSG);
 	setForegroundColor(FOREGROUND_DEFAULT);
 	setBackgroundColor(BACKGROUND_DEFAULT);
@@ -158,6 +175,7 @@ public class AlertPanel extends JPanel implements MouseListener {
 	    setOpaque(false);
 	    setHorizontalTextPosition(SwingConstants.CENTER);
 	    setHorizontalAlignment(SwingConstants.CENTER);
+	    setBorder(new LineBorder(Color.lightGray, 1, false));
 	}
 
 	public IconLabel(ImageIcon icon) {

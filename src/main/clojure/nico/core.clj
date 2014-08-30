@@ -24,6 +24,7 @@
             [seesaw.icon :as si])
   (:import [java.awt Dimension]
            [java.net URI]
+           [java.util.concurrent Executors TimeUnit]
            [javax.imageio ImageIO]
            [com.github.sgr.slide LinkHandler LinkHandlers]
            [nico.cache ImageCache]
@@ -111,6 +112,7 @@
 
 (defn- status-channel [frame]
   (let [cc (ca/chan)
+        pool (Executors/newSingleThreadExecutor)
         icache (ImageCache. 2048 5 3
                             (.width PgmPanelLayout/ICON_SIZE)
                             (.height PgmPanelLayout/ICON_SIZE)
@@ -142,7 +144,7 @@
                                (:description pgm) (:owner_name pgm)
                                (:comm_name pgm) (:comm_id pgm)
                                (:type pgm) (:member_only pgm) (:open_time pgm)
-                               (si/icon (.getImage icache (:thumbnail pgm)))))
+                               (.getImageIcon icache (:thumbnail pgm))))
             (pgm-panel [pgm & {:keys [width height border]}]
               (let [p (pgm-panel-aux (if height pgm (update-in pgm [:description] trim 64)))]
                 (.setLinkHandlers p link-handlers)
@@ -156,27 +158,31 @@
             (do-alert [msg thumbs duration]
               (let [imgs (doall (map #(.getImage icache %) thumbs))
                     apanel (do (AlertPanel/create msg imgs))]
-                (da/alert apanel 10000)))
+                (da/alert apanel duration)))
             (update-pgms [id pgms title alert] ; 更新後のリスト内の番組数を返す。
               (let [pgm-lst (sc/select (cpanel id) [:#lst])
                     pnls (.getComponents pgm-lst)]
-                (loop [pids (->> pnls (map #(.getId %)) set)
-                       thumbs []
+                (loop [pids (->> pnls (map #(.getId %)) set) ;; 各チャンネルパネルの番組ID集合
+                       thumbs [] ;; 新規追加分サムネイルURL
+                       futures [] ;; GUI更新処理(番組パネル追加)のFutureを保持
                        pgms pgms]
                   (if-let [pgm (first pgms)]
-                    ;; pgmのうちまだ無いものをパネルを作って追加する
+                    ;; [前半] pgmsのうちまだ無いものをパネルを作って追加する
                     (if (contains? pids (:id pgm))
-                      (recur (disj pids (:id pgm)) thumbs (rest pgms))
-                      (do
-                        (sc/invoke-later (.add pgm-lst (pgm-panel pgm)))
-                        (recur pids (conj thumbs (:thumbnail pgm)) (rest pgms))))
-                    ;; pgmsを全て追加し終わった→不要なパネルの削除とアラート
-                    (let [cnt (count thumbs)
-                          rpnls (doall (filter #(when (contains? pids (.getId %)) %) pnls))]
+                      (recur (disj pids (:id pgm)) thumbs futures (rest pgms))
+                      (let [^Callable add-pgm-panel-fn #(let [ppanel (do (pgm-panel pgm))]
+                                                          (sc/invoke-later (.add pgm-lst ppanel)))
+                            ftr (.submit pool add-pgm-panel-fn)]
+                        (recur pids (conj thumbs (:thumbnail pgm)) (conj futures ftr) (rest pgms))))
+                    ;; [後半] pgmsを全て追加し終わった→不要なパネルの削除とアラート
+                    (let [rpnls (doall (filter #(when (contains? pids (.getId %)) %) pnls))
+                          cnt (count thumbs)]
                       (when (and alert (pos? cnt))
                         (let [msg (format "%d %s added to \"%s\"" cnt
-                                          (if (= 1 cnt) "program is" "programs are") title)]
-                          (ca/go (do-alert msg thumbs 10000))))
+                                          (if (= 1 cnt) "program is" "programs are") title)
+                              ^Callable alert-fn #(do-alert msg thumbs 6000)]
+                          (.submit pool alert-fn)))
+                      (doseq [ftr futures] (.get ftr)) ;; 前半でキックしたGUI更新処理の完了を待つ
                       (sc/invoke-later
                        (doseq [rpnl rpnls] (.remove pgm-lst rpnl))
                        (doseq [rpnl rpnls] (.release rpnl))
@@ -296,7 +302,10 @@
                             (sc/config! api-rate :text NO-PGMS-PERMIN-STR))
               (log/warnf "caught an unknown status: %s" (pr-str cmd)))
             (recur @n-titles @n-npgms @n-alerts))
-          (log/info "closed status channel")))
+          (do
+            (.shutdown pool)
+            (.awaitTermination pool 5 TimeUnit/SECONDS)
+            (log/info "closed status channel"))))
       cc)))
 
 (defn- disvec [v idx]
