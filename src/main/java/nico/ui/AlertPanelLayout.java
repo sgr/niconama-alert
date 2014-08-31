@@ -19,8 +19,8 @@ public class AlertPanelLayout implements LayoutManager2 {
     // レイアウト用定数
     public static int PAD = 5; // コンポーネント間隔
     public static int INDENT = 50; // アイコン行のインデント
-    public static Dimension MIN_MSG_SIZE = new Dimension(69, 32);
-    public static Dimension ICON_SIZE = new Dimension(32, 32);
+    public static Dimension MIN_MSG_SIZE = new Dimension(69, 20);
+    public static Dimension ICON_SIZE = new Dimension(40, 40);
     private static Dimension MIN_SIZE = new Dimension(PAD + MIN_MSG_SIZE.width + PAD,
 						      PAD + MIN_MSG_SIZE.height + PAD + ICON_SIZE.height + PAD);
 
