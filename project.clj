@@ -15,7 +15,7 @@
                  [enlive "1.1.5"]
                  [org.xerial/sqlite-jdbc "3.8.5-pre1"]
                  [org.apache.commons/commons-lang3 "3.3.2"]
-                 [net.sourceforge.htmlcleaner/htmlcleaner "2.8"]]
+                 [net.sourceforge.htmlcleaner/htmlcleaner "2.9"]]
   :exclusions [org.apache.ant/ant]
   :profiles {:dev
              {:resource-paths ["resources" "test-data"]}
