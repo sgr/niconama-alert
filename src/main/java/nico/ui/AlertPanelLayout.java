@@ -55,7 +55,7 @@ public class AlertPanelLayout implements LayoutManager2 {
 	if (_targetWidth != w || _targetHeight != h || _preferredLayoutSize == null) {
 	    _targetWidth = w;
 	    _targetHeight = h;
-	    _msg.setSize(w - PAD - PAD, h - PAD - PAD - ICON_SIZE.height - PAD);
+	    _msg.setSize(w - PAD - PAD, h - PAD - PAD - ICON_SIZE.height);
 	    Dimension d = _msg.getPreferredSize();
 	    _preferredLayoutSize = new Dimension(PAD + d.width + PAD,
 						 PAD + d.height + PAD + ICON_SIZE.height + PAD);
@@ -71,7 +71,7 @@ public class AlertPanelLayout implements LayoutManager2 {
 	int origin_x = insets.left + PAD;
 	int origin_y = insets.top + PAD;
 
-	_msg.setBounds(origin_x, origin_y, width, height - PAD - ICON_SIZE.height);
+	_msg.setBounds(origin_x, origin_y, width, height - ICON_SIZE.height);
 
 	int x = origin_x + width - ICON_SIZE.width;
 	int y = origin_y + height - ICON_SIZE.height;
