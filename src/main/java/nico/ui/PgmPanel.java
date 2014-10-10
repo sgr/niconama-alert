@@ -230,6 +230,7 @@ public class PgmPanel extends JPanel {
     }
 
     public void setIcon(ImageIcon icon) {
+	_iconLabel.setIcon(null);
 	if (_thumbnail != null) {
 	    _thumbnail.getImage().flush();
 	    _thumbnail = null;
