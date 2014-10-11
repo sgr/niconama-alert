@@ -82,6 +82,7 @@ public class PgmPanel extends JPanel {
     }
 
     public void release() {
+	_iconLabel.setIcon(null);
 	if (_thumbnail != null) {
 	    _thumbnail.getImage().flush();
 	    _thumbnail = null;
