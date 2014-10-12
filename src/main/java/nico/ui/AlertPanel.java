@@ -2,6 +2,7 @@
 package nico.ui;
 import java.awt.AWTEvent;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Container;
 import java.awt.Font;
 import java.awt.Graphics2D;
@@ -63,12 +64,18 @@ public class AlertPanel extends JPanel implements MouseListener {
      * 実際の廃棄は行わず、キャッシュに戻す。
      */
     public void dispose() {
+	for (Component c : getComponents()) {
+	    if (c instanceof IconLabel) {
+		((IconLabel)c).setIcon(null);
+	    }
+	}
 	removeAll();
-	add(_msgLabel, Slot.MSG);
 	for (Image img : _imgs) {
 	    img.flush();
 	}
 	_imgs.clear();
+
+	add(_msgLabel, Slot.MSG);
 	invalidate();
 	synchronized(cache) {
 	    cache.push(this);
@@ -81,14 +88,19 @@ public class AlertPanel extends JPanel implements MouseListener {
     private AlertPanelLayout _layout = null;
 
     public void setAlertInfo(String msg, List<Image> icons) {
+	for (Component c : getComponents()) {
+	    if (c instanceof IconLabel) {
+		((IconLabel)c).setIcon(null);
+	    }
+	}
 	removeAll();
-	_msgLabel.setText(msg);
-	add(_msgLabel, Slot.MSG);
-
 	for (Image img : _imgs) {
 	    img.flush();
 	}
 	_imgs.clear();
+
+	_msgLabel.setText(msg);
+	add(_msgLabel, Slot.MSG);
 	for (Image img : icons) {
 	    Image scaledImg = getScaledImageA(img, AlertPanelLayout.ICON_SIZE.width, AlertPanelLayout.ICON_SIZE.height);
 	    _imgs.add(scaledImg);
