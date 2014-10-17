@@ -135,17 +135,17 @@
                 (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
                                 (:thrd alert-status))] ; res_fromを-1200にすると、全ての番組を取得するらしい。
                   (doto wtr (.write q) (.flush)))
-                (loop [c (.read rdr) s nil]
+                (loop [c (.read rdr) s (StringBuilder.)]
                   (condp = c
                     -1 (do
                          (log/info "******* CONNECTION CLOSED *******")
                          :disconnected)
                     0  (let [received (System/currentTimeMillis)]
-                         (if-let [[id cid uid] (map s/nstr (parse-chat-str s))]
+                         (if-let [[id cid uid] (map s/nstr (parse-chat-str (.toString s)))]
                            (ca/>!! cc {:cmd :pgm :pid (str "lv" id) :cid cid :uid uid :received received})
                            (log/debugf "it isn't chat: %s" s))
-                         (recur (.read rdr) nil))
-                    (recur (.read rdr) (str s (char c)))))))
+                         (recur (.read rdr) (StringBuilder.)))
+                    (recur (.read rdr) (.append s (char c)))))))
 
             (connect [alert-status retry]
               (ca/go
@@ -241,7 +241,7 @@
              (= ch (:ch rate)) (let [now (System/currentTimeMillis)
                                      rate-updated (filter #(> 60000 (- now %)) (:rate rate))]
                                  (ca/>! oc-status {:status :rate-api :rate (count rate-updated)})
-                                 (recur user (assoc rate :ch (ca/timeout UPDATE-INTERVAL)) listener))
+                                 (recur user {:rate rate-updated :ch (ca/timeout UPDATE-INTERVAL)} listener))
              (not= ch cc) (do
                             (log/warn "other channel closed: " (pr-str ch))
                             (recur user rate listener))

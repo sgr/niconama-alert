@@ -11,14 +11,11 @@
   [^String s]
   (if (nil? s) "" (String. s)))
 
-(let [p (Pattern/compile "\\p{Cntrl}")
-      m (.matcher p "a")]
+(let [p (Pattern/compile "\\p{Cntrl}")]
   (defn cleanup
     "絵文字など制御文字扱いになる文字を削除する"
     [^String s]
-    (locking m
-      (.reset m s)
-      (.replaceAll m ""))))
+    (-> (.matcher p s) (.replaceAll ""))))
 
 (defn unescape
   [^String s type]
