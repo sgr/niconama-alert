@@ -13,8 +13,7 @@
                  [desktop-alert "0.5.2"]
                  [input-parser "0.1.1"]
                  [enlive "1.1.5"]
-                 [org.xerial/sqlite-jdbc "3.8.6"]
-                 ;;[org.xerial/sqlite-jdbc "3.7.15-M1"]
+                 [org.xerial/sqlite-jdbc "3.8.7"]
                  [org.apache.commons/commons-lang3 "3.3.2"]
                  [net.sourceforge.htmlcleaner/htmlcleaner "2.9"]]
   :exclusions [org.apache.ant/ant]
@@ -44,13 +43,11 @@
 ;;  :repositories [["sonatype-oss-public" {:url "https://oss.sonatype.org/content/groups/public/"}]]
   :jvm-opts ~(let [sys (.toLowerCase (System/getProperty "os.name"))]
                (condp re-find sys
-                 ;; "sqlite-3.8.x-i386-libsqlitejdbc.jnilib" is as corrupt as ever :-(
-                 ;; <https://bitbucket.org/xerial/sqlite-jdbc/issue/127/sqlite-jdbc4-382-snapshotjar-misses-org>
-                 ;; <https://bitbucket.org/xerial/sqlite-jdbc/issue/147/javalangnoclassdeffounderror-org-sqlite>
-                 ;;#"mac" ["-d32" "-Xdock:name=NikonamaAlert.clj" "-Xdock:icon=resources/dempakun.png"
-                 #"mac" ["-Xdock:name=NikonamaAlert.clj" "-Xdock:icon=resources/dempakun.png"
-                         "-XX:+TieredCompilation" "-XX:TieredStopAtLevel=1"]
-                 ["-XX:+TieredCompilation" "-XX:TieredStopAtLevel=1"]))
+                 #"mac" ["-d32" "-Xdock:name=NikonamaAlert.clj" "-Xdock:icon=resources/dempakun.png"
+                         "-XX:+UseParNewGC" "-XX:+CMSClassUnloadingEnabled" "-XX:+CMSPermGenSweepingEnabled"
+                         "-XX:+CMSIncrementalMode" "-XX:+CMSIncrementalPacing" "-XX:+UseConcMarkSweepGC"
+                         "-XX:CMSIncrementalDutyCycleMin=0" "-XX:+CMSParallelRemarkEnabled"]
+                 []))
   ;; Oracle's Java SE 7/8 for Mac OS X has a serious memory-leak bug.
   ;; <https://bugs.openjdk.java.net/browse/JDK-8029147>
   :java-cmd ~(let [sys (.toLowerCase (System/getProperty "os.name"))]
