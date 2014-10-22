@@ -149,7 +149,7 @@ public class PgmPanelLayout implements LayoutManager2 {
 		if (left_rest_h > 0) {
 		    _desc.setSize(leftWidth, 0);
 		    int desc_h = _desc.getPreferredSize().height;
-		    _desc.setBounds(origin_x, origin_y + title_h,
+		    _desc.setBounds(origin_x, origin_y + title_h + PAD,
 				    leftWidth, desc_h > left_rest_h ? left_rest_h : desc_h);
 		}
 	    }
@@ -251,9 +251,9 @@ public class PgmPanelLayout implements LayoutManager2 {
     private Dimension calcSizeWithRestriction(int width) {
 	int w = width - PAD - PAD - ICON_SIZE.width - PAD;
 	if (w > 0) {
-	    _title.setBounds(0, 0, w, 0);
-	    _desc.setBounds(0, 0, w, 0);
-	    _comm.setBounds(0, 0, width - PAD - PAD, 0);
+	    _title.setSize(w, 0);
+	    _desc.setSize(w, 0);
+	    _comm.setSize(width - PAD - PAD, 0);
 	    int h = Math.max(_title.getPreferredSize().height + PAD + _desc.getPreferredSize().height,
 			     STD_UPPER_HEIGHT);
 	    return new Dimension(PAD + w + PAD + ICON_SIZE.width + PAD,
