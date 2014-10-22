@@ -14,8 +14,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.text.MessageFormat;
 import java.util.Locale;
-import java.util.Stack;
-import java.util.EmptyStackException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.border.Border;
@@ -56,44 +54,44 @@ public class PgmPanel extends JPanel {
     private static final FastDateFormat sdf = FastDateFormat.getInstance("d MMM", Locale.ENGLISH);
     private static final FastDateFormat odf = FastDateFormat.getInstance("MM/dd HH:mm:ss");
 
-    private static Stack<PgmPanel> cache = new Stack<PgmPanel>();
-
-    public static PgmPanel create() {
-	synchronized(cache) {
-	    PgmPanel p = null;
-	    try {
-		p = cache.pop();
-		log.log(Level.FINEST, MessageFormat.format("reused a PgmPanel from cache <- ({0})", cache.size()));
-	    } catch (EmptyStackException e) {
-		log.log(Level.FINEST, MessageFormat.format("created a new PgmPanel ({0})", cache.size()));
-		p = new PgmPanel();
-	    } finally {
-		return p;
-	    }
-	}
-    }
-
     public static PgmPanel create(String id, String title, String link, String description,
 				  String owner_name, String comm_name, String comm_id, int type,
 				  int member_only, long open_time, ImageIcon thumbnail) {
-	PgmPanel p = PgmPanel.create();
+	PgmPanel p = new PgmPanel();
 	p.setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, thumbnail);
 	return p;
     }
 
     public void release() {
+	_id = null;
+	_fgColor = null;
+	_bgColor = null;
+	removeAll();
+	setLayout(null);
+	_layout = null;
+	_titleLabel.dispose();
+	_timeLabel = null;
+	_descLabel.dispose();
+	_descLabel = null;
+	_commLabel.dispose();
+	_commLabel = null;
 	_iconLabel.setIcon(null);
 	if (_thumbnail != null) {
 	    _thumbnail.getImage().flush();
 	    _thumbnail = null;
 	}
-	setHeight(0);
-	setWidth(0);
-	_layout.needLayout();
-	synchronized(cache) {
-	    cache.push(this);
-	    log.log(Level.FINE, MessageFormat.format("released a PgmPanel into cache -> ({0})", cache.size()));
+	_iconLabel = null;
+	_timeLabel = null;
+	if (_onlyLabel.getIcon() != null) {
+	    ((ImageIcon)_onlyLabel.getIcon()).getImage().flush();
+	    _onlyLabel.setIcon(null);
 	}
+	_onlyLabel = null;
+	if (_typeLabel.getIcon() != null) {
+	    ((ImageIcon)_typeLabel.getIcon()).getImage().flush();
+	    _typeLabel.setIcon(null);
+	}
+	_typeLabel = null;
     }
 
     private PgmPanelLayout _layout = null;
