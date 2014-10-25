@@ -7,7 +7,7 @@
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [org.clojure/tools.logging "0.3.1"]
                  [seesaw "1.4.4"]
-                 [slide "0.2.2"]
+                 [slide "0.2.3"]
                  [clj-http "1.0.0"]
                  [config-file "0.1.0"]
                  [desktop-alert "0.5.2"]
