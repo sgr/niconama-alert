@@ -3,18 +3,16 @@
   (:require [clojure.tools.logging :as log]
             [clj-http.client :as hc]))
 
-(def ^{:private true} CONNECT-TIMEOUT 5000)
+(def ^{:private true} TIMEOUT 5000)
 
 (def ^{:private true} HTTP-OPTS
   {:headers {"user-agent" "NiconamaAlert.clj"}
-   :socket-timeout CONNECT-TIMEOUT
-   :conn-timeout   CONNECT-TIMEOUT})
+   :follow-redirects true
+   :socket-timeout TIMEOUT
+   :conn-timeout   TIMEOUT})
 
-(let [default-opts HTTP-OPTS]
-  (defn http-get [url & opts]
-    (hc/get url (if opts (reduce merge default-opts opts) default-opts)))
-  (defn http-post [url & opts]
-    (hc/post url (if opts (reduce merge default-opts opts) default-opts))))
+(defn http-get [url & opts] (hc/get url (merge HTTP-OPTS (first opts))))
+(defn http-post [url & opts] (hc/post url (merge HTTP-OPTS (first opts))))
 
 (defmacro with-http-res [bindings & body]
   (assert (vector? bindings)     "with-http-res: a vector for its binding")
