@@ -1,18 +1,18 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.net
   (:require [clojure.tools.logging :as log]
-            [clj-http.client :as hc]))
+            [clj-http.client :as hc]
+            [clj-http.conn-mgr :as cm]))
 
-(def ^{:private true} TIMEOUT 5000)
-
-(def ^{:private true} HTTP-OPTS
-  {:headers {"user-agent" "NiconamaAlert.clj"}
-   :follow-redirects true
-   :socket-timeout TIMEOUT
-   :conn-timeout   TIMEOUT})
-
-(defn http-get [url & opts] (hc/get url (merge HTTP-OPTS (first opts))))
-(defn http-post [url & opts] (hc/post url (merge HTTP-OPTS (first opts))))
+(let [cm (cm/make-reusable-conn-manager {:timeout 90 :threads 6})
+      HTTP-OPTS  {:headers {"user-agent" "NiconamaAlert.clj"}
+                  :connection-manager cm
+                  :conn-timeout   5000
+                  :socket-timeout 90000
+                  :follow-redirects true}]
+  (defn http-get [url & opts] (hc/get url (merge HTTP-OPTS (first opts))))
+  (defn http-post [url & opts] (hc/post url (merge HTTP-OPTS (first opts))))
+  (defn shutdown-conn-manager [] (cm/shutdown-manager cm)))
 
 (defmacro with-http-res [bindings & body]
   (assert (vector? bindings)     "with-http-res: a vector for its binding")
