@@ -51,7 +51,7 @@
    (-> url (net/http-get {:as :byte-array}) :body image-from-bytes-imageio)
    (catch [:status 404] {:keys [status headers body trace-redirects]}
      (log/warnf "failed fetching image (%d, %s, %s)" status headers trace-redirects)
-     fallback-image)
+     (image-from-bytes-imageio body))
    (catch [:status 410] {:keys [status headers body]}
      (log/warnf "failed fetching image (%d, %s)" status headers)
      fallback-image)
