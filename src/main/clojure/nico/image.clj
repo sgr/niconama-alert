@@ -5,22 +5,10 @@
             [nico.net :as net])
   (:use [slingshot.slingshot :only [try+]])
   (:import [java.awt Image Container MediaTracker Toolkit]
-           [java.io InputStream ByteArrayInputStream ByteArrayOutputStream]
+           [java.io InputStream ByteArrayInputStream]
            [java.util LinkedHashMap]
            [javax.imageio ImageIO]
            [nico.ui PgmPanelLayout]))
-
-(defn- bytes-from-is [^InputStream is buf-size]
-  (with-open [baos (ByteArrayOutputStream.)]
-    (let [ba (byte-array buf-size)]
-      (loop [n (.read is ba 0 buf-size)]
-        (when (pos? n)
-          (.write baos ba 0 n)
-          (recur (.read is ba 0 buf-size))))
-      (.toByteArray baos))))
-
-(defn- fetch-bytes [^String url]
-  (bytes-from-is (-> url (net/http-get {:as :stream}) :body) 1024))
 
 (let [tk (Toolkit/getDefaultToolkit)
       dummy-component (Container.)]
@@ -56,9 +44,11 @@
     (with-open [bais (ByteArrayInputStream. bs)]
       (ImageIO/read bais))))
 
-(defn- image-from-url [^String url ^Image fallback-image]
+(defn- image-from-url
+  "URLの指すイメージを返す。イメージが存在しない場合はfallback-imageを返し、それ以外のエラーの場合はnilを返す。"
+  [^String url ^Image fallback-image]
   (try+
-   (-> url fetch-bytes image-from-bytes-imageio)
+   (-> url (net/http-get {:as :byte-array}) :body image-from-bytes-imageio)
    (catch [:status 404] {:keys [status headers body trace-redirects]}
      (log/warnf "failed fetching image (%d, %s, %s)" status headers trace-redirects)
      fallback-image)
