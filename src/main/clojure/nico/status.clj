@@ -101,7 +101,9 @@
                   (if-let [pgm (first pgms)]
                     ;; [前半] pgmsのうちまだ無いものをパネルを作って追加する
                     (if (contains? pids (:id pgm))
-                      (recur (disj pids (:id pgm)) thumbs futures (rest pgms))
+                      (do
+                        (-> pgm :thumbnail .flush)
+                        (recur (disj pids (:id pgm)) thumbs futures (rest pgms)))
                       (let [^Callable add-pgm-panel-fn #(let [ppanel (do (pgm-panel pgm))]
                                                           (sc/invoke-later (.add pgm-lst ppanel)))
                             ftr (.submit pool add-pgm-panel-fn)]
