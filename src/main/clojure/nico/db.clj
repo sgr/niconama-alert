@@ -43,17 +43,6 @@
       [:fetched_at :timestamp]
       [:updated_at :timestamp]
       :table-spec "WITHOUT ROWID"))
-    ;; No indices are needed on in-memory database.
-    ;; "CREATE INDEX idx_pgms_id ON pgms(id)"
-    ;; "CREATE INDEX idx_pgms_title ON pgms(title)"
-    ;; "CREATE INDEX idx_pgms_open_time ON pgms(open_time)"
-    ;; "CREATE INDEX idx_pgms_start_time ON pgms(start_time)"
-    ;; "CREATE INDEX idx_pgms_description ON pgms(description)"
-    ;; "CREATE INDEX idx_pgms_category ON pgms(category)"
-    ;; "CREATE INDEX idx_pgms_owner_name ON pgms(owner_name)"
-    ;; "CREATE INDEX idx_pgms_comm_id ON pgms(comm_id)"
-    ;; "CREATE INDEX idx_pgms_comm_name ON pgms(comm_name)"
-    ;; "CREATE INDEX idx_pgms_updated_at ON pgms(updated_at)"
     "PRAGMA journal_mode = OFF"))
 
 ;; Query generator ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -127,7 +116,6 @@
    :freelist_count "PRAGMA freelist_count"
    :page_count     "PRAGMA page_count"
    :vacuum         "VACUUM"
-   :reindex        "REINDEX"
    :shrink_memory  "PRAGMA shrink_memory"})
 
 (def PGM-KEYS (map keyword (nico.pgm.Pgm/getBasis)))
@@ -178,16 +166,19 @@
   (letfn [(pgms-with-id [id] (jdbc/query db [(:pgms-with-id @(:ps-std db)) id]))
           (pgms-with-comm [comm-id] (jdbc/query db [(:pgms-with-comm @(:ps-std db)) comm-id]))
           (insert! [db r]
-            (execute! db (-> [(:insert @(:ps-std db)) (map #(get r %) PGM-KEYS)] flatten vec)))
+            (let [pstmt (:insert @(:ps-std db))]
+              (execute! db (-> [pstmt (map #(get r %) PGM-KEYS)] flatten vec))
+              (.clearParameters pstmt)))
           (delete! [db id]
             (execute! db [(:delete-with-id @(:ps-std db)) id]))
           (diff-row [new old]
             (let [[only-new only-old both] (cd/diff new old)]
               (reduce (fn [m [k v]]
-                        (assoc m k (condp instance? v
-                                     String (max (count v) (count (get old k)))
-                                     Long (max v (get old k))
-                                     v)))
+                        (let [ov (get old k)]
+                          (assoc m k (condp instance? v
+                                       String (if (> (count v) (count ov)) v ov)
+                                       Long (max v ov)
+                                       v))))
                       {} only-new)))
           (update-query [diff]
             (str "UPDATE pgms SET "
@@ -195,9 +186,10 @@
                  " WHERE id=?"))
           (update! [db id diff]
             (let [q (update-query diff)
-                  p (cached-pstmt db q)]
+                  pstmt (cached-pstmt db q)]
               ;;(log/infof "UPDATE[%s] <- %s" id (pr-str (keys diff)))
-              (execute! db (-> [p (vals diff) id] flatten vec))))]
+              (execute! db (-> [pstmt (vals diff) id] flatten vec))
+              (.clearParameters pstmt)))]
 
     (let [id (:id pgm)
           irs (pgms-with-id id)]
@@ -332,7 +324,7 @@
                    last-cleaned (now) ; 最終削除時刻。削除頻度を上げ過ぎないために用いる。
                    last-searched (now) ; 最終検索時刻。オンデマンド検索は含まない。検索頻度を上げ過ぎないために用いる。
                    acc-rm 0] ; 累積削除数。vacuumタイミングを決めるのに用いる。
-        ;;(System/gc)
+
         (cond
          (and (> npgms (int (* RATIO total)) 0) ;; 30分経って更新されてない番組情報は削除する
               (< CLEAN-INTERVAL (- (now) last-cleaned)))
@@ -359,7 +351,6 @@
          (let [fc (pragma-query db :freelist_count)
                pc (pragma-query db :page_count)]
            (execute! db [(:vacuum @(:ps-std db))] :transaction? false)
-           ;;(execute! db [(:reindex @(:ps-std db))] :transaction? false)
            (execute! db [(:shrink_memory @(:ps-std db))] :transaction? false)
            (log/infof "freelist / page: [%d, %d] -> [%d, %d]" fc pc
                       (pragma-query db :freelist_count) (pragma-query db :page_count))
