@@ -5,7 +5,6 @@
             [clojure.tools.logging :as log]
             [desktop-alert :as da]
             [input-parser.tokenizer :as tok]
-            [nico.image :as img]
             [seesaw.core :as sc]
             [seesaw.border :as border])
   (:import [java.net URI]
@@ -78,7 +77,7 @@
                                (:description pgm) (:owner_name pgm)
                                (:comm_name pgm) (:comm_id pgm)
                                (:type pgm) (:member_only pgm) (:open_time pgm)
-                               (ImageIcon. (img/image (:thumbnail pgm)))))
+                               (ImageIcon. (:thumbnail pgm))))
             (pgm-panel [pgm & {:keys [width height border]}]
               (let [p (pgm-panel-aux (if height pgm (update-in pgm [:description] trim 64)))]
                 (.setLinkHandlers p link-handlers)
@@ -90,8 +89,7 @@
               (-> (reduce #(assoc %1 (-> %2 sc/id-of name) %2) {} (.getComponents wpanel))
                   (get id)))
             (do-alert [msg thumbs duration]
-              (let [imgs (doall (map img/image thumbs))
-                    apanel (do (AlertPanel/create msg imgs))]
+              (let [apanel (do (AlertPanel/create msg thumbs))]
                 (da/alert apanel duration)))
             (update-pgms [id pgms title alert] ; 更新後のリスト内の番組数を返す。
               (let [pgm-lst (sc/select (cpanel id) [:#lst])

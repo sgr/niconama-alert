@@ -7,6 +7,7 @@
             [clojure.string :as s]
             [clojure.tools.logging :as log]
             [input-parser.cond-parser :as cp]
+            [nico.image :as img]
             [nico.pgm :as pgm])
   (:import [java.sql DriverManager PreparedStatement Statement]
            [java.util LinkedHashMap]
@@ -283,8 +284,11 @@
    :create-db
           {:cmd :create-db}"
   [oc-status]
-  (letfn [(search-pgms [db q]
-            (jdbc/query db [(if (instance? PreparedStatement q) q (cached-pstmt db q))] :row-fn pgm/map->Pgm))
+  (letfn [(gen-pgm [row]
+            (let [thumbnail (do (img/image (:thumbnail row)))]
+              (-> row pgm/map->Pgm (assoc :thumbnail thumbnail))))
+          (search-pgms [db q]
+            (jdbc/query db [(if (instance? PreparedStatement q) q (cached-pstmt db q))] :row-fn gen-pgm))
           (search-pgms-by-queries [db]
             (reduce (fn [m [id q]] (assoc m id (search-pgms db q))) {} @(:ps db)))
           (count-pgms [db query target]
