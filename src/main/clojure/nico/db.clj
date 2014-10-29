@@ -238,7 +238,9 @@
       (log/errorf e "failed add!: %s" (pr-str pgm))
       [0 0])))
 
-(defn now-str [] (-> (FastDateFormat/getInstance "HH:mm:ss") (.format (System/currentTimeMillis))))
+(defn ^String now-str []
+  (let [^FastDateFormat f (FastDateFormat/getInstance "HH:mm:ss")]
+    (.format f (System/currentTimeMillis))))
 
 (defn boot
   "番組情報を保持するDBインスタンスを生成し、コントロールチャネルを返す。

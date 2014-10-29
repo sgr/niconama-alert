@@ -1,7 +1,7 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.string
   (:import [java.io ByteArrayInputStream]
-           [java.util.regex Pattern]
+           [java.util.regex Matcher Pattern]
            [org.apache.commons.lang3 StringEscapeUtils]))
 
 (defn nstr
@@ -11,11 +11,12 @@
   [^String s]
   (if (nil? s) "" (String. s)))
 
-(let [p (Pattern/compile "\\p{Cntrl}")]
+(let [^Pattern p (Pattern/compile "\\p{Cntrl}")]
   (defn cleanup
     "絵文字など制御文字扱いになる文字を削除する"
     [^String s]
-    (-> (.matcher p s) (.replaceAll ""))))
+    (let [^Matcher m (.matcher p s)]
+      (.replaceAll m ""))))
 
 (defn unescape
   [^String s type]

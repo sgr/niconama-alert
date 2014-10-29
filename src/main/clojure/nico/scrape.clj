@@ -37,7 +37,7 @@
       (-> (URI. s-uri) .getPath (cs/split #"/") last)
       (catch Exception e (log/warnf "Malformed URI string %s" s-uri)))))
 
-(defn- open-start-time [[sday sopen sstart]]
+(defn- open-start-time [[^String sday ^String sopen ^String sstart]]
   (let [[yyyy MM dd] (map #(Integer/parseInt %) (rest (re-find #"(\d{4})/(\d{2})/(\d{2})" sday)))
         [ohh omm] (if sopen (map #(Integer/parseInt %) (.split sopen ":")) [nil nil])
         [shh smm] (if sstart (map #(Integer/parseInt %) (.split sstart ":")) [nil nil])

@@ -1,6 +1,7 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.status
   (:require [clojure.core.async :as ca]
+            [clojure.data :as cd]
             [clojure.java.browse :as browse]
             [clojure.tools.logging :as log]
             [desktop-alert :as da]
@@ -8,12 +9,11 @@
             [seesaw.core :as sc]
             [seesaw.border :as border])
   (:import [java.net URI]
-           [java.util.concurrent Executors TimeUnit]
            [javax.swing ImageIcon]
            [com.github.sgr.slide LinkHandler LinkHandlers]
-           [nico.ui AlertPanel PgmPanel]))
+           [nico.ui AlertPanel PgmList PgmPanel]))
 
-(let [sb (StringBuilder.)
+(let [^StringBuilder sb (StringBuilder.)
       SEC-REST " sec rest"
       PER " / "
       PGMS-PERMIN " programs/min"
@@ -49,7 +49,6 @@
    (core, db, rss, apiの各チャネルのドキュメントを確認)"
   [frame]
   (let [cc (ca/chan)
-        pool (Executors/newSingleThreadExecutor)
         browsers (atom nil)
         link-handlers (proxy [LinkHandlers] []
                         (getHandlerCount [] (count @browsers))
@@ -68,8 +67,8 @@
                     (let [cmd (conj (tok/tokenize cmd) (.. uri toURL toString))]
                       (log/debugf "Open URL command: %s" (pr-str cmd))
                       (.start (ProcessBuilder. cmd)))))))
-            (trim [s n]
-              (if (and (instance? String s) (pos? n) (< n (.length s)))
+            (trim [^String s n]
+              (if (and (pos? n) (< n (count s)))
                 (-> (str (.substring s 0 n) "\n＜省略しています＞") String.)
                 s))
             (pgm-panel-aux [pgm]
@@ -79,50 +78,37 @@
                                (:type pgm) (:member_only pgm) (:open_time pgm)
                                (ImageIcon. (:thumbnail pgm))))
             (pgm-panel [pgm & {:keys [width height border]}]
-              (let [p (pgm-panel-aux (if height pgm (update-in pgm [:description] trim 64)))]
+              (let [^PgmPanel p (pgm-panel-aux (if height pgm (update-in pgm [:description] trim 64)))]
                 (.setLinkHandlers p link-handlers)
                 (when width (.setWidth p width))
                 (when height (.setHeight p height))
                 (when border (.setBorder p (border/line-border :color :lightgray :thickness 1)))
                 p))
             (cpanel [id]
-              (-> (reduce #(assoc %1 (-> %2 sc/id-of name) %2) {} (.getComponents wpanel))
-                  (get id)))
-            (do-alert [msg thumbs duration]
-              (let [apanel (do (AlertPanel/create msg thumbs))]
-                (da/alert apanel duration)))
+              (->> (.getComponents wpanel)
+                   (filter #(= id (-> % sc/id-of name)))
+                   first))
+            (do-alert [title thumbs]
+              (when (pos? (count thumbs))
+                (let [cnt (count thumbs)
+                      msg (format "%d %s added to \"%s\"" cnt (if (= 1 cnt) "program is" "programs are") title)
+                      apanel (do (AlertPanel/create msg thumbs))]
+                  (da/alert apanel 6000))))
             (update-pgms [id pgms title alert] ; 更新後のリスト内の番組数を返す。
-              (let [pgm-lst (sc/select (cpanel id) [:#lst])
-                    pnls (.getComponents pgm-lst)]
-                (loop [pids (->> pnls (map #(.getId %)) set) ;; 各チャンネルパネルの番組ID集合
-                       thumbs [] ;; 新規追加分サムネイルURL
-                       futures [] ;; GUI更新処理(番組パネル追加)のFutureを保持
-                       pgms pgms]
-                  (if-let [pgm (first pgms)]
-                    ;; [前半] pgmsのうちまだ無いものをパネルを作って追加する
-                    (if (contains? pids (:id pgm))
-                      (recur (disj pids (:id pgm)) thumbs futures (rest pgms))
-                      (let [^Callable add-pgm-panel-fn #(let [ppanel (do (pgm-panel pgm))]
-                                                          (sc/invoke-later (.add pgm-lst ppanel)))
-                            ftr (.submit pool add-pgm-panel-fn)]
-                        (recur pids (conj thumbs (:thumbnail pgm)) (conj futures ftr) (rest pgms))))
-                    ;; [後半] pgmsを全て追加し終わった→不要なパネルの削除とアラート
-                    (let [rpnls (doall (filter #(when (contains? pids (.getId %)) %) pnls))
-                          cnt (count thumbs)]
-                      (when (and alert (pos? cnt))
-                        (let [msg (format "%d %s added to \"%s\"" cnt
-                                          (if (= 1 cnt) "program is" "programs are") title)
-                              ^Callable alert-fn #(do-alert msg thumbs 6000)]
-                          (.submit pool alert-fn)))
-                      (doseq [ftr futures] (.get ftr)) ;; 前半でキックしたGUI更新処理の完了を待つ
-                      (sc/invoke-later
-                       (doseq [rpnl rpnls] (.remove pgm-lst rpnl))
-                       (doseq [rpnl rpnls] (.release rpnl))
-                       (.validate pgm-lst))
-                      (sc/invoke-now
-                       (let [npgms (.getComponentCount pgm-lst)]
-                         (sc/config! (sc/select (cpanel id) [:#control]) :border (format "%s (%d)" title npgms))
-                         npgms)))))))]
+              (let [^PgmList pgm-lst (sc/select (cpanel id) [:#lst])
+                    pnls (.getComponents pgm-lst)
+                    [rpids npids _] (cd/diff (set (map #(.getId %) pnls)) (set (map :id pgms)))
+                    npnls (->> pgms (filter #(contains? npids (:id %))) (map pgm-panel))
+                    rpnls (->> pnls (filter #(contains? rpids (.getId %))))]
+                (when alert
+                  (do-alert title (->> pgms (filter #(contains? npids (:id %))) (map :thumbnail))))
+                (sc/invoke-now
+                 (doseq [npnl npnls] (.add pgm-lst npnl))
+                 (doseq [rpnl rpnls] (.remove pgm-lst rpnl) (.release rpnl))
+                 (.validate pgm-lst)
+                 (let [npgms (.getComponentCount pgm-lst)]
+                   (sc/config! (sc/select (cpanel id) [:#control]) :border (format "%s (%d)" title npgms))
+                   npgms))))]
 
       ;; このループではUIに関する状態を管理する。
       ;; PgmPanelがリンクを開く際に共通して用いるブラウザ情報およびLinkHandlersは
@@ -235,8 +221,5 @@
                             (sc/config! api-rate :text NO-PGMS-PERMIN-STR))
               (log/warnf "caught an unknown status: %s" (pr-str cmd)))
             (recur @n-titles @n-npgms @n-alerts))
-          (do
-            (.shutdown pool)
-            (.awaitTermination pool 5 TimeUnit/SECONDS)
-            (log/info "closed status channel"))))
+          (log/info "closed status channel")))
       cc)))
