@@ -128,23 +128,44 @@
                                        Long (max v ov)
                                        v))))
                       {} only-new)))]
+    ;; epgms 同一IDを持つキャッシュ済みの情報 -> カラムごとに比較して必要に応じ更新
+    ;; pgms0 epgmsと比較する
+    ;; pgms1 テンポラリ
+    ;; pgms2 公式の新規番組 -> 追加してよい
+    ;; pgms3 テンポラリ
+    ;; opgms 同一コミュニティの古いキャッシュ済み情報 -> 削除
+    ;; pgms4 pgmsのうち同一コミュニティのキャッシュ済み情報より新しいと確認できたもの -> 追加してよい
     (let [epgms (jdbc/query db (vec (concat [(query-pgm-id (count pgms))] (map :id pgms))))
           epids (->> epgms (map :id) set)
-          comm-ids (->> pgms (map :comm_id) (filter s/blank?) set)
-          cpgms (->> (jdbc/query db (vec (concat [(query-comm-id (count comm-ids))] comm-ids)))
-                     (filter #(not (contains? epids (:id %)))))]
+          [pgms0 pgms1] (let [m (group-by #(contains? epids (:id %)) pgms)]
+                          [(get m true) (get m false)])
+          [pgms2 pgms3] (let [m (group-by #(s/blank? (:comm_id %)) pgms1)]
+                          [(get m true) (get m false)])
+          cmap (reduce #(assoc %1 (:comm_id %2) %2) {} pgms3)
+          comm-ids (keys cmap)
+          [opgms pgms4] (loop [cpgms (jdbc/query db (vec (concat [(query-comm-id (count comm-ids))] comm-ids)))
+                               opgms []
+                               cmap cmap]
+                          (if-let [cpgm (first cpgms)]
+                            (let [comm_id (:comm_id cpgm)
+                                  npgm (get cmap comm_id)]
+                              (if (> (:start_time npgm) (:start_time cpgm))
+                                (recur (rest cpgms) (conj opgms cpgm) cmap)
+                                (recur (rest cpgms) opgms (dissoc cmap comm_id))))
+                            [opgms (vals cmap)]))]
+      (log/infof "PGMS2 (%d), PGMS4 (%d), EPGMS (%d), OPGMS (%d)"
+                 (count pgms2) (count pgms4) (count epgms) (count opgms))
       (jdbc/with-db-transaction [db db]
-        (doseq [cpgm cpgms] (jdbc/delete! db :pgms ["id=?" (:id cpgm)]))
-        (if (pos? (count epgms)) ;; 要比較更新
-          (let [pmap (reduce #(assoc %1 (:id %2) %2) {} pgms)
-                npgms (filter #(not (contains? epids (:id %))) pgms)]
-            (doseq [npgm npgms] (jdbc/insert! db :pgms npgm))
+        (jdbc/delete! db :pgms (-> [(str "id IN (" (s/join "," (repeat (count opgms) "?")) ")")
+                                    opgms] flatten vec))
+        (doseq [pgm (concat pgms2 pgms4)] (jdbc/insert! db :pgms pgm))
+        (when (pos? (count epgms)) ;; 要比較更新
+          (let [pmap (reduce #(assoc %1 (:id %2) %2) {} pgms0)]
             (doseq [epgm epgms]
               (let [pgm (get pmap (:id epgm))
                     upd-kvs (diff-row pgm epgm)]
-                (when-not (empty? upd-kvs) (jdbc/update! db :pgms upd-kvs ["id=?" (:id epgm)])))))
-          (doseq [pgm pgms] (jdbc/insert! db :pgms pgm))))
-      [(- (count pgms) (count epgms)) (count cpgms)])))
+                (when-not (empty? upd-kvs) (jdbc/update! db :pgms upd-kvs ["id=?" (:id epgm)])))))))
+      [(+ (count pgms2) (count pgms4)) (count opgms)])))
 
 (defn- add! [db pgms]
   (let [upgms (loop [pgms pgms upgms [] ids #{}]
