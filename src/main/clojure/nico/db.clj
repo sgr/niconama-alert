@@ -101,15 +101,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(def QS-STD
-  {:n-pgms "SELECT COUNT(*) AS cnt FROM pgms"
-   :clean (str "DELETE FROM pgms WHERE id IN "
-               "(SELECT id FROM pgms WHERE open_time < ? AND updated_at < ? ORDER BY updated_at LIMIT ?)")
-   :freelist_count "PRAGMA freelist_count"
-   :page_count     "PRAGMA page_count"
-   :vacuum         "VACUUM"
-   :shrink_memory  "PRAGMA shrink_memory"})
-
 (defn- add!*
   "番組情報をDBに登録する。[追加レコード数 既存レコード削除数]を返す。
    
@@ -180,45 +171,18 @@
         (log/errorf e "failed add!: %s" (pr-str (map :id pgms)))
         [0 0]))))
 
-(defn- pstmt [db q]
-  (cond (and (string? q) (not (s/blank? q))) (jdbc/prepare-statement (jdbc/db-connection db) q)
-        (vector? q) (let [p (.prepareStatement (jdbc/db-connection db) (first q))]
-                      (doseq [b (rest q)] (.addBatch p b))
-                      p)
-        :else nil))
-
-(defn- cached-pstmt [db q]
-  (let [ps-cache (:ps-cache db)]
-    (if-let [p (locking ps-cache (.. ps-cache (get q)))]
-      (do
-        (log/trace "HIT PSTMT CACHE: " q)
-        p)
-      (let [p (pstmt db q)]
-        (log/debug "NEW PSTMT CACHE: " q)
-        (locking ps-cache (.. ps-cache (put q p)))
-        p))))
-
-(defn- set-params! [pstmt params]
-  (dorun (map-indexed (fn [i param] (.setObject pstmt (inc i) param)) params)))
-
-(defn- execute! [db pstmt-params & {:keys [transaction?] :or {transaction? true}}]
-  {:pre [(pos? (count pstmt-params))
-         (instance? PreparedStatement (first pstmt-params))]}
-  (let [pstmt (first pstmt-params)
-        params (rest pstmt-params)]
-    (when params (set-params! pstmt params))
-    (try
-      (if transaction?
-        (jdbc/with-db-transaction [db db] (.executeUpdate pstmt))
-        (.executeUpdate pstmt))
-      (catch Exception e
-        (log/errorf e "failed execute!"))
-      (finally
-        (.clearParameters pstmt)))))
-
 (defn ^String now-str []
   (let [^FastDateFormat f (FastDateFormat/getInstance "HH:mm:ss")]
     (.format f (System/currentTimeMillis))))
+
+(def QS-STD
+  {:n-pgms "SELECT COUNT(*) AS cnt FROM pgms"
+   :clean (str "DELETE FROM pgms WHERE id IN "
+               "(SELECT id FROM pgms WHERE open_time < ? AND updated_at < ? ORDER BY updated_at LIMIT ?)")
+   :freelist_count "PRAGMA freelist_count"
+   :page_count     "PRAGMA page_count"
+   :vacuum         "VACUUM"
+   :shrink_memory  "PRAGMA shrink_memory"})
 
 (defn boot
   "番組情報を保持するDBインスタンスを生成し、コントロールチャネルを返す。
@@ -260,43 +224,33 @@
             (let [thumbnail (do (img/image (:thumbnail row)))]
               (-> row pgm/map->Pgm (assoc :thumbnail thumbnail))))
           (search-pgms [db q]
-            (jdbc/query db [(if (instance? PreparedStatement q) q (cached-pstmt db q))] :row-fn gen-pgm))
+            (jdbc/query db [q] :row-fn gen-pgm))
           (search-pgms-by-queries [db]
-            (reduce (fn [m [id q]] (assoc m id (search-pgms db q))) {} @(:ps db)))
+            (reduce (fn [m [id q]] (assoc m id (search-pgms db q))) {} @(:qs db)))
           (count-pgms [db query target]
             (let [q (format "SELECT COUNT(*) AS cnt, %s AS %s FROM pgms WHERE %s"
                             (s/join " || " (map name target)) CCOL (where-clause query))]
-              (jdbc/query db [(cached-pstmt db q)] :result-set-fn first :row-fn :cnt)))
+              (jdbc/query db [q] :result-set-fn first :row-fn :cnt)))
           (n-pgms [db]
-            (jdbc/query db [(:n-pgms @(:ps-std db))] :result-set-fn first :row-fn :cnt))
+            (jdbc/query db [(:n-pgms QS-STD)] :result-set-fn first :row-fn :cnt))
           (timel-before [min]
             (- (System/currentTimeMillis) (* 60000 min)))
           (clean! [db target-val]
-            (execute! db [(:clean @(:ps-std db)) (timel-before 30) (timel-before 5) target-val]))
+            (jdbc/execute! db [(:clean QS-STD) (timel-before 30) (timel-before 5) target-val]))
           (pragma-query [db k]
-            (when-let [p (get @(:ps-std db) k)]
-              (jdbc/query db [p] :result-set-fn first :row-fn k)))
+            (when-let [q (get QS-STD k)]
+              (jdbc/query db [q] :result-set-fn first :row-fn k)))
           (now [] (System/currentTimeMillis))]
     (let [RATIO 1.05
           CLEAN-INTERVAL 30000
           SEARCH-INTERVAL 5000
           SEARCH-LIMIT 50
           FREELIST-THRESHOLD 10
-          CACHE-QS-CAPACITY 64
           cc (ca/chan)]
       (Class/forName (:classname DB-SPEC))
       (ca/go-loop [db {:connection (DriverManager/getConnection
                                     (format "jdbc:%s:%s" (:subprotocol DB-SPEC) (:subname DB-SPEC)))
-                       :ps-std (atom {}) ; key: 固有の値, value: pstmt
-                       :ps (atom {}) ; key: id, value: pstmt
-                       :ps-cache (proxy [LinkedHashMap] [(inc CACHE-QS-CAPACITY) 1.1 true] ; key: sql, value: pstmt
-                                   (removeEldestEntry [entry]
-                                     (if (> (proxy-super size) CACHE-QS-CAPACITY)
-                                       (do
-                                         (log/info "Remove from cache-qs: " (.. entry getKey))
-                                         (.. entry getValue close)
-                                         true)
-                                       false)))}
+                       :qs (atom {})} ; key: id, value: query string
                    total 0 ; ニコ生から得た総番組数。cleanタイミングを決めるのに用いる。
                    npgms 0 ; DBに格納されている総番組数。cleanやvacuumタイミングを決めるのに用いる。
                    last-cleaned (now) ; 最終削除時刻。削除頻度を上げ過ぎないために用いる。
@@ -328,8 +282,8 @@
               (< FREELIST-THRESHOLD (pragma-query db :freelist_count)))
          (let [fc (pragma-query db :freelist_count)
                pc (pragma-query db :page_count)]
-           (execute! db [(:vacuum @(:ps-std db))] :transaction? false)
-           (execute! db [(:shrink_memory @(:ps-std db))] :transaction? false)
+           (jdbc/execute! db [(:vacuum QS-STD)] :transaction? false)
+           (jdbc/execute! db [(:shrink_memory QS-STD)] :transaction? false)
            (log/infof "freelist / page: [%d, %d] -> [%d, %d]" fc pc
                       (pragma-query db :freelist_count) (pragma-query db :page_count))
            (recur db total npgms last-cleaned last-searched 0))
@@ -339,22 +293,19 @@
            (condp = (:cmd c)
              :create-db (let [now (now)]
                           (create-db db)
-                          (reset! (:ps-std db) (reduce (fn [m [k q]] (assoc m k (pstmt db q))) {} QS-STD))
                           (recur db 0 0 now now 0))
              :set-query-kwd (let [{:keys [id query target]} c
                                   q (sql-kwd query target)]
-                              (when-let [p (get @(:ps db) id)] (.close p))
-                              (swap! (:ps db) assoc id (pstmt db q))
+                              (swap! (:qs db) assoc id q)
                               (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
                               (recur db total npgms last-cleaned last-searched acc-rm))
              :set-query-user (let [{:keys [id comms]} c
                                    q (sql-comms comms)]
-                               (when-let [p (get @(:ps db) id)] (.close p))
-                               (swap! (:ps db) assoc id (pstmt db q))
+                               (swap! (:qs db) assoc id q)
                                (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
                                (recur db total npgms last-cleaned last-searched acc-rm))
              :rem-query (let [id (:id c)]
-                          (swap! (:ps db) dissoc id)
+                          (swap! (:qs db) dissoc id)
                           (recur db total npgms last-cleaned last-searched acc-rm))
              :add-pgm  (let [[ins rm] (add! db [(:pgm c)])
                              npgms (n-pgms db)]
@@ -392,15 +343,8 @@
            (do
              (log/info "closed database control channel")
              (try
-               (doseq [pstmt (vals @(:ps-std db))] (.close pstmt))
-               (doseq [pstmt (vals @(:ps db))] (.close pstmt))
-               (doseq [pstmt (.values (:ps-cache db))] (.close pstmt))
+               (.close (:connection db))
                (catch Exception e
-                 (log/warnf e "failed closing pstmts"))
-               (finally
-                 (try
-                   (.close (:connection db))
-                   (catch Exception e
-                     (log/errorf e "failed closing connection")))))))))
+                 (log/errorf e "failed closing connection")))))))
       (ca/>!! cc {:cmd :create-db})
       cc)))
