@@ -11,28 +11,22 @@
             [nico.pgm :as pgm]
             [nico.scrape :as scrape]
             [nico.string :as s])
+  (:use [slingshot.slingshot :only [try+]])
   (:import [java.util Locale]
            [java.util.concurrent TimeUnit]
            [org.apache.commons.lang3.time FastDateFormat]
            [org.htmlcleaner HtmlCleaner]))
 
-(def ^{:private true} RETRY 2)
-
-(defn- get-nico-rss-aux [url]
-  (try
-    (net/with-http-res [raw-res (net/http-get url)]
-      (with-open [is (-> raw-res :body s/cleanup s/utf8stream)]
-        (xml/parse is)))
-    (catch Exception e
-      (log/warnf "failed fetching RSS (%s)" url))))
-
-(defn- get-nico-rss [url]
-  (loop [rss (get-nico-rss-aux url), c RETRY wait 1]
-    (if (or rss (zero? c))
-      rss
-      (do
-        (.sleep TimeUnit/SECONDS wait)
-        (recur (get-nico-rss-aux url) (dec c) (inc wait))))))
+(defn- get-nico-rss [^String url]
+  (try+
+   (with-open [is (-> url (net/http-get {:as :stream}) :body)]
+     (xml/parse is))
+   (catch [:status 404] {:keys [status headers body trace-redirects]}
+     (log/warnf "failed fetching RSS (%d, %s, %s)" status headers trace-redirects))
+   (catch [:status 410] {:keys [status headers body]}
+     (log/warnf "failed fetching RSS (%d, %s)" status headers))
+   (catch Exception e
+     (log/warnf "failed fetching RSS (%s, %s)" url (.getMessage e)))))
 
 (defn- get-programs-count
   "get the total programs count."
@@ -69,10 +63,10 @@
   (defn create-official-pgm [item fetched_at]
     (try
       (let [id (-> item (child-content :guid) s/nstr)
-            title (-> item (child-content :title) (s/unescape :xml) s/nstr)
+            title (-> item (child-content :title) (s/unescape :html) s/nstr)
             open_time (-> item (child-content :nicolive:open_time) (parse-date fmt))
             start_time (-> item (child-content :nicolive:start_time) (parse-date fmt))
-            description (-> item (child-content :description) (s/unescape :xml) remove-tag s/nstr)
+            description (-> item (child-content :description) (s/unescape :html) remove-tag s/nstr)
             category "" ; ない
             link (-> item (child-content :link) s/nstr)
             thumbnail (-> item (get-child-attr :media:thumbnail :url) s/nstr)
@@ -98,10 +92,10 @@
   (defn create-pgm [item fetched_at]
     (try
       (let [id (-> item (child-content :guid) s/nstr)
-            title (-> item (child-content :title) (s/unescape :xml) s/nstr)
+            title (-> item (child-content :title) (s/unescape :html) s/nstr)
             open_time (-> item (child-content :pubDate) (parse-date fmt locale))
             start_time open_time
-            description (-> item (child-content :description) (s/unescape :xml) remove-tag s/nstr)
+            description (-> item (child-content :description) (s/unescape :html) remove-tag s/nstr)
             category (->> (child-elements item :category)
                           (map #(-> % :content first))
                           (cs/join ",")
@@ -117,6 +111,7 @@
                      2) 2) ; "official"
             comm_name (-> item (child-content :nicolive:community_name) s/nstr)
             comm_id (-> item (child-content :nicolive:community_id) s/nstr)]
+        ;;(when (cs/blank? title) (log/infof "title is blank [%s -> %s]" item title))
         (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
           (pgm/->Pgm id title open_time start_time description category link thumbnail owner_name
                      member_only type comm_name comm_id fetched_at fetched_at)
@@ -140,7 +135,7 @@
   ([] ; ページなしは公式の番組取得。RSSフォーマットが異なる。
      (if-let [rss (get-nico-rss "http://live.nicovideo.jp/rss")]
        (extract rss create-official-pgm) []))
-  ([page] ; pageは1以上。0で問い合わせると1と同じ結果が返るみたい。また、カテゴリ無しはcommonカテゴリと同じ結果が返るみたい。
+  ([page] ; pageは1以上。0で問い合わせると1と同じ結果が返る。また、カテゴリ無しはcommonカテゴリと同じ結果が返る。
      {:pre [(pos? page)]}
      (if-let [rss (get-nico-rss (format "http://live.nicovideo.jp/recent/rss?p=%d" page))]
        [(get-programs-count rss) (extract rss create-pgm)] [nil []]))

@@ -6,48 +6,41 @@
             [clojure.tools.logging :as log]
             [clojure.xml :as xml]
             [clojure.zip :as zip]
-            [nico.net :as n]
+            [nico.net :as net]
             [nico.pgm :as pgm]
 	    [nico.scrape :as ns]
             [nico.string :as s])
   (:import [java.io BufferedReader InputStreamReader IOException OutputStreamWriter]
            [java.net Socket]))
 
-(defmacro ^{:private true} with-nico-res [bindings & body]
-  (assert (vector? bindings)     "with-nico-res: a vector for its binding")
-  (assert (= 2 (count bindings)) "with-nico-res: two number of forms in binding vector")
-  `(let ~bindings
-     (let [^String status# (-> ~(first bindings) :attrs :status)]
-       (if (.equalsIgnoreCase status# "ok")
-         (do ~@body)
-         (let [err# (dzx/xml-> (zip/xml-zip ~(first bindings)) :error :description dzx/text)]
-           (log/errorf "returned failure from server: %s" (pr-str err#)))))))
-
 (defn get-alert-status [email passwd]
   (letfn [(get-ticket [email passwd] ;; 認証APIでチケットを得る
-            (n/with-http-res [raw-res (n/http-post "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
-                                                   {:form-params {:mail email :password passwd}})]
-              (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
-                (dzx/xml1-> (zip/xml-zip res) :ticket dzx/text))))
+            (with-open [is (-> "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
+                               (net/http-post {:form-params {:mail email :password passwd} :as :stream})
+                               :body)]
+              (let [zipped (-> is xml/parse zip/xml-zip)]
+                (dzx/xml1-> zipped :ticket dzx/text))))
           (get-alert-status1 [ticket]
-            (n/with-http-res [raw-res (n/http-get (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket))]
-              (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
-                (let [xz (zip/xml-zip res)]
-                  {:user_id (dzx/xml1-> xz :user_id dzx/text)
-                   :user_name (dzx/xml1-> xz :user_name dzx/text)
-                   :comms (set (dzx/xml-> xz :communities :community_id dzx/text))
-                   :addr (dzx/xml1-> xz :ms :addr dzx/text)
-                   :port (Integer/parseInt (dzx/xml1-> xz :ms :port dzx/text))
-                   :thrd (dzx/xml1-> xz :ms :thread dzx/text)}))))]
+            (with-open [is (-> (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
+                               (net/http-get {:as :stream})
+                               :body)]
+              (let [zipped (-> is xml/parse zip/xml-zip)]
+                {:user_id (dzx/xml1-> zipped :user_id dzx/text)
+                 :user_name (dzx/xml1-> zipped :user_name dzx/text)
+                 :comms (set (dzx/xml-> zipped :communities :community_id dzx/text))
+                 :addr (dzx/xml1-> zipped :ms :addr dzx/text)
+                 :port (Integer/parseInt (dzx/xml1-> zipped :ms :port dzx/text))
+                 :thrd (dzx/xml1-> zipped :ms :thread dzx/text)})))]
     (try
       (get-alert-status1 (get-ticket email passwd))
       (catch Exception e
         (log/errorf e "failed login: %s" email)))))
 
 (defn- get-stream-info [pid]
-  (n/with-http-res [raw-res (n/http-get (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid))]
-    (with-nico-res [res (-> raw-res :body s/cleanup s/utf8stream xml/parse)]
-      (zip/xml-zip res))))
+  (with-open [is (-> (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
+                     (net/http-get {:as :stream})
+                     :body)]
+    (-> is xml/parse zip/xml-zip)))
 
 (defn- create-pgm-from-getstreaminfo
   "getstreaminfoで得られた情報から番組情報を生成する。が、足りない情報がポロポロあって使えない・・・"

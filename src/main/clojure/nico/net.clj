@@ -27,15 +27,3 @@
     (.shutdown pool)
     (cm/shutdown-manager cm)
     (.awaitTermination pool 5 TimeUnit/SECONDS)))
-
-(defmacro with-http-res [bindings & body]
-  (assert (vector? bindings)     "with-http-res: a vector for its binding")
-  (assert (= 2 (count bindings)) "with-http-res: two number of forms in binding vector")
-  `(let ~bindings
-     (let [raw-res# ~(first bindings) status# (:status raw-res#) body# (:body raw-res#)]
-       (if (= 200 status#)
-         (do ~@body)
-         (let [msg# (format "returned HTTP error: %d, %s" status# body#)]
-           (log/error msg#)
-           (throw (Exception. msg#)))))))
-

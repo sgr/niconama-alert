@@ -293,8 +293,6 @@
             (jdbc/query db [(:n-pgms @(:ps-std db))] :result-set-fn first :row-fn :cnt))
           (timel-before [min]
             (- (System/currentTimeMillis) (* 60000 min)))
-          (delete! [db id]
-            (execute! db [(:delete-with-id @(:ps-std db)) id]))
           (clean! [db target-val]
             (execute! db [(:clean @(:ps-std db)) (timel-before 30) (timel-before 5) target-val]))
           (pragma-query [db k]
