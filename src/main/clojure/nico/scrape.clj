@@ -69,7 +69,7 @@
                                      (html/select [:div.kaijo :> :strong :> html/text-node])
                                      open-start-time)
           thumbnail (-> xml (html/select [(html/attr= :itemprop "thumbnail")]) first :attrs :content s/nstr)
-          member_only (if (first (html/select infobox [:h2.onlym])) 1 0)
+          member_only (if (first (html/select infobox [:span.onlym])) 1 0)
           type (cond
                 (not (empty? (html/select infobox [:div.com]))) :community
                 (not (empty? (html/select infobox [:div.chan]))) :channel

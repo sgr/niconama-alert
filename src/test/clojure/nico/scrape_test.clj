@@ -19,6 +19,8 @@
 (deftest ^{:scrape true :data true} extract-pgm-test
   (let [comm-file (io/resource "sample-pgm-comm")
         chan-file (io/resource "sample-pgm-channel")
+        comm-monly-file (io/resource "sample-pgm-comm-member-only")
+        comm-monly-file2 (io/resource "sample-pgm-comm-member-only2")
         ;;offi-file (io/resource "sample-pgm-official")
         comm-file-old (io/resource "sample-pgm-comm-old")
         chan-file-old (io/resource "sample-pgm-channel-old")
@@ -26,6 +28,8 @@
         ]
     (pgm-test comm-file)
     (pgm-test chan-file)
+    (pgm-test comm-monly-file)
+    (pgm-test comm-monly-file2)
     (pgm-test comm-file-old)
     (pgm-test chan-file-old)
     ;;(pgm-test offi-file)

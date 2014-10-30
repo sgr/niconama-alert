@@ -13,7 +13,7 @@
 
 (defn rss-xml [url]
   (when (.exists (io/file url))
-    (-> (slurp url) s/cleanup s/utf8stream xml/parse)))
+    (-> (slurp url) s/utf8stream xml/parse)))
 
 (defn extract-pgms [rx & {:keys [type] :or {type :user} :as opts}]
   (extract rx ({:official create-official-pgm
