@@ -102,23 +102,62 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def QS-STD
-  {:pgms-with-id "SELECT * FROM pgms WHERE id=?"
-   :pgms-with-comm "SELECT * FROM pgms WHERE comm_id=?"
-   :n-pgms "SELECT COUNT(*) AS cnt FROM pgms"
+  {:n-pgms "SELECT COUNT(*) AS cnt FROM pgms"
    :clean (str "DELETE FROM pgms WHERE id IN "
                "(SELECT id FROM pgms WHERE open_time < ? AND updated_at < ? ORDER BY updated_at LIMIT ?)")
-   :insert (str "INSERT INTO pgms ( "
-                (s/join "," (nico.pgm.Pgm/getBasis))
-                " ) VALUES ( "
-                (s/join "," (-> (nico.pgm.Pgm/getBasis) count (repeat "?")))
-                " )")
-   :delete-with-id "DELETE FROM pgms WHERE id=?"
    :freelist_count "PRAGMA freelist_count"
    :page_count     "PRAGMA page_count"
    :vacuum         "VACUUM"
    :shrink_memory  "PRAGMA shrink_memory"})
 
-(def PGM-KEYS (map keyword (nico.pgm.Pgm/getBasis)))
+(defn- add!*
+  "番組情報をDBに登録する。[追加レコード数 既存レコード削除数]を返す。
+   
+   同じ番組情報が既に登録されている場合は更新する
+    -> 時刻系(:open_time :start_time :updated_at)とその他(異なる場合)
+   同じコミュニティIDの古い番組が既に登録されている場合は削除した上で新しい番組を登録する"
+  [db pgms]
+  (letfn [(query-pgm-id [npgms] (str "SELECT * FROM pgms WHERE id IN (" (s/join "," (repeat npgms "?")) ")"))
+          (query-comm-id [npgms] (str "SELECT * FROM pgms WHERE comm_id IN (" (s/join "," (repeat npgms "?")) ")"))
+          (diff-row [new old]
+            (let [[only-new only-old both] (cd/diff new old)]
+              (reduce (fn [m [k v]]
+                        (let [ov (get old k)]
+                          (assoc m k (condp instance? v
+                                       String (if (> (count v) (count ov)) v ov)
+                                       Long (max v ov)
+                                       v))))
+                      {} only-new)))]
+    (let [epgms (jdbc/query db (vec (concat [(query-pgm-id (count pgms))] (map :id pgms))))
+          epids (->> epgms (map :id) set)
+          comm-ids (->> pgms (map :comm_id) (filter s/blank?) set)
+          cpgms (->> (jdbc/query db (vec (concat [(query-comm-id (count comm-ids))] comm-ids)))
+                     (filter #(not (contains? epids (:id %)))))]
+      (jdbc/with-db-transaction [db db]
+        (doseq [cpgm cpgms] (jdbc/delete! db :pgms ["id=?" (:id cpgm)]))
+        (if (pos? (count epgms)) ;; 要比較更新
+          (let [pmap (reduce #(assoc %1 (:id %2) %2) {} pgms)
+                npgms (filter #(not (contains? epids (:id %))) pgms)]
+            (doseq [npgm npgms] (jdbc/insert! db :pgms npgm))
+            (doseq [epgm epgms]
+              (let [pgm (get pmap (:id epgm))
+                    upd-kvs (diff-row pgm epgm)]
+                (when-not (empty? upd-kvs) (jdbc/update! db :pgms upd-kvs ["id=?" (:id epgm)])))))
+          (doseq [pgm pgms] (jdbc/insert! db :pgms pgm))))
+      [(- (count pgms) (count epgms)) (count cpgms)])))
+
+(defn- add! [db pgms]
+  (let [upgms (loop [pgms pgms upgms [] ids #{}]
+                (if-let [pgm (first pgms)]
+                  (if (contains? ids (:id pgm))
+                    (recur (rest pgms) upgms ids)
+                    (recur (rest pgms) (conj upgms pgm) (conj ids (:id pgm))))
+                  upgms))]
+    (try
+      (add!* db upgms)
+      (catch Exception e
+        (log/errorf e "failed add!: %s" (pr-str (map :id pgms)))
+        [0 0]))))
 
 (defn- pstmt [db q]
   (cond (and (string? q) (not (s/blank? q))) (jdbc/prepare-statement (jdbc/db-connection db) q)
@@ -155,88 +194,6 @@
         (log/errorf e "failed execute!"))
       (finally
         (.clearParameters pstmt)))))
-
-(defn- add!*
-  "番組情報をDBに登録する。[追加レコード数 既存レコード削除数]を返す。
-   
-   同じ番組情報が既に登録されている場合は更新する
-    -> 時刻系(:open_time :start_time :updated_at)とその他(異なる場合)
-   同じコミュニティIDの古い番組が既に登録されている場合は削除した上で新しい番組を登録する"
-  [db pgm]
-  (letfn [(pgms-with-id [id] (jdbc/query db [(:pgms-with-id @(:ps-std db)) id]))
-          (pgms-with-comm [comm-id] (jdbc/query db [(:pgms-with-comm @(:ps-std db)) comm-id]))
-          (insert! [db r]
-            (let [pstmt (:insert @(:ps-std db))]
-              (execute! db (-> [pstmt (map #(get r %) PGM-KEYS)] flatten vec))
-              (.clearParameters pstmt)))
-          (delete! [db id]
-            (execute! db [(:delete-with-id @(:ps-std db)) id]))
-          (diff-row [new old]
-            (let [[only-new only-old both] (cd/diff new old)]
-              (reduce (fn [m [k v]]
-                        (let [ov (get old k)]
-                          (assoc m k (condp instance? v
-                                       String (if (> (count v) (count ov)) v ov)
-                                       Long (max v ov)
-                                       v))))
-                      {} only-new)))
-          (update-query [diff]
-            (str "UPDATE pgms SET "
-                 (s/join "," (map (fn [[k v]] (str (name k) "=" (if (nil? v) "NULL" "?"))) diff))
-                 " WHERE id=?"))
-          (update! [db id diff]
-            (let [q (update-query diff)
-                  pstmt (cached-pstmt db q)]
-              ;;(log/infof "UPDATE[%s] <- %s" id (pr-str (keys diff)))
-              (execute! db (-> [pstmt (vals diff) id] flatten vec))
-              (.clearParameters pstmt)))]
-
-    (let [id (:id pgm)
-          irs (pgms-with-id id)]
-      (condp = (count irs)
-        1 (let [diff (diff-row pgm (first irs))]
-            (when-not (empty? diff)
-              (update! db id diff))
-            [0 0])
-        0 (if (s/blank? (:comm_id pgm)) ; 公式の番組はcomm_idがない
-            (jdbc/with-db-transaction [db db]
-              ;;(log/tracef "INSERT[%s]" id)
-              (insert! db pgm)
-              [1 0])
-            (let [crs (pgms-with-comm (:comm_id pgm))]
-              (condp = (count crs)
-                0 (jdbc/with-db-transaction [db db]
-                    ;;(log/tracef "INSERT[%s]" id)
-                    (insert! db pgm)
-                    [1 0])
-                1 (let [cr (first crs)]
-                    (if (= id (:id cr))
-                      (let [diff (diff-row pgm cr)]
-                        (when-not (empty? diff)
-                          (update! db id diff))
-                        [0 0])
-                      (if (> (:open_time pgm) (:open_time cr))
-                        (jdbc/with-db-transaction [db db]
-                          ;;(log/tracef "DELETE[%s] & INSERT[%s]" (:id cr) id)
-                          (delete! db (:id cr))
-                          (insert! db pgm)
-                          [1 1])
-                        [0 0])))
-                (do
-                  (log/errorf "too many pgms (%d) has same comm_id (%s): %s -> %s"
-                              (count crs) (:comm_id pgm) (pr-str pgm) (pr-str crs))
-                  [0 0]))))
-        (do
-          (log/errorf "too many pgms (%d) has same id (%s): %s -> %s"
-                      (count irs) (:id pgm) (pr-str pgm) (pr-str irs))
-          [0 0])))))
-
-(defn- add! [db pgm]
-  (try
-    (add!* db pgm)
-    (catch Exception e
-      (log/errorf e "failed add!: %s" (pr-str pgm))
-      [0 0])))
 
 (defn ^String now-str []
   (let [^FastDateFormat f (FastDateFormat/getInstance "HH:mm:ss")]
@@ -378,18 +335,14 @@
              :rem-query (let [id (:id c)]
                           (swap! (:ps db) dissoc id)
                           (recur db total npgms last-cleaned last-searched acc-rm))
-             :add-pgm  (let [[ins rm] (add! db (:pgm c))
+             :add-pgm  (let [[ins rm] (add! db [(:pgm c)])
                              npgms (n-pgms db)]
                          (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated (now-str) :total total})
                          (when (some pos? [ins rm])
                            (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
                          (recur db total npgms last-cleaned (if (some pos? [ins rm]) (now) last-searched) (+ acc-rm rm)))
              :add-pgms (let [{:keys [pgms force-search]} c
-                             [ins rm] (loop [ains 0 arm 0 pgms pgms]
-                                        (if-let [pgm (first pgms)]
-                                          (let [[ins rm] (add! db pgm)]
-                                            (recur (+ ains ins) (+ arm rm) (rest pgms)))
-                                          [ains arm]))
+                             [ins rm] (add! db pgms)
                              npgms (n-pgms db)
                              new-last-searched (let [now (now)]
                                                  (if (and (< SEARCH-INTERVAL (- now last-searched))
