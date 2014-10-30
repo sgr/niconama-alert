@@ -1,7 +1,9 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.string
   (:require [clojure.string :as s])
-  (:import [java.io ByteArrayInputStream]
+  (:import [java.io BufferedInputStream ByteArrayInputStream InputStream InputStreamReader]
+           [java.nio.charset Charset CharsetDecoder]
+           [org.xml.sax InputSource]
            [org.apache.commons.lang3 StringEscapeUtils]))
 
 (defn nstr
@@ -10,6 +12,12 @@
    詳しくはこちらを参照。 http://bugs.java.com/bugdatabase/view_bug.do?bug_id=4513622"
   [^String str]
   (if (nil? str) "" (String. str)))
+
+(defn clean-reader [^InputStream is]
+  (let [in (BufferedInputStream. is)
+        decoder (.newDecoder (Charset/forName "UTF-8"))
+        reader (InputStreamReader. in decoder)]
+    (InputSource. reader)))
 
 (defn unescape
   [^String str type]

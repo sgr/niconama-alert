@@ -20,7 +20,7 @@
 (defn- get-nico-rss [^String url]
   (try+
    (with-open [is (-> url (net/http-get {:as :stream}) :body)]
-     (xml/parse is))
+     (xml/parse (s/clean-reader is)))
    (catch [:status 404] {:keys [status headers body trace-redirects]}
      (log/warnf "failed fetching RSS (%d, %s, %s)" status headers trace-redirects))
    (catch [:status 410] {:keys [status headers body]}

@@ -83,12 +83,12 @@ public class PgmPanel extends JPanel {
 	_iconLabel = null;
 	_timeLabel = null;
 	if (_onlyLabel.getIcon() != null) {
-	    ((ImageIcon)_onlyLabel.getIcon()).getImage().flush();
+	    //((ImageIcon)_onlyLabel.getIcon()).getImage().flush();
 	    _onlyLabel.setIcon(null);
 	}
 	_onlyLabel = null;
 	if (_typeLabel.getIcon() != null) {
-	    ((ImageIcon)_typeLabel.getIcon()).getImage().flush();
+	    //((ImageIcon)_typeLabel.getIcon()).getImage().flush();
 	    _typeLabel.setIcon(null);
 	}
 	_typeLabel = null;
