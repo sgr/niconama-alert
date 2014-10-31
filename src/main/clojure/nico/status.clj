@@ -103,8 +103,8 @@
                 (when alert
                   (do-alert title (->> pgms (filter #(contains? npids (:id %))) (map :thumbnail))))
                 (sc/invoke-now
-                 (doseq [npnl npnls] (.add pgm-lst npnl))
                  (doseq [rpnl rpnls] (.remove pgm-lst rpnl) (.release rpnl))
+                 (doseq [npnl npnls] (.add pgm-lst npnl))
                  (.validate pgm-lst)
                  (let [npgms (.getComponentCount pgm-lst)]
                    (sc/config! (sc/select (cpanel id) [:#control]) :border (format "%s (%d)" title npgms))
