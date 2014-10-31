@@ -229,8 +229,8 @@
             (let [q ["id IN (SELECT id FROM pgms WHERE open_time < ? AND updated_at < ? ORDER BY updated_at LIMIT ?)"
                      (timel-before 30) (timel-before 5) target-val]]
               (jdbc/delete! db :pgms q)))
-          (pragma-query [db q]
-            (jdbc/query db [q] :result-set-fn first :row-fn (keyword q)))
+          (pragma-query [db k]
+            (jdbc/query db [(str "PRAGMA " (name k))] :result-set-fn first :row-fn k))
           (now [] (System/currentTimeMillis))]
     (let [RATIO 1.05
           CLEAN-INTERVAL 30000
@@ -271,13 +271,13 @@
                     new-acc-rm)))
          
          (and (pos? npgms) (>= acc-rm npgms) ;; acc-rm等を見て必要に応じてvacuumをかける
-              (< FREELIST-THRESHOLD (pragma-query db "PRAGMA freelist_count")))
-         (let [fc (pragma-query db "PRAGMA freelist_count")
-               pc (pragma-query db "PRAGMA page_count")]
+              (< FREELIST-THRESHOLD (pragma-query db :freelist_count)))
+         (let [fc (pragma-query db :freelist_count)
+               pc (pragma-query db :page_count)]
            (jdbc/execute! db ["VACUUM"] :transaction? false)
            (jdbc/execute! db ["PRAGMA shrink_memory"] :transaction? false)
            (log/infof "freelist / page: [%d, %d] -> [%d, %d]" fc pc
-                      (pragma-query db "PRAGMA freelist_count") (pragma-query db "PRAGMA page_count"))
+                      (pragma-query db :freelist_count) (pragma-query db :page_count))
            (recur db total npgms last-cleaned last-searched 0))
 
          :else
