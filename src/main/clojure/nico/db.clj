@@ -9,15 +9,10 @@
             [input-parser.cond-parser :as cp]
             [nico.image :as img]
             [nico.pgm :as pgm])
-  (:import [java.sql DriverManager PreparedStatement Statement]
-           [java.util LinkedHashMap]
+  (:import [java.sql DriverManager]
            [org.apache.commons.lang3.time FastDateFormat]))
 
 ;; DDL ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(def ^{:private true} DB-SPEC {:classname "org.sqlite.JDBC"
-                               :subprotocol "sqlite"
-                               :subname ":memory:"})
 
 (def ^{:private true} CCOL "ccol") ;; concatenated column
 
@@ -77,7 +72,7 @@
       (when-let [q (cp/parse q-str)]
         (where-clause-aux q CCOL))
       (catch Exception e
-        (log/tracef e "failed parsing [%s]" q-str)))))
+        (log/warnf e "failed parsing [%s]" q-str)))))
 
 (defn- where-comms-clause [comms]
   (if (pos? (count comms))
@@ -108,8 +103,10 @@
     -> 時刻系(:open_time :start_time :updated_at)とその他(異なる場合)
    同じコミュニティIDの古い番組が既に登録されている場合は削除した上で新しい番組を登録する"
   [db pgms]
-  (letfn [(query-pgm-id [npgms] (str "SELECT * FROM pgms WHERE id IN (" (s/join "," (repeat npgms "?")) ")"))
-          (query-comm-id [npgms] (str "SELECT * FROM pgms WHERE comm_id IN (" (s/join "," (repeat npgms "?")) ")"))
+  (letfn [(query-pgm-id [n]
+            (str "SELECT * FROM pgms WHERE id IN (" (s/join "," (repeat n "?")) ")"))
+          (query-comm-id [n]
+            (str "SELECT id, comm_id, start_time FROM pgms WHERE comm_id IN (" (s/join "," (repeat n "?")) ")"))
           (diff-row [new old]
             (let [[only-new only-old both] (cd/diff new old)]
               (reduce (fn [m [k v]]
@@ -119,12 +116,12 @@
                                        Long (max v ov)
                                        v))))
                       {} only-new)))]
-    ;; epgms 同一IDを持つキャッシュ済みの情報 -> カラムごとに比較して必要に応じ更新
-    ;; pgms0 epgmsと比較する
+    ;; epgms 同一IDを持つキャッシュ済みの情報 -> pgms0と比較して必要に応じカラム更新
+    ;; pgms0 追加しようとしている番組情報 -> epgmsと比較して必要に応じカラム更新
     ;; pgms1 テンポラリ
     ;; pgms2 公式の新規番組 -> 追加してよい
     ;; pgms3 テンポラリ
-    ;; opgms 同一コミュニティの古いキャッシュ済み情報 -> 削除
+    ;; opgms 同一コミュニティの番組情報 -> 削除
     ;; pgms4 pgmsのうち同一コミュニティのキャッシュ済み情報より新しいと確認できたもの -> 追加してよい
     (let [epgms (jdbc/query db (vec (concat [(query-pgm-id (count pgms))] (map :id pgms))))
           epids (->> epgms (map :id) set)
@@ -144,18 +141,19 @@
                                 (recur (rest cpgms) (conj opgms cpgm) cmap)
                                 (recur (rest cpgms) opgms (dissoc cmap comm_id))))
                             [opgms (vals cmap)]))]
-      (log/infof "PGMS2 (%d), PGMS4 (%d), EPGMS (%d), OPGMS (%d)"
-                 (count pgms2) (count pgms4) (count epgms) (count opgms))
+      (log/tracef "PGMS (%d) -> PGMS2 (%d), PGMS4 (%d), EPGMS (%d), OPGMS (%d)"
+                  (count pgms) (count pgms2) (count pgms4) (count epgms) (count opgms))
       (jdbc/with-db-transaction [db db]
-        (jdbc/delete! db :pgms (-> [(str "id IN (" (s/join "," (repeat (count opgms) "?")) ")")
-                                    opgms] flatten vec))
+        (jdbc/delete! db :pgms (-> [(str "id IN (" (s/join "," (-> opgms count (repeat "?"))) ")")
+                                    (map :id opgms)] flatten vec))
         (doseq [pgm (concat pgms2 pgms4)] (jdbc/insert! db :pgms pgm))
         (when (pos? (count epgms)) ;; 要比較更新
           (let [pmap (reduce #(assoc %1 (:id %2) %2) {} pgms0)]
             (doseq [epgm epgms]
               (let [pgm (get pmap (:id epgm))
                     upd-kvs (diff-row pgm epgm)]
-                (when-not (empty? upd-kvs) (jdbc/update! db :pgms upd-kvs ["id=?" (:id epgm)])))))))
+                (when-not (empty? upd-kvs)
+                  (jdbc/update! db :pgms upd-kvs ["id=?" (:id epgm)])))))))
       [(+ (count pgms2) (count pgms4)) (count opgms)])))
 
 (defn- add! [db pgms]
@@ -174,15 +172,6 @@
 (defn ^String now-str []
   (let [^FastDateFormat f (FastDateFormat/getInstance "HH:mm:ss")]
     (.format f (System/currentTimeMillis))))
-
-(def QS-STD
-  {:n-pgms "SELECT COUNT(*) AS cnt FROM pgms"
-   :clean (str "DELETE FROM pgms WHERE id IN "
-               "(SELECT id FROM pgms WHERE open_time < ? AND updated_at < ? ORDER BY updated_at LIMIT ?)")
-   :freelist_count "PRAGMA freelist_count"
-   :page_count     "PRAGMA page_count"
-   :vacuum         "VACUUM"
-   :shrink_memory  "PRAGMA shrink_memory"})
 
 (defn boot
   "番組情報を保持するDBインスタンスを生成し、コントロールチャネルを返す。
@@ -226,31 +215,34 @@
           (search-pgms [db q]
             (jdbc/query db [q] :row-fn gen-pgm))
           (search-pgms-by-queries [db]
-            (reduce (fn [m [id q]] (assoc m id (search-pgms db q))) {} @(:qs db)))
+            (->> @(:qs db)
+                 (reduce (fn [m [id q]] (assoc m id (search-pgms db q))) {})))
           (count-pgms [db query target]
             (let [q (format "SELECT COUNT(*) AS cnt, %s AS %s FROM pgms WHERE %s"
                             (s/join " || " (map name target)) CCOL (where-clause query))]
               (jdbc/query db [q] :result-set-fn first :row-fn :cnt)))
           (n-pgms [db]
-            (jdbc/query db [(:n-pgms QS-STD)] :result-set-fn first :row-fn :cnt))
+            (jdbc/query db ["SELECT COUNT(*) AS cnt FROM pgms"] :result-set-fn first :row-fn :cnt))
           (timel-before [min]
             (- (System/currentTimeMillis) (* 60000 min)))
           (clean! [db target-val]
-            (jdbc/execute! db [(:clean QS-STD) (timel-before 30) (timel-before 5) target-val]))
-          (pragma-query [db k]
-            (when-let [q (get QS-STD k)]
-              (jdbc/query db [q] :result-set-fn first :row-fn k)))
+            (let [q ["id IN (SELECT id FROM pgms WHERE open_time < ? AND updated_at < ? ORDER BY updated_at LIMIT ?)"
+                     (timel-before 30) (timel-before 5) target-val]]
+              (jdbc/delete! db :pgms q)))
+          (pragma-query [db q]
+            (jdbc/query db [q] :result-set-fn first :row-fn (keyword q)))
           (now [] (System/currentTimeMillis))]
     (let [RATIO 1.05
           CLEAN-INTERVAL 30000
           SEARCH-INTERVAL 5000
           SEARCH-LIMIT 50
           FREELIST-THRESHOLD 10
+          CONN-URI "jdbc:sqlite:file::memory:?cache=shared"
           cc (ca/chan)]
-      (Class/forName (:classname DB-SPEC))
-      (ca/go-loop [db {:connection (DriverManager/getConnection
-                                    (format "jdbc:%s:%s" (:subprotocol DB-SPEC) (:subname DB-SPEC)))
-                       :qs (atom {})} ; key: id, value: query string
+      (Class/forName "org.sqlite.JDBC")
+      (ca/go-loop [db {:connection-uri CONN-URI ; これにより都度コネクションが作られる
+                       :reserved-conn (DriverManager/getConnection CONN-URI) ; メモリDB保持のため
+                       :qs (atom {})} ; UIで設定されたクエリー。key: id, value: query string
                    total 0 ; ニコ生から得た総番組数。cleanタイミングを決めるのに用いる。
                    npgms 0 ; DBに格納されている総番組数。cleanやvacuumタイミングを決めるのに用いる。
                    last-cleaned (now) ; 最終削除時刻。削除頻度を上げ過ぎないために用いる。
@@ -279,13 +271,13 @@
                     new-acc-rm)))
          
          (and (pos? npgms) (>= acc-rm npgms) ;; acc-rm等を見て必要に応じてvacuumをかける
-              (< FREELIST-THRESHOLD (pragma-query db :freelist_count)))
-         (let [fc (pragma-query db :freelist_count)
-               pc (pragma-query db :page_count)]
-           (jdbc/execute! db [(:vacuum QS-STD)] :transaction? false)
-           (jdbc/execute! db [(:shrink_memory QS-STD)] :transaction? false)
+              (< FREELIST-THRESHOLD (pragma-query db "PRAGMA freelist_count")))
+         (let [fc (pragma-query db "PRAGMA freelist_count")
+               pc (pragma-query db "PRAGMA page_count")]
+           (jdbc/execute! db ["VACUUM"] :transaction? false)
+           (jdbc/execute! db ["PRAGMA shrink_memory"] :transaction? false)
            (log/infof "freelist / page: [%d, %d] -> [%d, %d]" fc pc
-                      (pragma-query db :freelist_count) (pragma-query db :page_count))
+                      (pragma-query db "PRAGMA freelist_count") (pragma-query db "PRAGMA page_count"))
            (recur db total npgms last-cleaned last-searched 0))
 
          :else
@@ -343,7 +335,7 @@
            (do
              (log/info "closed database control channel")
              (try
-               (.close (:connection db))
+               (.close (:reserved-conn db))
                (catch Exception e
                  (log/errorf e "failed closing connection")))))))
       (ca/>!! cc {:cmd :create-db})
