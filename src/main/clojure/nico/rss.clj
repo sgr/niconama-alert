@@ -12,7 +12,8 @@
             [nico.scrape :as scrape]
             [nico.string :as s])
   (:use [slingshot.slingshot :only [try+]])
-  (:import [java.util Locale]
+  (:import [java.io BufferedReader InputStream InputStreamReader]
+           [java.util Locale]
            [java.util.concurrent TimeUnit]
            [org.xml.sax InputSource]
            [org.apache.commons.lang3.time FastDateFormat]
@@ -20,10 +21,11 @@
 
 (defn- get-nico-rss [^String url]
   (try+
-   (with-open [is (-> url (net/http-get {:as :stream}) :body)
-               ir (s/clean-reader is)]
-     (xml/parse (InputSource. ir)))
-   ;;(do (-> url net/http-get :body s/cleanup s/utf8stream xml/parse))
+   (with-open [^InputStream is (-> url (net/http-get {:as :stream}) :body)
+               ^InputStreamReader isr (s/clean-reader is)
+               ^BufferedReader br (BufferedReader. isr)]
+     (xml/parse (InputSource. br)))
+   ;;(-> url net/http-get :body s/cleanup s/utf8stream xml/parse)
    (catch [:status 404] {:keys [status headers body trace-redirects]}
      (log/warnf "failed fetching RSS (%d, %s, %s)" status headers trace-redirects))
    (catch [:status 410] {:keys [status headers body]}

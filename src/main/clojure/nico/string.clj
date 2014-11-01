@@ -2,8 +2,7 @@
 (ns nico.string
   (:require [clojure.string :as s]
             [clojure.tools.logging :as log])
-  (:import [java.io BufferedInputStream BufferedReader ByteArrayInputStream InputStream InputStreamReader]
-           [java.nio.charset Charset CharsetDecoder CodingErrorAction]
+  (:import [java.io ByteArrayInputStream InputStream InputStreamReader]
            [java.util.regex Matcher Pattern]
            [org.apache.commons.lang3 StringEscapeUtils]))
 
@@ -19,31 +18,28 @@
     ;; 9 (Horizontal Tab), 10 (Line feed), 13 (Carriage return) は目こぼしする
     (or (<= 0 i 8) (= 11 i) (= 12 i) (<= 14 i 31) (= 127 i))))
 
-(defn clean-reader
-  "XMLパーサーが受理しない文字を削除する"
+(defn ^InputStreamReader clean-reader
+  "XMLパーサーが受理しない文字を削除するInputStreamReaderを返す"
   [^InputStream is]
-  (let [isr (proxy [InputStreamReader] [is "UTF-8"]
-              (read
-                ([]
-                   (loop [c (proxy-super read)]
-                     (if (non-printable-char? c)
-                       (recur (proxy-super read))
-                       c)))
-                ([cbuf offset len]
-                   (let [tbuf (char-array len)
-                         l (proxy-super read tbuf 0 len)]
-                     (if (pos? l)
-                       (let [buf (->> tbuf
-                                      (filter #(not (non-printable-char? %)))
-                                      (into-array Character/TYPE))
-                             nl (count buf)]
-                         (when (not= nl l)
-                           (let [ccs (filter non-printable-char? tbuf)]
-                             (log/infof "NON PRINTABLE CHAR CONTAINED (%d, %d, %s)" l nl (pr-str ccs))))
-                         (doall (map-indexed (fn [i c] (aset-char cbuf (+ offset i) c)) buf))
-                         nl)
-                       l)))))]
-    (BufferedReader. isr)))
+  (proxy [InputStreamReader] [is "UTF-8"]
+    (read
+      ([]
+         (loop [c (proxy-super read)]
+           (if (non-printable-char? c)
+             (recur (proxy-super read))
+             c)))
+      ([cbuf offset len]
+         (let [tbuf (char-array len)
+               l (proxy-super read tbuf 0 len)]
+           (if (pos? l)
+             (let [buf (->> tbuf (take l) (filter #(not (non-printable-char? %))) (map char))
+                   nl (count buf)]
+               (when (not= nl l)
+                 (let [ccs (->> tbuf (take l) (filter non-printable-char?) (map #(Integer/toHexString (int %))))]
+                   (log/debugf "DETECTED NON PRINTABLE CHAR(S) (%d, %d, %s)" l nl (pr-str ccs))))
+               (doall (map-indexed (fn [i c] (aset-char cbuf (+ offset i) c)) buf))
+               nl)
+             l))))))
 
 (let [^Pattern p (Pattern/compile "\\p{Cntrl}")]
   (defn cleanup
