@@ -33,15 +33,9 @@
 (defn- get-child-attr [node tag attr]
   (-> node (child-elements tag) first :attrs attr))
 
-(defn- parse-date
-  ([s fmt]
-     (when-not (cs/blank? s)
-       (-> (FastDateFormat/getInstance fmt) (.parse s) .getTime)))
-  ([s fmt locale]
-     (when-not (cs/blank? s)
-       (-> (FastDateFormat/getInstance fmt locale) (.parse s) .getTime))))
+(defn- parse-date [s fmt] (-> fmt (.parse s) .getTime))
 
-(let [fmt "yyyy-MM-dd HH:mm:ss"]
+(let [fmt (FastDateFormat/getInstance "yyyy-MM-dd HH:mm:ss")]
   (defn create-official-pgm [item fetched_at]
     (try
       (let [id (-> item (child-content :guid) s/nstr)
@@ -69,13 +63,12 @@
       (catch Exception e
         (log/warnf "failed creating pgm from official RSS: %s" (-> item pr-str s/nstr))))))
 
-(let [fmt "EEE, dd MMM yyyy HH:mm:ss Z"
-      locale Locale/ENGLISH]
+(let [fmt (FastDateFormat/getInstance "EEE, dd MMM yyyy HH:mm:ss Z" Locale/ENGLISH)]
   (defn create-pgm [item fetched_at]
     (try
       (let [id (-> item (child-content :guid) s/nstr)
             title (-> item (child-content :title) (s/unescape :html) s/nstr)
-            open_time (-> item (child-content :pubDate) (parse-date fmt locale))
+            open_time (-> item (child-content :pubDate) (parse-date fmt))
             start_time open_time
             description (-> item (child-content :description) (s/unescape :html) remove-tag s/nstr)
             category (->> (child-elements item :category)
