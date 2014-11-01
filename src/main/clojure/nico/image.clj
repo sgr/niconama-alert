@@ -32,6 +32,7 @@
         (try
           (.addImage mt scaled-img 1)
           (.waitForAll mt)
+          (.flush img)
           scaled-img
           (catch Exception e
             (log/warnf "failed scaling image (%s)" (.getMessage e))
