@@ -19,29 +19,6 @@
            [org.apache.commons.lang3.time FastDateFormat]
            [org.htmlcleaner HtmlCleaner]))
 
-(defn- get-nico-rss [^String url]
-  (try+
-   (with-open [^InputStream is (-> url (net/http-get {:as :stream}) :body)
-               ^InputStreamReader isr (s/clean-reader is)
-               ^BufferedReader br (BufferedReader. isr)]
-     (xml/parse (InputSource. br)))
-   ;;(-> url net/http-get :body s/cleanup s/utf8stream xml/parse)
-   (catch [:status 404] {:keys [status headers body trace-redirects]}
-     (log/warnf "failed fetching RSS (%d, %s, %s)" status headers trace-redirects))
-   (catch [:status 410] {:keys [status headers body]}
-     (log/warnf "failed fetching RSS (%d, %s)" status headers))
-   (catch Exception e
-     (log/warnf "failed fetching RSS (%s, %s)" url (.getMessage e)))))
-
-(defn- get-programs-count
-  "get the total programs count."
-  [rss]
-  (when-let [total-count (first (dzx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count dzx/text))]
-    (try
-      (Integer/parseInt total-count)
-      (catch NumberFormatException e
-        (log/errorf "failed fetching RSS for get programs count: %s" rss)))))
-
 (let [cleaner (HtmlCleaner.)]
   (defn- remove-tag [^String s]
     (when-not (cs/blank? s)
@@ -125,6 +102,15 @@
       (catch Exception e
         (log/warnf "failed creating pgm from RSS: %s" (-> item pr-str s/nstr))))))
 
+(defn- get-programs-count
+  "get the total programs count."
+  [rss]
+  (when-let [total-count (first (dzx/xml-> (zip/xml-zip rss) :channel :nicolive:total_count dzx/text))]
+    (try
+      (Integer/parseInt total-count)
+      (catch NumberFormatException e
+        (log/errorf "failed fetching RSS for get programs count: %s" rss)))))
+
 (defn- items [rss]
   (let [nodes-child (dzx/xml-> (zip/xml-zip rss) :channel dz/children)]
     (for [x nodes-child :when (= :item (:tag (first x)))] (first x))))
@@ -135,19 +121,32 @@
          (map #(pgm-fn % now))
          (filter #(and % (and (:id %) (:title %) (:open_time %) (:start_time %)))))))
 
+(defn- get-nico-rss [^String url extract-fn]
+  (try+
+   (with-open [^InputStream is (-> url (net/http-get {:as :stream}) :body)
+               ^InputStreamReader isr (s/clean-reader is)
+               ^BufferedReader br (BufferedReader. isr)]
+     ;;(-> url net/http-get :body s/cleanup s/utf8stream xml/parse)
+     (when-let [rss (xml/parse (InputSource. br))]
+       (extract-fn rss)))
+   (catch [:status 404] {:keys [status headers body trace-redirects]}
+     (log/warnf "failed fetching RSS (%d, %s, %s)" status headers trace-redirects))
+   (catch [:status 410] {:keys [status headers body]}
+     (log/warnf "failed fetching RSS (%d, %s)" status headers))
+   (catch Exception e
+     (log/warnf "failed fetching RSS (%s, %s)" url (.getMessage e)))))
 
 (defn- get-programs-from-rss
   ([] ; ページなしは公式の番組取得。RSSフォーマットが異なる。
-     (if-let [rss (get-nico-rss "http://live.nicovideo.jp/rss")]
-       (extract rss create-official-pgm) []))
+     (get-nico-rss "http://live.nicovideo.jp/rss" #(if % (extract % create-official-pgm) [])))
   ([page] ; pageは1以上。0で問い合わせると1と同じ結果が返る。また、カテゴリ無しはcommonカテゴリと同じ結果が返る。
      {:pre [(pos? page)]}
-     (if-let [rss (get-nico-rss (format "http://live.nicovideo.jp/recent/rss?p=%d" page))]
-       [(get-programs-count rss) (extract rss create-pgm)] [nil []]))
+     (get-nico-rss (format "http://live.nicovideo.jp/recent/rss?p=%d" page)
+                   #(if % [(get-programs-count %) (extract % create-pgm)] [nil []])))
   ([page category] ; pageは1以上。0で問い合わせると1と同じ結果が返るみたい。
      {:pre [(pos? page)]}
-     (if-let [rss (get-nico-rss (format "http://live.nicovideo.jp/recent/rss?tab=%s&p=%d" category page))]
-       [(get-programs-count rss) (extract rss create-pgm)] [nil []])))
+     (get-nico-rss (format "http://live.nicovideo.jp/recent/rss?tab=%s&p=%d" category page)
+                   #(if % [(get-programs-count %) (extract % create-pgm)] [nil []]))))
 
 (defn boot
   "ニコ生RSSを通じて番組情報を取得するfetcherを生成し、コントロールチャネルを返す。
