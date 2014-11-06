@@ -141,8 +141,8 @@
                                 (recur (rest cpgms) (conj opgms cpgm) cmap)
                                 (recur (rest cpgms) opgms (dissoc cmap comm_id))))
                             [opgms (vals cmap)]))]
-      (log/tracef "PGMS (%d) -> PGMS2 (%d), PGMS4 (%d), EPGMS (%d), OPGMS (%d)"
-                  (count pgms) (count pgms2) (count pgms4) (count epgms) (count opgms))
+      ;; (log/tracef "PGMS (%d) -> PGMS2 (%d), PGMS4 (%d), EPGMS (%d), OPGMS (%d)"
+      ;;             (count pgms) (count pgms2) (count pgms4) (count epgms) (count opgms))
       (jdbc/with-db-transaction [db db]
         (jdbc/delete! db :pgms (-> [(str "id IN (" (s/join "," (-> opgms count (repeat "?"))) ")")
                                     (map :id opgms)] flatten vec))
@@ -166,7 +166,7 @@
     (try
       (add!* db upgms)
       (catch Exception e
-        (log/errorf e "failed add!: %s" (pr-str (map :id pgms)))
+        (log/errorf e "failed add! pgms (%s)" (pr-str (map :id upgms)))
         [0 0]))))
 
 (defn ^String now-str []
@@ -206,10 +206,9 @@
    また、次のコマンドが内部的に使用される。
    :create-db
           {:cmd :create-db}"
-  [oc-status]
-  (letfn [(gen-pgm [row]
-            (let [thumbnail (do (img/image (:thumbnail row)))]
-              (-> row pgm/map->Pgm (assoc :thumbnail thumbnail))))
+  [oc-ui]
+  (letfn [(gen-pgm [r]
+            (assoc r :thumbnail_image (img/image (:thumbnail r))))
           (search-pgms [db q]
             (jdbc/query db [q] :row-fn gen-pgm))
           (search-pgms-by-queries [db]

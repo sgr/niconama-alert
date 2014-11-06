@@ -9,7 +9,6 @@
             [seesaw.core :as sc]
             [seesaw.border :as border])
   (:import [java.net URI]
-           [javax.swing ImageIcon]
            [com.github.sgr.slide LinkHandler LinkHandlers]
            [nico.ui AlertPanel PgmList PgmPanel]))
 
@@ -71,14 +70,10 @@
               (if (and (pos? n) (< n (count s)))
                 (-> (str (.substring s 0 n) "\n＜省略しています＞") String.)
                 s))
-            (pgm-panel-aux [pgm]
-              (PgmPanel/create (:id pgm) (:title pgm) (:link pgm)
-                               (:description pgm) (:owner_name pgm)
-                               (:comm_name pgm) (:comm_id pgm)
-                               (:type pgm) (:member_only pgm) (:open_time pgm)
-                               (ImageIcon. (:thumbnail pgm))))
             (pgm-panel [pgm & {:keys [width height border]}]
-              (let [^PgmPanel p (pgm-panel-aux (if height pgm (update-in pgm [:description] trim 64)))]
+              (let [^PgmPanel p (PgmPanel/create (:id pgm) (:title pgm) (:link pgm) (trim (:description pgm) 64)
+                                                 (:owner_name pgm) (:comm_name pgm) (:comm_id pgm) (:type pgm)
+                                                 (:member_only pgm) (:open_time pgm) (:thumbnail_image pgm))]
                 (.setLinkHandlers p link-handlers)
                 (when width (.setWidth p width))
                 (when height (.setHeight p height))
@@ -101,7 +96,7 @@
                     npnls (->> pgms (filter #(contains? npids (:id %))) (map pgm-panel))
                     rpnls (->> pnls (filter #(contains? rpids (.getId %))))]
                 (when alert
-                  (do-alert title (->> pgms (filter #(contains? npids (:id %))) (map :thumbnail))))
+                  (do-alert title (->> pgms (filter #(contains? npids (:id %))) (map :thumbnail_image))))
                 (sc/invoke-now
                  (doseq [rpnl rpnls] (.remove pgm-lst rpnl) (.release rpnl))
                  (doseq [npnl npnls] (.add pgm-lst npnl))

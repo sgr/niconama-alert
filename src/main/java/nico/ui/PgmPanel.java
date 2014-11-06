@@ -56,9 +56,10 @@ public class PgmPanel extends JPanel {
 
     public static PgmPanel create(String id, String title, String link, String description,
 				  String owner_name, String comm_name, String comm_id, int type,
-				  int member_only, long open_time, ImageIcon thumbnail) {
+				  int member_only, long open_time, Image thumbnail) {
 	PgmPanel p = new PgmPanel();
-	p.setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, thumbnail);
+	ImageIcon img = new ImageIcon(thumbnail);
+	p.setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, img);
 	return p;
     }
 
