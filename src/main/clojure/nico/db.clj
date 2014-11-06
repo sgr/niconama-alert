@@ -175,7 +175,7 @@
 
 (defn boot
   "番組情報を保持するDBインスタンスを生成し、コントロールチャネルを返す。
-   アウトプットチャネルoc-statusには次のステータスが出力される。
+   アウトプットチャネルoc-uiには次のステータスが出力される。
    :db-stat
           {:status :db-stat :npgms [DBに格納されている総番組数] :last-updated [最終更新日時文字列] :total [ニコ生から得た総番組数]}
    :searched :searchによる検索結果。
@@ -183,17 +183,15 @@
    :searched-ondemand :search-ondemandによる検索結果。
           {:status :searched-ondemand :results [検索された番組情報のリスト]}
 
-   アウトプットチャネルocには検索結果が出力される。
+   アウトプットチャネルoc-statsには登録結果が出力される。
+   :add-pgms-result 登録結果を返す
+          {:cmd :add-pgms-result :npgms [番組情報数] :ins [新規登録数] :rm [削除数]}
 
    コントロールチャネルは次のコマンドを受理する。
-   :add-pgm 番組情報を登録する。
-          {:cmd :add-pgm :pgm [番組情報]}
    :add-pgms 番組情報をまとめて登録する。
           {:cmd :add-pgms :pgms [番組情報のリスト] :force-search [番組情報検索するか]}
    :set-total 総番組数を設定する。この情報を元にDB内の古い番組情報を削除する。
           {:cmd :set-total :total [ニコ生から得た総番組数]}
-   :finish RSS取得が一巡したことを知らせる。このタイミングで更新用検索をかける。
-          {:cmd :finish}
    :search 番組情報を検索する。結果はアウトプットチャネルに返す。
           {:cmd :search :queries {:id [チャネルID] :where [検索クエリ]}}
    :search-ondemand 番組情報を検索する。結果はアウトプットチャネルに返す。
@@ -238,7 +236,8 @@
           SEARCH-LIMIT 50
           FREELIST-THRESHOLD 10
           CONN-URI "jdbc:sqlite:file::memory:?cache=shared"
-          cc (ca/chan)]
+          cc (ca/chan)
+          oc-stats (ca/chan)]
       (Class/forName "org.sqlite.JDBC")
       (ca/go-loop [db {:connection-uri CONN-URI ; これにより都度コネクションが作られる
                        :reserved-conn (DriverManager/getConnection CONN-URI) ; メモリDB保持のため
@@ -260,9 +259,9 @@
                  new-acc-rm (+ acc-rm rm)
                  now (now)]
              (log/infof "clean! [%d -> %d] / %d acc-rm: %d" npgms new-npgms total new-acc-rm)
-             (ca/>! oc-status {:status :db-stat :npgms new-npgms :last-updated last-updated :total total})
+             (ca/>! oc-ui {:status :db-stat :npgms new-npgms :last-updated last-updated :total total})
              (when (pos? rm)
-               (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
+               (ca/>! oc-ui {:status :searched :results (search-pgms-by-queries db)}))
              (recur db
                     total
                     new-npgms
@@ -289,46 +288,41 @@
              :set-query-kwd (let [{:keys [id query target]} c
                                   q (sql-kwd query target)]
                               (swap! (:qs db) assoc id q)
-                              (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
+                              (ca/>! oc-ui {:status :searched :results (search-pgms-by-queries db)})
                               (recur db total npgms last-cleaned last-searched acc-rm))
              :set-query-user (let [{:keys [id comms]} c
                                    q (sql-comms comms)]
                                (swap! (:qs db) assoc id q)
-                               (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
+                               (ca/>! oc-ui {:status :searched :results (search-pgms-by-queries db)})
                                (recur db total npgms last-cleaned last-searched acc-rm))
              :rem-query (let [id (:id c)]
                           (swap! (:qs db) dissoc id)
                           (recur db total npgms last-cleaned last-searched acc-rm))
-             :add-pgm  (let [[ins rm] (add! db [(:pgm c)])
-                             npgms (n-pgms db)]
-                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated (now-str) :total total})
-                         (when (some pos? [ins rm])
-                           (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
-                         (recur db total npgms last-cleaned (if (some pos? [ins rm]) (now) last-searched) (+ acc-rm rm)))
              :add-pgms (let [{:keys [pgms force-search]} c
-                             [ins rm] (add! db pgms)
+                             [ins rm] (if (and pgms (-> pgms count pos?)) (add! db pgms) [0 0])
                              npgms (n-pgms db)
                              new-last-searched (let [now (now)]
                                                  (if (and (< SEARCH-INTERVAL (- now last-searched))
                                                           (some pos? [ins rm]))
                                                    now last-searched))]
-                         (ca/>! oc-status {:status :db-stat :npgms npgms :last-updated (now-str) :total total})
+                         (when-not (= 1 (count pgms))
+                           (ca/>! oc-stats {:cmd :add-pgms-result :total total :npgms npgms
+                                            :add (count pgms) :ins ins :rm rm}))
+                         (ca/>! oc-ui {:status :db-stat :npgms npgms :last-updated (now-str) :total total})
                          (when (or force-search (not= last-searched new-last-searched))
-                           (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)}))
+                           (ca/>! oc-ui {:status :searched :results (search-pgms-by-queries db)}))
                          (recur db total npgms last-cleaned new-last-searched (+ acc-rm rm)))
              :set-total (let [new-total (:total c)]
                           (log/infof "SET-TOTAL: %d -> %d" total new-total)
                           (recur db (or new-total total) npgms last-cleaned last-searched acc-rm))
-             :finish (do
-                       (ca/>! oc-status {:status :searched :results (search-pgms-by-queries db)})
-                       (recur db total npgms last-cleaned (now) acc-rm))
              :search-ondemand (let [{:keys [query target]} c
                                     cnt (count-pgms db query target)
                                     q (if (< SEARCH-LIMIT cnt)
                                         (sql-kwd query target SEARCH-LIMIT)
                                         (sql-kwd query target))]
-                                (ca/>! oc-status {:status :searched-ondemand :cnt cnt :results (search-pgms db q)})
-                                (recur db total npgms last-cleaned last-searched acc-rm)) ;; ここではlast-searched更新しない
+                                (ca/>! oc-ui {:status :searched-ondemand :cnt cnt :results (search-pgms db q)})
+                                ;; ここではlast-searched更新しない
+                                (recur db total npgms last-cleaned last-searched acc-rm))
              (do
                (log/warnf "caught an unknown command[%s]" (pr-str c))
                (recur db total npgms last-cleaned last-searched acc-rm)))
@@ -339,4 +333,4 @@
                (catch Exception e
                  (log/errorf e "failed closing connection")))))))
       (ca/>!! cc {:cmd :create-db})
-      cc)))
+      [cc oc-stats])))

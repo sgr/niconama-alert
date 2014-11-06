@@ -46,7 +46,7 @@
   "getstreaminfoで得られた情報から番組情報を生成する。が、足りない情報がポロポロあって使えない・・・"
   [zipped-res fetched_at]
   (let [id (dzx/xml1-> zipped-res :request_id dzx/text)]
-    (nico.pgm.Pgm.
+    (pgm/->Pgm
      id
      (dzx/xml1-> zipped-res :streaminfo :title dzx/text)
      nil ; open_time
@@ -76,10 +76,10 @@
 
 (defn boot
   "ニコ生アラートAPIを通じて番組情報を取得するリスナーを生成し、コントロールチャネルを返す。
-   引数oc-statusにはリスナーの状態を受け取るチャネルを、
+   引数oc-uiにはリスナーの状態を受け取るチャネルを、
    引数oc-dbにはリスナーが受信した番組情報を受け取るチャネルをそれぞれ指定する。
 
-   アウトプットチャネルoc-statusには次のステータスが出力される。
+   アウトプットチャネルoc-uiには次のステータスが出力される。
    :enabled-api 有効である（開始可能である）
           {:status :enabled-api}
    :disabled-api 無効である（開始できない）
@@ -113,7 +113,7 @@
    :pgm 番組情報取得要求。
           {:cmd :pgm, :pid [番組ID] :cid [コミュID] :uid [ユーザID] :received [取得時刻]}
    "
-  [oc-status oc-db]
+  [oc-ui oc-db]
   (let [UPDATE-INTERVAL 5000
         FETCH-INTERVAL 10000
         RETRY-LIMIT 20
@@ -122,13 +122,13 @@
     (letfn [(listen [alert-status]
               (with-open [sock (doto (Socket. ^String (:addr alert-status) ^int (:port alert-status))
                                  (.setSoTimeout 30000))
-                          rdr (BufferedReader. (InputStreamReader. (.getInputStream sock) "UTF8"))
-                          wtr (OutputStreamWriter. (.getOutputStream sock))]
+                          wtr (OutputStreamWriter. (.getOutputStream sock))
+                          ^BufferedReader rdr (BufferedReader. (InputStreamReader. (.getInputStream sock) "UTF8"))]
                 (ca/>!! cc {:cmd :connected})
                 (let [q (format "<thread thread=\"%s\" version=\"20061206\" res_from=\"-1\"/>\0"
                                 (:thrd alert-status))] ; res_fromを-1200にすると、全ての番組を取得するらしい。
                   (doto wtr (.write q) (.flush)))
-                (loop [c (.read rdr) s (StringBuilder.)]
+                (loop [c (.read rdr) ^StringBuilder s (StringBuilder.)]
                   (condp = c
                     -1 (do
                          (log/info "******* CONNECTION CLOSED *******")
@@ -154,20 +154,20 @@
                 (apply set/union (map :comms (vals alert-statuses))))]
 
       ;; fetcher
-      (ca/go-loop []
-        (if-let [c (ca/<! cc-fetcher)]
+      (ca/go-loop [c (ca/<! cc-fetcher)]
+        (if c
           (let [{:keys [pid cid received]} c]
             (when (and pid cid received)
               (when-let [pgm (ns/scrape-pgm pid cid received)]
-                (ca/>! oc-db {:cmd :add-pgm :pgm pgm})
-                (ca/<! (ca/timeout FETCH-INTERVAL))))
-            (recur))
+                (ca/>! oc-db {:cmd :add-pgms :pgms (list pgm) :force-search true})
+                (Thread/sleep FETCH-INTERVAL)))
+            (recur (ca/<! cc-fetcher)))
           (log/info "Closed API fetcher channel")))
 
       (ca/go-loop [user {:comms #{}
                          :as {}
                          :queue {}}
-                   rate {:rate []
+                   rate {:rate (list)
                          :ch nil}
                    listener nil]
         (let [chs (->> (conj (vals (:queue user)) cc (:ch rate) listener) (remove nil?))
@@ -179,12 +179,12 @@
                            lc (ca/thread
                                 (if-let [as (get-alert-status email passwd)]
                                   (let [user_name (:user_name as)]
-                                    (ca/>!! oc-status {:status :set-channel-title :id id :title user_name})
+                                    (ca/>!! oc-ui {:status :set-channel-title :id id :title user_name})
                                     {:cmd :set-alert-status :id id :alert-status as})
                                   (do
-                                    (ca/>!! oc-status {:status :set-channel-title :id id :title "(login failed)"})
+                                    (ca/>!! oc-ui {:status :set-channel-title :id id :title "(login failed)"})
                                     {:cmd :rem-alert-status :id id})))]
-                       (ca/>! oc-status {:status :set-channel-title :id id :title "(logging in...)"})
+                       (ca/>! oc-ui {:status :set-channel-title :id id :title "(logging in...)"})
                        (recur (update-in user [:queue] assoc id lc) rate listener))
               :set-alert-status (let [{:keys [id alert-status]} c
                                       new-as (assoc (:as user) id alert-status)
@@ -193,7 +193,7 @@
                                   (ca/close! ch)
                                   (ca/>! oc-db {:cmd :set-query-user :id id :comms (:comms alert-status)})
                                   (when (and (nil? listener) (pos? (count new-as)))
-                                    (ca/>! oc-status {:status :enabled-api}))
+                                    (ca/>! oc-ui {:status :enabled-api}))
                                   (recur {:comms new-comms :as new-as :queue new-q} rate listener))
               :rem-alert-status (let [id (:id c)
                                       new-as (dissoc (:as user) id)
@@ -202,11 +202,11 @@
                                   (when (not= cc ch) (ca/close! ch))
                                   (ca/>! oc-db {:cmd :rem-query :id id})
                                   (when (zero? (count new-as))
-                                    (ca/>! oc-status {:status :disabled-api}))
+                                    (ca/>! oc-ui {:status :disabled-api}))
                                   (recur {:comms new-comms :as new-as :queue new-q} rate listener))
               :start (if (and (nil? listener) (pos? (count (:as user))))
                        (do
-                         (ca/>! oc-status {:status :starting-api})
+                         (ca/>! oc-ui {:status :starting-api})
                          (recur user rate (connect (-> (:as user) vals first) 0)))
                        (do
                          (log/warnf "couldn't start [%d, %s]" (count (:as user)) (pr-str listener))
@@ -214,16 +214,16 @@
               :restart (let [retry (:retry c)
                              cnt (count (:as user))]
                          (ca/close! listener)
-                         (ca/>! oc-status (if (and (> RETRY-LIMIT retry) (pos? cnt))
+                         (ca/>! oc-ui (if (and (> RETRY-LIMIT retry) (pos? cnt))
                                             {:status :disabled-api}
                                             {:status :stopped-api}))
                          (recur user rate
                                 (when (and (> RETRY-LIMIT retry) (pos? cnt))
                                   (log/infof "retry connecting via API (%d)" retry)
-                                  (ca/<! (ca/timeout (* retry 1500)))
+                                  (Thread/sleep (* retry 1500))
                                   (connect (-> (:as user) vals first) retry))))
               :connected (do
-                           (ca/>! oc-status {:status :started-api})
+                           (ca/>! oc-ui {:status :started-api})
                            (recur user (assoc rate :ch (ca/timeout UPDATE-INTERVAL)) listener))
               :pgm (let [{:keys [pid cid uid received]} c]
                      (when (contains? (:comms user) cid)
@@ -232,8 +232,8 @@
 
             (cond ;; cがnilの場合はチャネルを見る。
              (= ch (:ch rate)) (let [now (System/currentTimeMillis)
-                                     rate-updated (filter #(> 60000 (- now %)) (:rate rate))]
-                                 (ca/>! oc-status {:status :rate-api :rate (count rate-updated)})
+                                     rate-updated (filter #(> % (- now 60000)) (:rate rate))]
+                                 (ca/>! oc-ui {:status :rate-api :rate (count rate-updated)})
                                  (recur user {:rate rate-updated :ch (ca/timeout UPDATE-INTERVAL)} listener))
              (not= ch cc) (do
                             (log/warn "other channel closed: " (pr-str ch))

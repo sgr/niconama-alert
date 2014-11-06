@@ -92,14 +92,14 @@
                                             sc/show!))
                                 (fn [e] (main-frame/close! frame))
                                 (fn [e] (ca/>!! cc {:cmd :edit-prefs})))
-        cc-status (status/boot frame) ;; status は以下のチャネルからの状態情報をUIに反映
-        cc-db (db/boot cc-status) ;; db -> status
-        cc-rss (rss/boot cc-status cc-db) ;; rss -> status, db
-        cc-api (api/boot cc-status cc-db) ;; api -> status, db
+        cc-ui (status/boot frame) ;; cc-ui は以下のチャネルからの状態情報をUIに反映
+        [cc-db oc-stats] (db/boot cc-ui) ;; db -> ui
+        cc-rss (rss/boot cc-ui cc-db oc-stats) ;; rss -> ui, db
+        cc-api (api/boot cc-ui cc-db) ;; api -> ui, db
         {:keys [wpanel spanel search-btn add-ch-btn l-search-status]} (sc/group-by-id frame)
         cfg (config/load-config)]
 
-    (ca/>!! cc-status {:status :set-browsers :browsers (:browsers cfg)})
+    (ca/>!! cc-ui {:status :set-browsers :browsers (:browsers cfg)})
 
     (sc/listen frame :window-closing
                (fn [e]
@@ -153,7 +153,7 @@
                                (when (not= old-alert-cfg new-alert-cfg)
                                  (init-alert new-alert-cfg frame))
                                (when (not= old-browsers-cfg new-browsers-cfg)
-                                 (ca/>! cc-status {:status :set-browsers :browsers new-browsers-cfg}))
+                                 (ca/>! cc-ui {:status :set-browsers :browsers new-browsers-cfg}))
                                (recur (merge cfg new-cfg) (disj async-ops op)))
               :add-channel (let [ch (:channel c)
                                  id (:id ch)]
@@ -161,10 +161,10 @@
                              (condp = (:type ch)
                                :kwd (let [{:keys [title query target]} ch]
                                       (ca/>! cc-db {:cmd :set-query-kwd :id id :query query :target target})
-                                      (ca/>! cc-status {:status :set-channel-title :id id :title title}))
+                                      (ca/>! cc-ui {:status :set-channel-title :id id :title title}))
                                :comm (let [{:keys [id email passwd]} ch]
                                        (ca/>! cc-api {:cmd :login :id id :email email :passwd passwd})))
-                             (ca/>! cc-status {:status :set-channel-alert :id id :alert (:alert ch)})
+                             (ca/>! cc-ui {:status :set-channel-alert :id id :alert (:alert ch)})
                              (recur (update-in cfg [:channels] conj ch) (disj async-ops op)))
               :dispose-channel (let [id (:id c)]
                                  (when-let [idx (index-channel id (:channels cfg))]
@@ -172,12 +172,12 @@
                                      (condp = (:type ch)
                                        :kwd (ca/>! cc-db {:cmd :rem-query :id id})
                                        :comm (ca/>! cc-api {:cmd :rem-alert-status :id id}))
-                                     (ca/>! cc-status {:status :dispose-channel :id id})
+                                     (ca/>! cc-ui {:status :dispose-channel :id id})
                                      (recur (update-in cfg [:channels] disvec idx) async-ops))))
               :update-channel-alert (let [{:keys [id alert]} c
                                           idx (index-channel id (:channels cfg))]
                                       (when-let [ch (channel id (:channels cfg))]
-                                        (ca/>! cc-status {:status :set-channel-alert :id id :alert alert})
+                                        (ca/>! cc-ui {:status :set-channel-alert :id id :alert alert})
                                         (recur (update-in cfg [:channels] assoc idx (assoc ch :alert alert))
                                                async-ops)))
               :update-channel (let [ch (:channel c)
@@ -186,7 +186,7 @@
                                   (condp = (:type ch)
                                     :kwd (let [{:keys [title query target]} ch]
                                            (ca/>! cc-db {:cmd :set-query-kwd :id id :query query :target target})
-                                           (ca/>! cc-status {:status :set-channel-title :id id :title title}))
+                                           (ca/>! cc-ui {:status :set-channel-title :id id :title title}))
                                     :comm (let [{:keys [id email passwd]} ch]
                                             (ca/>! cc-api {:cmd :login :id id :email email :passwd passwd})))
                                   (recur (update-in cfg [:channels] assoc idx ch) (disj async-ops op))))
@@ -200,10 +200,10 @@
                                  (condp = (:type ch)
                                    :kwd (let [{:keys [id title query target]} ch]
                                           (ca/>! cc-db {:cmd :set-query-kwd :id id :query query :target target})
-                                          (ca/>! cc-status {:status :set-channel-title :id id :title title}))
+                                          (ca/>! cc-ui {:status :set-channel-title :id id :title title}))
                                    :comm (let [{:keys [id email passwd]} ch]
                                            (ca/>! cc-api {:cmd :login :id id :email email :passwd passwd})))
-                                 (ca/>! cc-status {:status :set-channel-alert :id (:id ch) :alert (:alert ch)}))
+                                 (ca/>! cc-ui {:status :set-channel-alert :id (:id ch) :alert (:alert ch)}))
                                (recur cfg async-ops))
               :search-ondemand (let [spec (deref (sc/user-data spanel))]
                                  (sc/invoke-now
@@ -287,7 +287,7 @@
                 (ca/close! cc-rss)
                 (ca/close! cc-api)
                 (ca/close! cc-db)
-                (ca/close! cc-status)
+                (ca/close! cc-ui)
                 (when (pos? (count async-ops))
                   (log/warnf "Unfinished operations: %s" (pr-str async-ops)))
                 (da/close-alert)
