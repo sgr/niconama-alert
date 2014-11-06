@@ -42,7 +42,8 @@
             title (-> item (child-content :title) (s/unescape :html) s/nstr)
             open_time (-> item (child-content :nicolive:open_time) (parse-date fmt))
             start_time (-> item (child-content :nicolive:start_time) (parse-date fmt))
-            description (-> item (child-content :description) (s/unescape :html) remove-tag s/nstr)
+            description (if-let [dstr (child-content item :description)]
+                          (-> dstr (s/unescape :html) remove-tag s/del-dup s/nstr) "")
             category "" ; ない
             link (-> item (child-content :link) s/nstr)
             thumbnail (-> item (get-child-attr :media:thumbnail :url) s/nstr)
@@ -70,7 +71,8 @@
             title (-> item (child-content :title) (s/unescape :html) s/nstr)
             open_time (-> item (child-content :pubDate) (parse-date fmt))
             start_time open_time
-            description (-> item (child-content :description) (s/unescape :html) remove-tag s/nstr)
+            description (if-let [dstr (child-content item :description)]
+                          (-> dstr (s/unescape :html) remove-tag s/del-dup s/nstr) "")
             category (->> (child-elements item :category)
                           (map #(-> % :content first))
                           (cs/join ",")
@@ -119,7 +121,6 @@
    (with-open [^InputStream is (-> url (net/http-get {:as :stream}) :body)
                ^InputStreamReader isr (s/clean-reader is)
                ^BufferedReader br (BufferedReader. isr)]
-     ;;(-> url net/http-get :body s/cleanup s/utf8stream xml/parse)
      (when-let [rss (xml/parse (InputSource. br))]
        (extract-fn rss)))
    (catch [:status 404] {:keys [status headers body trace-redirects]}

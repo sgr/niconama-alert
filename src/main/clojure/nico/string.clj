@@ -1,9 +1,8 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.string
-  (:require [clojure.string :as s]
-            [clojure.tools.logging :as log])
+  (:require [clojure.string :as s])
+            ;;[clojure.tools.logging :as log])
   (:import [java.io ByteArrayInputStream InputStream InputStreamReader]
-           [java.util.regex Matcher Pattern]
            [org.apache.commons.lang3 StringEscapeUtils]))
 
 (defn nstr
@@ -34,19 +33,20 @@
            (if (pos? l)
              (let [buf (->> tbuf (take l) (filter #(not (non-printable-char? %))) (map char))
                    nl (count buf)]
-               (when (not= nl l)
-                 (let [ccs (->> tbuf (take l) (filter non-printable-char?) (map #(Integer/toHexString (int %))))]
-                   (log/debugf "DETECTED NON PRINTABLE CHAR(S) (%d, %d, %s)" l nl (pr-str ccs))))
+               ;; (when (not= nl l)
+               ;;   (let [ccs (->> tbuf (take l) (filter non-printable-char?) (map #(Integer/toHexString (int %))))]
+               ;;     (log/debugf "DETECTED NON PRINTABLE CHAR(S) (%d, %d, %s)" l nl (pr-str ccs))))
                (doall (map-indexed (fn [i c] (aset-char cbuf (+ offset i) c)) buf))
                nl)
              l))))))
 
-(let [^Pattern p (Pattern/compile "\\p{Cntrl}")]
-  (defn cleanup
-  "XMLパーサーが受理しない文字を削除する"
-  [^String s]
-  (let [^Matcher m (.matcher p s)]
-    (.replaceAll m ""))))
+(defn del-dup
+  "連続した空白や改行を一つにまとめる"
+  [^String str]
+  (-> str
+      (s/replace #"(\s)+" " ")
+      (s/replace #"(\　)+" "　")
+      (s/replace #"(\n)+" "\n")))
 
 (defn unescape
   [^String str type]

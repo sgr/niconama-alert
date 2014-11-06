@@ -64,7 +64,7 @@
                     first
                     (s/unescape :html)
                     s/nstr)
-          description (-> xml (html/select [(html/attr= :property "og:description")]) first :attrs :content s/nstr)
+          description (-> xml (html/select [(html/attr= :property "og:description")]) first :attrs :content s/del-dup s/nstr)
           [open_time start_time] (-> infobox
                                      (html/select [:div.kaijo :> :strong :> html/text-node])
                                      open-start-time)
