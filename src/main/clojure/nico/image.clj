@@ -46,7 +46,7 @@
     (with-open [bais (ByteArrayInputStream. bs)]
       (ImageIO/read bais))))
 
-(defn- image-from-url
+(defn- image-from-url-aux
   "URLの指すイメージを返す。イメージが存在しない場合はfallback-imageを返し、それ以外のエラーの場合はnilを返す。"
   [^String url ^Image fallback-image read-fn]
   (try+
@@ -57,8 +57,22 @@
    (catch [:status 410] {:keys [status headers body]}
      (log/warnf "failed fetching image (%d, %s)" status headers)
      fallback-image)
-   (catch Exception e
-     (log/warnf "failed creating image from %s (%s)" url (.getMessage e)))))
+   (catch Object _
+     (log/warnf "failed fetching image (%s, %s)" url (:message &throw-context)))))
+
+(defn- image-from-url
+  "URLの指すイメージを返す。イメージが存在しない場合はfallback-imageを返し、それ以外のエラーの場合はnilを返す。"
+  [^String url ^Image fallback-image read-fn]
+  (let [FETCH-INTERVAL-MSEC 1000
+        FETCH-LIMIT 10]
+    (loop [retry 1]
+      (if (= FETCH-LIMIT retry)
+        fallback-image
+        (or (image-from-url-aux url fallback-image read-fn)
+            (do
+              (log/warnf "retry (%d) fetching image (%s)" retry url)
+              (Thread/sleep (* retry FETCH-INTERVAL-MSEC))
+              (recur (inc retry))))))))
 
 (let [CACHE-SIZE 1024
       DEFAULT-WIDTH (.width PgmPanelLayout/ICON_SIZE)
@@ -77,6 +91,6 @@
         (when-let [img (-> url
                            (image-from-url fallback-image image-from-bytes-tk)
                            (resize DEFAULT-WIDTH DEFAULT-HEIGHT))]
-          (locking image-cache (.put image-cache url img) img))
+          (locking image-cache (.put image-cache url img))
+          img)
         fallback-image)))
-
