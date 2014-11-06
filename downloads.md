@@ -9,8 +9,23 @@ title: niconama-alert.clj download
 * [1.7.1 Windows 用インストーラー](https://docs.google.com/uc?export=download&id=0BwIJLE1B4O3mRWd0OUhOLUxBUW8) (Windows 7で動作確認)
 * [1.7.1 Mac OS X 用 DMG イメージ](https://docs.google.com/uc?export=download&id=0BwIJLE1B4O3mTmtqV0Nja0FkNzg) (Mac OS X 10.9.2で動作確認)
 
-補足 (Mac OS)
-==============
+
+補足 (Mac OS 10.10 Yosemite) {#notice_yosemite}
+===============================================
+
+実行時の警告については [補足 (Mac OS 10.9 Mavericks)](#notice_mavericks) と同様です。
+
+また、初回起動時に
+
+> “NicoNamaAlert”を開くには、以前の Java SE 6 ランタイムをインストールする必要があります。
+
+というダイアログが表示される場合があります。
+「詳しい情報...」ボタンをクリックすると開くページからJavaランタイムをダウンロードし、
+インストールすると起動できるようになります。
+
+
+補足 (Mac OS 10.9 Mavericks) {#notice_mavericks}
+================================================
 
 Mac OS X 10.9 でディスクイメージからApplicationsへコピーした後、実行しようとすると
 
@@ -30,7 +45,7 @@ __一時的__に設定することで起動できるようになります。こ�
 
 
 ソースコードからのビルド {#howtobuild}
-=====================================
+======================================
 
 Windows や Mac OS 以外のOSでも、ソースコードをダウンロードしビルドすることが可能です。
 ビルドには [JDK](http://www.oracle.com/technetwork/java/javase/downloads/index.html) と
