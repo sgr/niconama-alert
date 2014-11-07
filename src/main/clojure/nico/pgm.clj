@@ -9,7 +9,7 @@
    ^String description  ;; 説明
    ^String category	;; カテゴリ
    ^String link		;; 番組へのリンク
-   thumbnail    	;; コミュニティのサムネイル
+   ^String thumbnail   	;; コミュニティのサムネイル
    ^String owner_name	;; 放送者名
    ^int    member_only	;; コミュ限なら1, そうでなければ0
    ^int    type 	;; community: 0, channel: 1, official: 2
