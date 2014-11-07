@@ -44,7 +44,7 @@ public class PgmPanelLayout implements LayoutManager2 {
 
     public void setWidth(int width) {
 	if (_width != width) {
-	    log.log(Level.FINEST, MessageFormat.format("setWidth {0} -> {1}", _width, width));
+	    //log.log(Level.FINEST, MessageFormat.format("setWidth {0} -> {1}", _width, width));
 	    _width = width;
 	    updateSize();
 	    _valid = false;
@@ -53,7 +53,7 @@ public class PgmPanelLayout implements LayoutManager2 {
 
     public void setHeight(int height) {
 	if (_height != height) {
-	    log.log(Level.FINEST, MessageFormat.format("setHeight {0} -> {1}", _height, height));
+	    //log.log(Level.FINEST, MessageFormat.format("setHeight {0} -> {1}", _height, height));
 	    _height = height;
 	    updateSize();
 	    _valid = false;
