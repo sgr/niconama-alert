@@ -93,8 +93,8 @@
                                 (fn [e] (main-frame/close! frame))
                                 (fn [e] (ca/>!! cc {:cmd :edit-prefs})))
         cc-ui (status/boot frame) ;; cc-ui は以下のチャネルからの状態情報をUIに反映
-        [cc-db oc-stats] (db/boot cc-ui) ;; db -> ui
-        cc-rss (rss/boot cc-ui cc-db oc-stats) ;; rss -> ui, db
+        cc-db (db/boot cc-ui) ;; db -> ui
+        cc-rss (rss/boot cc-ui cc-db) ;; rss -> ui, db
         cc-api (api/boot cc-ui cc-db) ;; api -> ui, db
         {:keys [wpanel spanel search-btn add-ch-btn l-search-status]} (sc/group-by-id frame)
         cfg (config/load-config)]

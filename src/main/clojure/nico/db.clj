@@ -183,10 +183,6 @@
    :searched-ondemand :search-ondemandによる検索結果。
           {:status :searched-ondemand :results [検索された番組情報のリスト]}
 
-   アウトプットチャネルoc-statsには登録結果が出力される。
-   :add-pgms-result 登録結果を返す
-          {:cmd :add-pgms-result :npgms [番組情報数] :ins [新規登録数] :rm [削除数]}
-
    コントロールチャネルは次のコマンドを受理する。
    :add-pgms 番組情報をまとめて登録する。
           {:cmd :add-pgms :pgms [番組情報のリスト] :force-search [番組情報検索するか]}
@@ -235,8 +231,7 @@
           SEARCH-LIMIT 50
           FREELIST-THRESHOLD 10
           CONN-URI "jdbc:sqlite:file::memory:?cache=shared"
-          cc (ca/chan)
-          oc-stats (ca/chan)]
+          cc (ca/chan)]
       (Class/forName "org.sqlite.JDBC")
       (ca/go-loop [db {:connection-uri CONN-URI ; これにより都度コネクションが作られる
                        :reserved-conn (DriverManager/getConnection CONN-URI) ; メモリDB保持のため
@@ -304,16 +299,13 @@
                                                  (if (and (< SEARCH-INTERVAL (- now last-searched))
                                                           (some pos? [ins rm]))
                                                    now last-searched))]
-                         (when-not (= 1 (count pgms))
-                           (ca/>! oc-stats {:cmd :add-pgms-result :total total :npgms npgms
-                                            :add (count pgms) :ins ins :rm rm}))
                          (ca/>! oc-ui {:status :db-stat :npgms npgms :last-updated (now-str) :total total})
                          (when (or force-search (not= last-searched new-last-searched))
                            (ca/>! oc-ui {:status :searched :results (search-pgms-by-queries db)}))
                          (recur db total npgms last-cleaned new-last-searched (+ acc-rm rm)))
              :set-total (let [new-total (:total c)]
-                          (log/infof "SET-TOTAL: %d -> %d" total new-total)
-                          (recur db (or new-total total) npgms last-cleaned last-searched acc-rm))
+                          (when (pos? new-total) (log/infof "SET-TOTAL: %d -> %d" total new-total))
+                          (recur db (if (pos? new-total) new-total total) npgms last-cleaned last-searched acc-rm))
              :search-ondemand (let [{:keys [query target]} c
                                     cnt (count-pgms db query target)
                                     q (if (< SEARCH-LIMIT cnt)
@@ -332,4 +324,4 @@
                (catch Exception e
                  (log/errorf e "failed closing connection")))))))
       (ca/>!! cc {:cmd :create-db})
-      [cc oc-stats])))
+      cc)))
