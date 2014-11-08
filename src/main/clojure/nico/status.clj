@@ -12,35 +12,6 @@
            [com.github.sgr.slide LinkHandler LinkHandlers]
            [nico.ui AlertPanel PgmList PgmPanel]))
 
-(let [^StringBuilder sb (StringBuilder.)
-      SEC-REST " sec rest"
-      PER " / "
-      PGMS-PERMIN " programs/min"
-      NPGMS " programs"
-      LAST-UPDATED "Last updated: "]
-  (defn waiting-progress-str [^long sec]
-    (locking sb
-      (.setLength sb 0)
-      (-> sb (.append sec) (.append SEC-REST) .toString)))
-  (defn fetching-progress-str [^long acc ^long total]
-    (locking sb
-      (.setLength sb 0)
-      (-> sb (.append acc) (.append PER) (.append total) .toString)))
-  (defn rate-api-str [^long rate]
-    (locking sb
-      (.setLength sb 0)
-      (-> sb (.append rate) (.append PGMS-PERMIN) .toString)))
-  (defn npgms-str [^long npgms ^long total]
-    (locking sb
-      (.setLength sb 0)
-      (if (pos? total)
-        (-> sb (.append npgms) (.append PER) (.append total) (.append NPGMS) .toString)
-        (-> sb (.append npgms) (.append NPGMS) .toString))))
-  (defn last-updated-str [^String at]
-    (locking sb
-      (.setLength sb 0)
-      (-> sb (.append LAST-UPDATED) (.append at) .toString))))
-
 (defn boot
   "このアプリケーションの現在の状態をGUIに反映するためのコントロールチャネルを返す。
    処理結果は全てGUIに反映されるため、アウトプットチャネルはない。(終点)
@@ -167,17 +138,17 @@
               ;; 以下のコマンド群はUIへの反映のみ、ループ状態更新はない。
               :db-stat (let [{:keys [npgms last-updated total]} cmd]
                          (sc/invoke-later
-                          (sc/config! l-last-updated :text (last-updated-str last-updated))
-                          (sc/config! l-npgms :text (npgms-str npgms total))))
+                          (sc/config! l-last-updated :text (str "Last updated: " last-updated))
+                          (sc/config! l-npgms :text (if (and total (pos? total))
+                                                      (str npgms " / " total " programs")
+                                                      (str npgms " programs")))))
               :fetching-rss (let [{:keys [page acc total]} cmd]
                               (sc/invoke-later
                                (sc/config! rss-status :text "fetching")
                                (if total
                                  (sc/config! rss-progress :value acc :max total)
                                  (sc/config! rss-progress :value acc))
-                               (.setString rss-progress (if total
-                                                          (fetching-progress-str acc total)
-                                                          (str acc)))))
+                               (.setString rss-progress (if total (str acc " / " total) (str acc)))))
               :searched-ondemand (let [{:keys [cnt results]} cmd
                                        nresults (count results)
                                        s (cond
@@ -200,7 +171,7 @@
                              (sc/invoke-later
                               (sc/config! rss-status :text "waiting")
                               (sc/config! rss-progress :value sec :max total)
-                              (.setString rss-progress (waiting-progress-str sec))))
+                              (.setString rss-progress (str sec " sec rest"))))
               :started-rss (sc/invoke-later
                             (sc/config! rss-status :text "running")
                             (sc/config! rss-progress :value 0 :max 100)
@@ -222,7 +193,7 @@
                             (sc/config! api-status :text "listening")
                             (sc/config! api-rate :text NO-PGMS-PERMIN-STR))
               :rate-api (sc/invoke-later
-                         (sc/config! api-rate :text (rate-api-str (:rate cmd))))
+                         (sc/config! api-rate :text (str (:rate cmd) " programs/min")))
               :stopped-api (sc/invoke-later
                             (sc/config! api-btn :enabled? true)
                             (sc/config! api-status :text "stopped")
