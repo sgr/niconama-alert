@@ -44,11 +44,13 @@ public class PgmPanel extends JPanel {
 
     public static Cursor LINK_CURSOR = (new HTMLEditorKit()).getLinkCursor();
     public static Cursor DEFAULT_CURSOR = Cursor.getDefaultCursor();
+    public static String LINE_SEPARATOR = System.getProperty("line.separator");
 
     public static ImageIcon MEMBER_ONLY_ICON = new ImageIcon(Thread.currentThread().getContextClassLoader().getResource("member_only.png"));
     public static ImageIcon COMMUNITY_ICON = new ImageIcon(Thread.currentThread().getContextClassLoader().getResource("community.png"));
     public static ImageIcon CHANNEL_ICON = new ImageIcon(Thread.currentThread().getContextClassLoader().getResource("channel.png"));
     public static ImageIcon OFFICIAL_ICON = new ImageIcon(Thread.currentThread().getContextClassLoader().getResource("official.png"));
+    public static ImageIcon FALLBACK_ICON = new ImageIcon(Thread.currentThread().getContextClassLoader().getResource("noimage.png"));
 
     private static final Logger log = Logger.getLogger(PgmPanel.class.getCanonicalName());
     private static final FastDateFormat sdf = FastDateFormat.getInstance("d MMM", Locale.ENGLISH);
@@ -58,8 +60,7 @@ public class PgmPanel extends JPanel {
 				  String owner_name, String comm_name, String comm_id, int type,
 				  int member_only, long open_time, Image thumbnail) {
 	PgmPanel p = new PgmPanel();
-	ImageIcon img = new ImageIcon(thumbnail);
-	p.setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, img);
+	p.setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, thumbnail);
 	return p;
     }
 
@@ -78,18 +79,16 @@ public class PgmPanel extends JPanel {
 	_commLabel = null;
 	_iconLabel.setIcon(null);
 	if (_thumbnail != null) {
-	    _thumbnail.getImage().flush();
+	    _thumbnail.flush();
 	    _thumbnail = null;
 	}
 	_iconLabel = null;
 	_timeLabel = null;
 	if (_onlyLabel.getIcon() != null) {
-	    //((ImageIcon)_onlyLabel.getIcon()).getImage().flush();
 	    _onlyLabel.setIcon(null);
 	}
 	_onlyLabel = null;
 	if (_typeLabel.getIcon() != null) {
-	    //((ImageIcon)_typeLabel.getIcon()).getImage().flush();
 	    _typeLabel.setIcon(null);
 	}
 	_typeLabel = null;
@@ -99,7 +98,13 @@ public class PgmPanel extends JPanel {
 
     private String _id = null;
     private long _open_time = 0;
-    private ImageIcon _thumbnail = null;
+    private Image _thumbnail = null;
+    private ImageIcon _thumbnailIcon = null;
+    private String _title = null;
+    private String _description = null;
+    private String _commName = null;
+    private URI _pgmURI = null;
+    private URI _commURI = null;
 
     private MultiLineLabel _titleLabel = null;
     private LinkLabel _iconLabel = null;
@@ -145,7 +150,7 @@ public class PgmPanel extends JPanel {
 
     public void setPgmInfo(String id, String title, String link, String description,
 			   String owner_name, String comm_name, String comm_id, int type,
-			   int member_only, long open_time, ImageIcon thumbnail) {
+			   int member_only, long open_time, Image thumbnail) {
 	setId(id);
 	if (description.length() > 0) {
 	    setDescription(description);
@@ -153,7 +158,7 @@ public class PgmPanel extends JPanel {
 	    setDescription(" ");
 	}
 	setOpenTime(open_time);
-	setIcon(thumbnail);
+	setThumbnail(thumbnail);
 	setType(type);
 	setOnly(member_only == 0 ? false : true);
 
@@ -179,8 +184,9 @@ public class PgmPanel extends JPanel {
 	    }
 	} catch (Exception e) {
 	    log.log(Level.WARNING, MessageFormat.format("failed creating URI from {0} ({1})", comm_id, type), e);
+	} finally {
+	    invalidate();
 	}
-	invalidate();
     }
 
     public void setId(String id) {
@@ -192,30 +198,65 @@ public class PgmPanel extends JPanel {
     }
 
     public void setTitle(String title, URI pgmURI) {
-	String aTitle = (title == null || title.equals("")) ? "<タイトルなし>" : title;
-	Link[] ls = {new Link(0, aTitle.length(), pgmURI)};
-	_titleLabel.setText(aTitle, ls);
+	if (_title != null) {
+	    _title = null;
+	}
+	_title = (title == null || title.equals("")) ? "<タイトルなし>" : title;
+	if (pgmURI != null) {
+	    _pgmURI = pgmURI;
+	}
+	Link[] ls = {new Link(0, _title.length(), _pgmURI)};
+	_titleLabel.setText(_title, ls);
 	_layout.needLayout();
+	invalidate();
+    }
+
+    public void setTitle(String title) {
+	setTitle(title, null);
+    }
+
+    public String getTitle() {
+	return _title;
     }
 
     public void setDescription(String description) {
-	_descLabel.setText(description);
+	if (_description != null) {
+	    _description = null;
+	}
+	_description = (description == null || description.equals("")) ? "<説明なし>" : description;
+	_descLabel.setText(_description);
 	_layout.needLayout();
+	invalidate();
+    }
+
+    public String getDescription() {
+	return _description;
     }
 
     public void setComm(String commName, URI commURI, String ownerName) {
-	String aCommName = (commName == null || commName.equals("")) ? "<コミュニティ名なし>" : commName;
-	Link[] ls = {new Link(0, aCommName.length(), commURI)};
-	String s = String.format("%s（放送者：%s）", aCommName, ownerName);
-	_commLabel.setText(s, ls);
+	if (_commName != null) {
+	    _commName = null;
+	}
+	_commName = (commName == null || commName.equals("")) ? "<コミュニティ名なし>" : commName;
+	_commURI = commURI;
+	Link[] ls = {new Link(0, _commName.length(), _commURI)};
+	if (ownerName != null) {
+	    String s = String.format("%s%s（放送者：%s）", _commName, LINE_SEPARATOR, ownerName);
+	    _commLabel.setText(s, ls);
+	} else {
+	    _commLabel.setText(commName, ls);
+	}
 	_layout.needLayout();
+	invalidate();
     }
 
     public void setComm(String commName, URI commURI) {
 	// チャンネルの場合放送者はnull
-	Link[] ls = {new Link(0, commName.length(), commURI)};
-	_commLabel.setText(commName, ls);
-	_layout.needLayout();
+	setComm(commName, commURI, null);
+    }
+
+    public String getCommName() {
+	return _commName;
     }
 
     public void setOpenTime(long open_time) {
@@ -223,21 +264,33 @@ public class PgmPanel extends JPanel {
 	_timeLabel.setText(relativeTimeString(_open_time));
 	_timeLabel.setToolTipText(odf.format(_open_time));
 	_layout.needLayout();
+	invalidate();
     }
 
     public long getOpenTime() {
 	return _open_time;
     }
 
-    public void setIcon(ImageIcon icon) {
+    public void setThumbnail(Image thumbnail) {
+	// Release old image's resource
 	_iconLabel.setIcon(null);
 	if (_thumbnail != null) {
-	    _thumbnail.getImage().flush();
+	    _thumbnail.flush();
 	    _thumbnail = null;
 	}
-	_thumbnail = icon;
-	_iconLabel.setIcon(icon);
+	// Set new image
+	if (thumbnail != null) {
+	    _thumbnail = thumbnail;
+	    ImageIcon icon = new ImageIcon(_thumbnail);
+	    _iconLabel.setIcon(icon);
+	} else {
+	    _iconLabel.setIcon(FALLBACK_ICON);
+	}
 	_layout.needLayout();
+    }
+
+    public Image getThumbnail() {
+	return _thumbnail;
     }
 
     public void setOnly(boolean only) {
@@ -358,7 +411,7 @@ public class PgmPanel extends JPanel {
 	    _commLabel.dispose();
 	}
 	if (_thumbnail != null) {
-	    _thumbnail.getImage().flush();
+	    _thumbnail.flush();
 	    _thumbnail = null;
 	}
     }

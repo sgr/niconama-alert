@@ -54,6 +54,7 @@
                         (getHandler [idx] (nth @browsers idx)))
         EMPTY-PROGRESS-STR ""
         NO-PGMS-PERMIN-STR "No programs/min"
+        LINE-SEPARATOR (System/getProperty "line.separator")
         {:keys [wpanel l-npgms l-last-updated
                 spanel sresult-panel search-btn add-ch-btn l-search-status
                 rss-btn rss-status rss-progress
@@ -68,7 +69,7 @@
                       (.start (ProcessBuilder. cmd)))))))
             (trim [^String s n]
               (if (and (pos? n) (< n (count s)))
-                (-> (str (.substring s 0 n) "\n＜省略しています＞") String.)
+                (-> (str (.substring s 0 n) LINE-SEPARATOR "＜省略しています＞") String.)
                 s))
             (pgm-panel [pgm & {:keys [width height border]}]
               (let [^PgmPanel p (PgmPanel/create (:id pgm) (:title pgm) (:link pgm) (trim (:description pgm) 64)
@@ -79,6 +80,15 @@
                 (when height (.setHeight p height))
                 (when border (.setBorder p (border/line-border :color :lightgray :thickness 1)))
                 p))
+            (update-panel [^PgmPanel p pgm]
+              (when (< (-> p .getTitle count) (-> pgm :title count))
+                (.setTitle p (:title pgm)))
+              (when (< (-> p .getDescription count) (-> pgm :description (trim 64) count))
+                (.setDescription p (-> pgm :description (trim 64))))
+              (when (< (.getOpenTime p) (:open_time pgm))
+                (.setOpenTime p (:open_time pgm)))
+              (when (and (nil? (.getThumbnail p)) (:thumbnail_image pgm))
+                (.setThumbnail p (:thumbnail_image pgm))))
             (cpanel [id]
               (->> (.getComponents wpanel)
                    (filter #(= id (-> % sc/id-of name)))
@@ -91,14 +101,17 @@
                   (da/alert apanel 6000))))
             (update-pgms [id pgms title alert] ; 更新後のリスト内の番組数を返す。
               (let [^PgmList pgm-lst (sc/select (cpanel id) [:#lst])
+                    pmap (reduce #(assoc %1 (:id %2) %2) {} pgms)
                     pnls (.getComponents pgm-lst)
-                    [rpids npids _] (cd/diff (set (map #(.getId %) pnls)) (set (map :id pgms)))
-                    npnls (->> pgms (filter #(contains? npids (:id %))) (map pgm-panel))
-                    rpnls (->> pnls (filter #(contains? rpids (.getId %))))]
+                    [rpids npids upids] (cd/diff (set (map #(.getId %) pnls)) (set (map :id pgms)))
+                    npnls (->> pgms (filter #(contains? npids (:id %))) (map pgm-panel)) ; 追加パネル
+                    rpnls (->> pnls (filter #(contains? rpids (.getId %))))  ; 削除パネル
+                    upnls (->> pnls (filter #(contains? upids (.getId %))))] ; 更新するかもパネル
                 (when alert
                   (do-alert title (->> pgms (filter #(contains? npids (:id %))) (map :thumbnail_image))))
                 (sc/invoke-now
                  (doseq [rpnl rpnls] (.remove pgm-lst rpnl) (.release rpnl))
+                 (doseq [upnl upnls] (update-panel upnl (get pmap (.getId upnl))))
                  (doseq [npnl npnls] (.add pgm-lst npnl))
                  (.validate pgm-lst)
                  (let [npgms (.getComponentCount pgm-lst)]

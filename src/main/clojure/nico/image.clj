@@ -1,7 +1,6 @@
 ;; -*- coding: utf-8-unix -*-
 (ns nico.image
   (:require [clojure.tools.logging :as log]
-            [clojure.java.io :as io]
             [nico.net :as net])
   (:use [slingshot.slingshot :only [try+]])
   (:import [java.awt Image Component MediaTracker Toolkit]
@@ -84,13 +83,11 @@
                           (log/debugf "Remove eldest image (%s)" (.. entry getKey))
                           (.. entry getValue flush)
                           true)
-                        false)))
-      fallback-image (ImageIO/read (io/resource "noimage.png"))]
+                        false)))]
   (defn image [^String url]
     (or (locking image-cache (.get image-cache url))
         (when-let [img (-> url
-                           (image-from-url fallback-image image-from-bytes-tk)
+                           (image-from-url nil image-from-bytes-tk)
                            (resize DEFAULT-WIDTH DEFAULT-HEIGHT))]
           (locking image-cache (.put image-cache url img))
-          img)
-        fallback-image)))
+          img))))
