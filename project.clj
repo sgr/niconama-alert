@@ -40,10 +40,18 @@
                    :net :net
                    :gui :gui
                    :all (constantly true)}
-;;  :repositories [["sonatype-oss-public" {:url "https://oss.sonatype.org/content/groups/public/"}]]
   :jvm-opts ~(let [sys (.toLowerCase (System/getProperty "os.name"))]
                (condp re-find sys
-                 #"mac" ["-d32" "-Xdock:name=NikonamaAlert.clj" "-Xdock:icon=resources/dempakun.png"]
+                 #"mac" ["-d32" "-Xdock:name=NikonamaAlert.clj" "-Xdock:icon=resources/dempakun.png"
+                         ;;"-XX:+TieredCompilation" "-XX:TieredStopAtLevel=1"
+                         ;; "-XX:+CMSClassUnloadingEnabled"
+                         ;;"-XX:NewRatio=1" ;;"-XX:SurvivorRatio=8" "-XX:GCTimeRatio=20"
+                         ;;"-XX:+UseParallelGC" "-XX:+UseParallelOldGC"
+                         ;; "-XX:+UseConcMarkSweepGC" "-XX:+UseParNewGC"
+                         ;; "-XX:+CMSIncrementalMode" "-XX:+CMSIncrementalPacing"
+                         ;; "-XX:CMSIncrementalDutyCycleMin=0" "-XX:+CMSParallelRemarkEnabled"
+                         "-XX:+UseG1GC" "-Xmx64M" "-XX:G1HeapRegionSize=4M"
+                         ]
                  []))
   ;; Oracle's Java SE 7/8 for Mac OS X has a serious memory-leak bug.
   ;; <https://bugs.openjdk.java.net/browse/JDK-8029147>
