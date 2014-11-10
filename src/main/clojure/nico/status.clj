@@ -131,7 +131,7 @@
               :searched (let [new-npgms (reduce (fn [m [id pgms]]
                                                   (let [title (get titles id)
                                                         alert (get alerts id)]
-                                                  (assoc m id (update-pgms id pgms title alert))))
+                                                    (assoc m id (update-pgms id pgms title alert))))
                                                 {} (:results cmd))]
                           (swap! n-npgms merge new-npgms))
 
@@ -164,6 +164,7 @@
                                     (.removeAll sresult-panel)
                                     (doseq [pnl pnls] (.add sresult-panel pnl))
                                     (.validate sresult-panel)
+                                    (.repaint sresult-panel)
                                     (sc/config! add-ch-btn :enabled? (pos? nresults))
                                     (sc/config! search-btn :enabled? true))
                                    (doseq [rpnl rpnls] (.release rpnl)))
