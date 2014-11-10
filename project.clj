@@ -17,11 +17,10 @@
                  [org.apache.commons/commons-lang3 "3.3.2"]
                  [net.sourceforge.htmlcleaner/htmlcleaner "2.10"]]
   :exclusions [org.apache.ant/ant]
-  :profiles {:dev
-             {:resource-paths ["resources" "test-data"]}
-             :debug
-             {:debug true
-              :injections [(prn (into {} (System/getProperties)))]}}
+  :profiles {:dev     {:resource-paths ["resources" "test-data"]}
+             :debug   {:debug true
+                       :injections [(prn (into {} (System/getProperties)))]}
+             :uberjar {:debug false :aot :all}}
   :aot :all
   :debug false
   :omit-source true
