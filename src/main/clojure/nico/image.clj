@@ -87,7 +87,7 @@
   (defn image [^String url]
     (or (locking image-cache (.get image-cache url))
         (when-let [img (-> url
-                           (image-from-url nil image-from-bytes-tk)
+                           (image-from-url nil image-from-bytes-imageio)
                            (resize DEFAULT-WIDTH DEFAULT-HEIGHT))]
           (locking image-cache (.put image-cache url img))
           img))))
