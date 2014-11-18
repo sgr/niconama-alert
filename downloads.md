@@ -3,33 +3,46 @@ layout: default
 title: niconama-alert.clj download
 ---
 
+* auto-gen TOC:
+{:toc}
+
+インストーラのダウンロード
+==========================
+
 こちらよりお使いのOS用のバイナリをダウンロードします。
 対応OS用のバイナリがない場合は、[ソースコードからのビルド](#howtobuild)をご覧ください。
 
 * [1.7.2 Windows 用インストーラー](https://docs.google.com/uc?export=download&id=0BwIJLE1B4O3mTVhmVVpyTDJCQXc) (Windows 7で動作確認)
-* [1.7.2 Mac OS X 用 DMG イメージ](https://docs.google.com/uc?export=download&id=0BwIJLE1B4O3mR3c3ZmZqbGlXUTg) (Mac OS X 10.10で動作確認)
+* [1.7.2 Mac OS X 用 DMG ファイル](https://docs.google.com/uc?export=download&id=0BwIJLE1B4O3mR3c3ZmZqbGlXUTg) (Mac OS X 10.10で動作確認)
 
 
-補足 (Mac OS 10.10 Yosemite) {#notice_yosemite}
+導入時の注意点 (Mac OS 10.10 Yosemite) {#notice_yosemite}
 ===============================================
 
-実行時の警告については [補足 (Mac OS 10.9 Mavericks)](#notice_mavericks) と同様です。
+Mac OS X 10.10 でディスクイメージからApplicationsへコピーした後、実行しようとすると
+
+![“NicoNamaAlert”は壊れているため開けません。“ゴミ箱”に入れる必要があります。]({{ site.baseurl }}/images/warn_gk.png)
+
+というダイアログが表示される場合があります。
+このような場合は、Apple メニュー >「システム環境設定」>「セキュリティとプライバシー」>「一般」タブの
+「ダウンロードしたアプリケーションの実行許可」で「すべてのアプリケーションを許可」を
+__一時的__に設定することで起動できるようになります。これは初回起動時だけ必要です。
 
 また、初回起動時に
-
-> “NicoNamaAlert”を開くには、以前の Java SE 6 ランタイムをインストールする必要があります。
+ 
+![“NicoNamaAlert”を開くには、以前の Java SE 6 ランタイムをインストールする必要があります。]({{ site.baseurl }}/images/warn_yosemite.png)
 
 というダイアログが表示される場合があります。
 「詳しい情報...」ボタンをクリックすると開くページからJavaランタイムをダウンロードし、
 インストールすると起動できるようになります。
 
 
-補足 (Mac OS 10.9 Mavericks) {#notice_mavericks}
+導入時の注意点 (Mac OS 10.9 Mavericks) {#notice_mavericks}
 ================================================
 
 Mac OS X 10.9 でディスクイメージからApplicationsへコピーした後、実行しようとすると
 
-> “NicoNamaAlert”は壊れているため開けません。“ゴミ箱”に入れる必要があります。
+![“NicoNamaAlert”は壊れているため開けません。“ゴミ箱”に入れる必要があります。]({{ site.baseurl }}/images/warn_gk.png)
 
 というダイアログが表示される場合があります。
 このような場合は、Apple メニュー >「システム環境設定」>「セキュリティとプライバシー」>「一般」タブの
@@ -44,7 +57,7 @@ __一時的__に設定することで起動できるようになります。こ�
 「インストール」ボタンをクリックし、Javaランタイムをインストールすると起動できるようになります。
 
 
-ソースコードからのビルド {#howtobuild}
+補足：ソースコードからのビルド {#howtobuild}
 ======================================
 
 Windows や Mac OS 以外のOSでも、ソースコードをダウンロードしビルドすることが可能です。
