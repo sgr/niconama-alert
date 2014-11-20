@@ -14,9 +14,9 @@ title: niconama-alert.clj tutorial
 
 ウィンドウ下部右のRSSボタンを押してみましょう。
 すると番組情報の取得が開始されます。ステータスバーが右端に達すると取得終了です。
+この後アプリケーションは一定間隔でRSS取得を繰り返すようになります。
 
 ![RSSボタンを押してみよう]({{ site.baseurl }}/images/sc_rss_btn.png)
-
 
 #ログインしてみよう {#login}
 
