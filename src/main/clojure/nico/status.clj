@@ -52,6 +52,7 @@
                 (when border (.setBorder p (border/line-border :color :lightgray :thickness 1)))
                 p))
             (update-panel [^PgmPanel p pgm]
+              (.setRepaintImmediately p false)
               (when (< (-> p .getTitle count) (-> pgm :title count))
                 (.setTitle p (:title pgm)))
               (when (< (-> p .getDescription count) (-> pgm :description (trim 64) count))
@@ -59,7 +60,10 @@
               (when (< (.getOpenTime p) (:open_time pgm))
                 (.setOpenTime p (:open_time pgm)))
               (when (and (nil? (.getThumbnail p)) (:thumbnail_image pgm))
-                (.setThumbnail p (:thumbnail_image pgm))))
+                (.setThumbnail p (:thumbnail_image pgm)))
+              (doto p
+                (.invalidate)
+                (.setRepaintImmediately true)))
             (cpanel [id]
               (->> (.getComponents wpanel)
                    (filter #(= id (-> % sc/id-of name)))

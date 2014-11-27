@@ -119,6 +119,7 @@ public class PgmPanel extends JPanel {
 
     private int _currWidth = 0;
     private int _currHeight = 0;
+    private boolean _repaintImmediately = true;
 
     private PgmPanel() {
 	_titleLabel = new MultiLineLabel();
@@ -151,6 +152,7 @@ public class PgmPanel extends JPanel {
     public void setPgmInfo(String id, String title, String link, String description,
 			   String owner_name, String comm_name, String comm_id, int type,
 			   int member_only, long open_time, Image thumbnail) {
+	_repaintImmediately = false;
 	setId(id);
 	if (description.length() > 0) {
 	    setDescription(description);
@@ -186,7 +188,16 @@ public class PgmPanel extends JPanel {
 	    log.log(Level.WARNING, MessageFormat.format("failed creating URI from {0} ({1})", comm_id, type), e);
 	} finally {
 	    invalidate();
+	    _repaintImmediately = true;
 	}
+    }
+
+    public boolean getRepaintImmediately() {
+	return _repaintImmediately;
+    }
+
+    public void setRepaintImmediately(boolean value) {
+	_repaintImmediately = value;
     }
 
     public void setId(String id) {
@@ -208,7 +219,9 @@ public class PgmPanel extends JPanel {
 	Link[] ls = {new Link(0, _title.length(), _pgmURI)};
 	_titleLabel.setText(_title, ls);
 	_layout.needLayout();
-	invalidate();
+	if (_repaintImmediately) {
+	    invalidate();
+	}
     }
 
     public void setTitle(String title) {
@@ -226,7 +239,9 @@ public class PgmPanel extends JPanel {
 	_description = (description == null || description.equals("")) ? "<説明なし>" : description;
 	_descLabel.setText(_description);
 	_layout.needLayout();
-	invalidate();
+	if (_repaintImmediately) {
+	    invalidate();
+	}
     }
 
     public String getDescription() {
@@ -247,7 +262,9 @@ public class PgmPanel extends JPanel {
 	    _commLabel.setText(commName, ls);
 	}
 	_layout.needLayout();
-	invalidate();
+	if (_repaintImmediately) {
+	    invalidate();
+	}
     }
 
     public void setComm(String commName, URI commURI) {
@@ -264,7 +281,9 @@ public class PgmPanel extends JPanel {
 	_timeLabel.setText(relativeTimeString(_open_time));
 	_timeLabel.setToolTipText(odf.format(_open_time));
 	_layout.needLayout();
-	invalidate();
+	if (_repaintImmediately) {
+	    invalidate();
+	}
     }
 
     public long getOpenTime() {

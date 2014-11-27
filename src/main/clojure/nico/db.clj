@@ -285,7 +285,7 @@
                                   (let [a (System/currentTimeMillis)
                                         ndb (vacuum! db)]
                                     ;; RSSサイクルの最後は空のpgmsがくるのでVACUUMする
-                                    (log/infof "vacuum DB (%d msec)" (- (System/currentTimeMillis) a))
+                                    (log/infof "vacuum (%d msec)" (- (System/currentTimeMillis) a))
                                     (.close (:connection db)) ; 古い方は削除
                                     ndb)
                                   db)
