@@ -9,6 +9,7 @@
             [seesaw.core :as sc]
             [seesaw.border :as border])
   (:import [java.net URI]
+           [javax.swing JLabel JProgressBar]
            [com.github.sgr.slide LinkHandler LinkHandlers]
            [nico.ui AlertPanel PgmList PgmPanel]))
 
@@ -28,7 +29,7 @@
         LINE-SEPARATOR (System/getProperty "line.separator")
         {:keys [wpanel l-npgms l-last-updated
                 spanel sresult-panel search-btn add-ch-btn l-search-status
-                rss-btn rss-status rss-progress
+                rss-btn ^JLabel rss-status ^JProgressBar rss-progress
                 api-btn api-status api-rate]} (sc/group-by-id frame)]
     (letfn [(link-handler [[name cmd]]
               (proxy [LinkHandler] [(if (= :default name) "Default Browser" name)]
@@ -148,10 +149,11 @@
                                                       (str npgms " programs")))))
               :fetching-rss (let [{:keys [page acc total]} cmd]
                               (sc/invoke-later
-                               (sc/config! rss-status :text "fetching")
-                               (if total
-                                 (sc/config! rss-progress :value acc :max total)
-                                 (sc/config! rss-progress :value acc))
+                               (when-not (= "fetching" (.getText rss-status))
+                                 (.setText rss-status "fetching"))
+                               (when (and total (not= total (.getMaximum rss-progress)))
+                                 (.setMaximum rss-progress total))
+                               (.setValue rss-progress acc)
                                (.setString rss-progress (if total (str acc " / " total) (str acc)))))
               :searched-ondemand (let [{:keys [cnt results]} cmd
                                        nresults (count results)
@@ -174,8 +176,11 @@
                                    (doseq [rpnl rpnls] (.release rpnl)))
               :waiting-rss (let [{:keys [sec total]} cmd]
                              (sc/invoke-later
-                              (sc/config! rss-status :text "waiting")
-                              (sc/config! rss-progress :value sec :max total)
+                              (when-not (= "waiting" (.getText rss-status))
+                                (.setText rss-status "waiting"))
+                              (when (and total (not= total (.getMaximum rss-progress)))
+                                (.setMaximum rss-progress total))
+                              (.setValue rss-progress sec)
                               (.setString rss-progress (str sec " sec rest"))))
               :started-rss (sc/invoke-later
                             (sc/config! rss-status :text "running")
