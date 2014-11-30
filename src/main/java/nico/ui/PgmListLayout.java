@@ -92,7 +92,7 @@ public class PgmListLayout implements LayoutManager2 {
     }
 
     public void invalidateLayout(Container target) {
-	_width = -1;
+	//_width = -1;
 	_preferredLayoutSize = null;
     }
     // LayoutManager2 ここまで

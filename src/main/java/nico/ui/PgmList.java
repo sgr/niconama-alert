@@ -36,14 +36,19 @@ public class PgmList extends JPanel implements Scrollable {
 
     public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
 	if (direction > 0) { // Scroll down
-	    return 80;
+	    return 5;
 	} else { // Scroll up
-	    return 80;
+	    return 8;
 	}
     }
 
     public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
-	return getScrollableUnitIncrement(visibleRect, orientation, direction);
+	//return getScrollableUnitIncrement(visibleRect, orientation, direction);
+	if (direction > 0) { // Scroll down
+	    return 45;
+	} else { // Scroll up
+	    return 80;
+	}
     }
 
     public boolean getScrollableTracksViewportWidth() {
