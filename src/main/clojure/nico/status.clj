@@ -151,6 +151,7 @@
                               (sc/invoke-later
                                (when-not (= "fetching" (.getText rss-status))
                                  (.setText rss-status "fetching"))
+                               (.setIndeterminate rss-progress (if total false true))
                                (when (and total (not= total (.getMaximum rss-progress)))
                                  (.setMaximum rss-progress total))
                                (.setValue rss-progress acc)

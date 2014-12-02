@@ -7,15 +7,30 @@
             [nico.ui.search-panel :as spanel]
             [seesaw.border :as sb]
             [seesaw.core :as sc])
-  (:import [java.awt Toolkit Window]
+  (:import [java.awt Color Toolkit Window]
            [java.awt.event WindowEvent]
-           [javax.swing JPanel JProgressBar SpringLayout]
+           [javax.swing JPanel JProgressBar SpringLayout UIManager]
+           [javax.swing.plaf.basic BasicProgressBarUI]
            [nico.ui WaterfallPanel]))
 
 (defn close! [^Window window]
   (.dispatchEvent window (WindowEvent. window WindowEvent/WINDOW_CLOSING)))
 
-(defn api-panel [api-btn]
+(defn- progress-bar []
+  (let [pbar (JProgressBar.)]
+    (when (= :mac (cf/system))
+      (let [fg (UIManager/getColor "List.selectionForeground")
+            bg (UIManager/getColor "List.selectionBackground")]
+        (.setUI pbar (proxy [BasicProgressBarUI] []
+                       (getSelectionBackground [] bg)
+                       (getSelectionForeground [] fg)))
+        (.setForeground pbar bg)))
+    (doto pbar
+      (sc/config! :id :rss-progress)
+      (.setStringPainted true)
+      (.setString ""))))
+
+(defn- api-panel [api-btn]
   (let [p (JPanel.)
         l (SpringLayout.)
         status (sc/label :id :api-status :text "idle")
@@ -35,14 +50,11 @@
       (.add rate)
       (.add api-btn))))
 
-(defn rss-panel [rss-btn]
+(defn- rss-panel [rss-btn]
   (let [p (JPanel.)
         l (SpringLayout.)
         status (sc/label :id :rss-status :text "stand-by")
-        pbar (doto (JProgressBar.)
-               (sc/config! :id :rss-progress)
-               (.setStringPainted true)
-               (.setString ""))]
+        pbar (progress-bar)]
     (.putConstraint l SpringLayout/WEST status 15 SpringLayout/WEST p)
     (.putConstraint l SpringLayout/WEST pbar 30 SpringLayout/EAST status)
     (.putConstraint l SpringLayout/EAST rss-btn -15 SpringLayout/EAST p)
@@ -70,7 +82,7 @@
         rss-panel (rss-panel rss-btn)
         cpanel (sc/grid-panel
                 :rows 1 :columns 3 :hgap 10
-                :border (sb/empty-border :top 0 :bottom 15 :left 10 :right 10)
+                :border (sb/empty-border :top 5 :bottom 15 :left 10 :right 10)
                 :items [status-panel api-panel rss-panel])
         tpanel (sc/tabbed-panel :id :tabbed-panel :user-data {}
                                 :tabs [{:title "Listings" :tip "Nico program listings"
