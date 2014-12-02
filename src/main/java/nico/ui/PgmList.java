@@ -36,9 +36,9 @@ public class PgmList extends JPanel implements Scrollable {
 
     public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
 	if (direction > 0) { // Scroll down
-	    return 8;
+	    return 20;
 	} else { // Scroll up
-	    return 10;
+	    return 30;
 	}
     }
 
