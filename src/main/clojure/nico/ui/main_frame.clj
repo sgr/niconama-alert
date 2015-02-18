@@ -5,30 +5,16 @@
             [config-file :as cf]
             [nico.config :as config]
             [nico.ui.search-panel :as spanel]
+            [nico.ui.util :as util]
             [seesaw.border :as sb]
             [seesaw.core :as sc])
   (:import [java.awt Color Toolkit Window]
            [java.awt.event WindowEvent]
-           [javax.swing JPanel JProgressBar SpringLayout UIManager]
-           [javax.swing.plaf.basic BasicProgressBarUI]
+           [javax.swing JPanel SpringLayout]
            [nico.ui WaterfallPanel]))
 
 (defn close! [^Window window]
   (.dispatchEvent window (WindowEvent. window WindowEvent/WINDOW_CLOSING)))
-
-(defn- progress-bar []
-  (let [pbar (JProgressBar.)]
-    (when (= :mac (cf/system))
-      (let [fg (UIManager/getColor "List.selectionForeground")
-            bg (UIManager/getColor "List.selectionBackground")]
-        (.setUI pbar (proxy [BasicProgressBarUI] []
-                       (getSelectionBackground [] bg)
-                       (getSelectionForeground [] fg)))
-        (.setForeground pbar bg)))
-    (doto pbar
-      (sc/config! :id :rss-progress)
-      (.setStringPainted true)
-      (.setString ""))))
 
 (defn- api-panel [api-btn]
   (let [p (JPanel.)
@@ -54,7 +40,7 @@
   (let [p (JPanel.)
         l (SpringLayout.)
         status (sc/label :id :rss-status :text "stand-by")
-        pbar (progress-bar)]
+        pbar (util/progress-bar)]
     (.putConstraint l SpringLayout/WEST status 15 SpringLayout/WEST p)
     (.putConstraint l SpringLayout/WEST pbar 30 SpringLayout/EAST status)
     (.putConstraint l SpringLayout/EAST rss-btn -15 SpringLayout/EAST p)

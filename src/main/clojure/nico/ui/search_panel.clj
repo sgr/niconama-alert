@@ -2,6 +2,7 @@
 (ns nico.ui.search-panel
   (:require [clojure.tools.logging :as log]
             [nico.db :as db]
+            [nico.ui.util :as util]
             [seesaw.bind :as sb]
             [seesaw.core :as sc]
             [seesaw.mig :as sm])
@@ -10,11 +11,11 @@
 (defn panel [spec]
   (let [search-spec (agent spec)
         scrl (javax.swing.JScrollPane.)]
-    (sc/with-widgets [(sc/checkbox :id :c-title :text "Title")
-                      (sc/checkbox :id :c-desc  :text "Description")
-                      (sc/checkbox :id :c-owner :text "Owner")
-                      (sc/checkbox :id :c-cat   :text "Category")
-                      (sc/checkbox :id :c-comm  :text "Community")
+    (sc/with-widgets [(util/checkbox :id :c-title :text "Title")
+                      (util/checkbox :id :c-desc  :text "Description")
+                      (util/checkbox :id :c-owner :text "Owner")
+                      (util/checkbox :id :c-cat   :text "Category")
+                      (util/checkbox :id :c-comm  :text "Community")
                       (sc/button :id :search-btn :text "Search" :enabled? false)
                       (sc/button :id :add-ch-btn :text "Save as keyword ch" :enabled? false)
                       (sc/text :id :cond-text

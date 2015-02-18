@@ -3,6 +3,7 @@
   (:require [clojure.string :as s]
             [clojure.tools.logging :as log]
             [nico.db :as db]
+            [nico.ui.util :as util]
             [slide.core :as slc]
             [seesaw.bind :as sb]
             [seesaw.core :as sc]
@@ -20,7 +21,7 @@
 
 (defn panel [id title]
   (when (and id title)
-    (let [c-alert  (sc/checkbox :id :c-alert :text "Alert")
+    (let [c-alert  (util/checkbox :id :c-alert :text "Alert")
           btn-gear (sc/button :id :btn-gear :icon "gear.png")
           btn-menu (sc/button :id :btn-menu :icon "menu.png")
           control  (sm/mig-panel
@@ -112,11 +113,11 @@
   (let [new-data (agent data)]
     (sc/with-widgets
       [(sc/text :id :title-text)
-       (sc/checkbox :id :c-title :text "Title")
-       (sc/checkbox :id :c-desc  :text "Description")
-       (sc/checkbox :id :c-owner :text "Owner")
-       (sc/checkbox :id :c-cat   :text "Category")
-       (sc/checkbox :id :c-comm  :text "Community")
+       (util/checkbox :id :c-title :text "Title")
+       (util/checkbox :id :c-desc  :text "Description")
+       (util/checkbox :id :c-owner :text "Owner")
+       (util/checkbox :id :c-cat   :text "Category")
+       (util/checkbox :id :c-comm  :text "Community")
        (sc/text :id :cond-text :multi-line? true :wrap-lines? true :rows 3 :editable? true)
        (slc/dialog
         :id :dlg
