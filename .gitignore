@@ -18,3 +18,4 @@ pom.xml.asc
 /test-data/sample*
 .DS_Store
 Thumbs.db
+.lein-repl-history
