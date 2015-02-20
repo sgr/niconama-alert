@@ -2,7 +2,6 @@
 (ns nico.image
   (:require [clojure.tools.logging :as log]
             [nico.net :as net])
-  (:use [slingshot.slingshot :only [try+]])
   (:import [java.awt Image Component MediaTracker Toolkit]
            [java.io InputStream ByteArrayInputStream]
            [java.util LinkedHashMap]
@@ -48,16 +47,19 @@
 (defn- image-from-url-aux
   "URLの指すイメージを返す。イメージが存在しない場合はfallback-imageを返し、それ以外のエラーの場合はnilを返す。"
   [^String url ^Image fallback-image read-fn]
-  (try+
-   (-> url (net/http-get {:as :byte-array}) :body read-fn)
-   (catch [:status 404] {:keys [status headers body trace-redirects]}
-     (log/warnf "failed fetching image (%d, %s, %s)" status headers trace-redirects)
-     (read-fn body))
-   (catch [:status 410] {:keys [status headers body]}
-     (log/warnf "failed fetching image (%d, %s)" status headers)
-     fallback-image)
-   (catch Object _
-     (log/warnf "failed fetching image (%s, %s)" url (:message &throw-context)))))
+  (if-let [response (net/http-get url {:as :byte-array})]
+    (condp = (:status response)
+      200 (try
+            (read-fn (:body response))
+            (catch Exception e
+              (log/warnf "failed reading image from response (%s, %s)" url (.getMessage e))))
+      404 (try
+            (log/warnf "The image is not found (%s)" (pr-str response))
+            (read-fn (:body response))
+            (catch Exception e
+              (log/warnf "failed reading image from response (%s, %s)" url (.getMessage e))))
+      (log/warnf "failed fetching image (%s)" (pr-str response)))
+    (log/warnf "timeouted fetching image (%s)" url)))
 
 (defn- image-from-url
   "URLの指すイメージを返す。イメージが存在しない場合はfallback-imageを返し、それ以外のエラーの場合はnilを返す。"

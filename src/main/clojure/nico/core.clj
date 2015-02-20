@@ -7,7 +7,6 @@
             [nico.api :as api]
             [nico.config :as config]
             [nico.db :as db]
-            [nico.net :as net]
             [nico.rss :as rss]
             [nico.status :as status]
             [nico.ui.about-dlg :as nua]
@@ -293,7 +292,6 @@
                 (da/close-alert)
                 (log/info "Store the config now...")
                 (config/store-config cfg)
-                (net/shutdown-conn-manager)
                 (System/exit 0)))))))
 
     ;; アラーターの初期化

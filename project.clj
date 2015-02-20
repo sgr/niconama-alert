@@ -8,7 +8,7 @@
                  [org.clojure/tools.logging "0.3.1"]
                  [seesaw "1.4.4"]
                  [slide "0.2.3"]
-                 [clj-http "1.0.1" :exclusions [cheshire crouton org.clojure/tools.reader]]
+                 [http-kit "2.1.18"]
                  [config-file "0.1.0"]
                  [desktop-alert "0.5.2"]
                  [input-parser "0.1.1"]

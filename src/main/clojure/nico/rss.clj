@@ -11,7 +11,6 @@
             [nico.pgm :as pgm]
             [nico.scrape :as scrape]
             [nico.string :as s])
-  (:use [slingshot.slingshot :only [try+]])
   (:import [java.io BufferedReader InputStream InputStreamReader]
            [java.util Locale]
            [java.util.concurrent TimeUnit]
@@ -117,18 +116,19 @@
          (filter #(and % (and (:id %) (:title %) (:open_time %) (:start_time %)))))))
 
 (defn- get-nico-rss [^String url extract-fn]
-  (try+
-   (with-open [^InputStream is (-> url (net/http-get {:as :stream}) :body)
-               ^InputStreamReader isr (s/clean-reader is)
-               ^BufferedReader br (BufferedReader. isr)]
-     (when-let [rss (xml/parse (InputSource. br))]
-       (extract-fn rss)))
-   (catch [:status 404] {:keys [status headers body trace-redirects]}
-     (log/warnf "failed fetching RSS (%d, %s, %s)" status headers trace-redirects))
-   (catch [:status 410] {:keys [status headers body]}
-     (log/warnf "failed fetching RSS (%d, %s)" status headers))
-   (catch Exception e
-     (log/warnf "failed fetching RSS (%s, %s)" url (.getMessage e)))))
+  (if-let [response (net/http-get url {:as :stream})]
+    (condp = (:status response)
+      200 (try
+            (with-open [^InputStream is (-> url (net/http-get {:as :stream}) :body)
+                        ^InputStreamReader isr (s/clean-reader is)
+                        ^BufferedReader br (BufferedReader. isr)]
+              (when-let [rss (xml/parse (InputSource. br))]
+                (extract-fn rss)))
+            (catch Exception e
+              (log/warnf "failed extracting RSS from response (%s, %s)" url (.getMessage e))))
+      404 (log/warnf "failed fetching RSS (NOT FOUND, %s)" (pr-str response))
+      (log/warnf "failed fetching RSS (%s)" (pr-str response)))
+    (log/warnf "timeouted fetching RSS (%s)" url)))
 
 (defn- get-programs-from-rss
   ([] ; ページなしは公式の番組取得。RSSフォーマットが異なる。
@@ -284,9 +284,9 @@
                            (do
                              (ca/>! wc {:cmd :fetch :page (inc page)})
                              (recur mode (if (zero? page) (System/currentTimeMillis) last-official-fetched))))
-                :error   (do ; リトライ指示
-                           (ca/>! wc {:cmd :fetch :page page})
-                           (recur mode (if (zero? page) (System/currentTimeMillis) last-official-fetched))))
+                :error   (do ; 停止
+                           (log/infof "stopped fetching RSS (%d) caused by error" page)
+                           (recur false last-official-fetched)))
               (do
                 (ca/>! oc-ui {:status :stopped-rss})
                 (recur mode last-official-fetched))))
