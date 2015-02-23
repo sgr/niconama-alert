@@ -52,14 +52,14 @@
       200 (try
             (read-fn (:body response))
             (catch Exception e
-              (log/warnf "failed reading image from response (%s, %s)" url (.getMessage e))))
+              (log/warnf "failed reading image from response %s, %s" url (.getMessage e))))
       404 (try
-            (log/warnf "The image is not found (%s)" (pr-str response))
+            (log/debugf "The image is not found %s" (pr-str response))
             (read-fn (:body response))
             (catch Exception e
-              (log/warnf "failed reading image from response (%s, %s)" url (.getMessage e))))
-      (log/warnf "failed fetching image (%s)" (pr-str response)))
-    (log/warnf "timeouted fetching image (%s)" url)))
+              (log/warnf "failed reading image from response %s, %s" url (.getMessage e))))
+      (log/warnf "failed fetching image %s" (pr-str response)))
+    (log/warnf "timeouted fetching image %s" url)))
 
 (defn- image-from-url
   "URLの指すイメージを返す。イメージが存在しない場合はfallback-imageを返し、それ以外のエラーの場合はnilを返す。"

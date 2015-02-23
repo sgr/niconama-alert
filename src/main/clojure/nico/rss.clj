@@ -125,10 +125,10 @@
               (when-let [rss (xml/parse (InputSource. br))]
                 (extract-fn rss)))
             (catch Exception e
-              (log/warnf "failed extracting RSS from response (%s, %s)" url (.getMessage e))))
-      404 (log/warnf "failed fetching RSS (NOT FOUND, %s)" (pr-str response))
-      (log/warnf "failed fetching RSS (%s)" (pr-str response)))
-    (log/warnf "timeouted fetching RSS (%s)" url)))
+              (log/warnf "failed extracting RSS from response %s, %s" url (.getMessage e))))
+      404 (log/debugf "The RSS is not found %s" (pr-str response))
+      (log/warnf "failed fetching RSS %s" (pr-str response)))
+    (log/warnf "timeouted fetching RSS %s" url)))
 
 (defn- get-programs-from-rss
   ([] ; ページなしは公式の番組取得。RSSフォーマットが異なる。
@@ -285,7 +285,8 @@
                              (ca/>! wc {:cmd :fetch :page (inc page)})
                              (recur mode (if (zero? page) (System/currentTimeMillis) last-official-fetched))))
                 :error   (do ; 停止
-                           (log/infof "stopped fetching RSS (%d) caused by error" page)
+                           (log/infof "STOP RSS (%d) caused by fetching error" page)
+                           (ca/>! oc-ui {:status :stopped-rss})
                            (recur false last-official-fetched)))
               (do
                 (ca/>! oc-ui {:status :stopped-rss})
