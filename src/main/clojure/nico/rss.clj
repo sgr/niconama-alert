@@ -286,7 +286,7 @@
                              (recur mode (if (zero? page) (System/currentTimeMillis) last-official-fetched))))
                 :error   (do ; 停止
                            (log/infof "STOP RSS (%d) caused by fetching error" page)
-                           (ca/>! oc-ui {:status :stopped-rss})
+                           (ca/>! oc-ui {:status :stopped-rss :reason "stopped by network error"})
                            (recur false last-official-fetched)))
               (do
                 (ca/>! oc-ui {:status :stopped-rss})

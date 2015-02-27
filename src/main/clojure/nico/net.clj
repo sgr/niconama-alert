@@ -4,7 +4,7 @@
 
 (let [TIMEOUT-MSEC 10000
       HTTP-OPTS {:user-agent "NiconamaAlert.clj"
-                 :timeout 2000
+                 :timeout TIMEOUT-MSEC
                  :follow-redirects true}]
   (defn- http-req
     "指定されたurlにリクエストを行い、レスポンスがmapで返る。タイムアウトの場合nilが返る。"

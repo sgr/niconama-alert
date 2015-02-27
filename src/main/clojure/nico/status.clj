@@ -189,8 +189,9 @@
                             (.setString rss-progress EMPTY-PROGRESS-STR)
                             (sc/config! rss-btn :icon "stop.png"))
               :stopped-rss (sc/invoke-later
-                            (sc/config! rss-status :text "stand-by")
+                            (sc/config! rss-status :text (or (:reason cmd) "stand-by"))
                             (sc/config! rss-progress :value 0 :max 100)
+                            (.setIndeterminate rss-progress false)
                             (.setString rss-progress EMPTY-PROGRESS-STR)
                             (sc/config! rss-btn :icon "start.png"))
               :enabled-api  (sc/invoke-later (sc/config! api-btn :enabled? true))
