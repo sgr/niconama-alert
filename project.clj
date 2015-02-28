@@ -6,7 +6,7 @@
                  [org.clojure/java.jdbc "0.3.6"]
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [org.clojure/tools.logging "0.3.1"]
-                 [seesaw "1.4.4"]
+                 [seesaw "1.4.5"]
                  [slide "0.2.3"]
                  [http-kit "2.1.18"]
                  [config-file "0.1.0"]
