@@ -1,7 +1,8 @@
 safe: true
 lsi: false
 markdown: kramdown
-pygments: true
+highlighter: true
+exclude: [vendor]
 baseurl: /niconama-alert
 gems:
 - jekyll-mentions
