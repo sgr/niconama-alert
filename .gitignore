@@ -2,3 +2,5 @@
 Thumbs.db
 *~
 _site
+.bundle
+vendor
