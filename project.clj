@@ -60,6 +60,6 @@
   ;; <https://bugs.openjdk.java.net/browse/JDK-8029147>
   :java-cmd ~(let [sys (.toLowerCase (System/getProperty "os.name"))]
                (condp re-find sys
-                 #"mac" "/System/Library/Java/JavaVirtualMachines/1.6.0.jdk/Contents/Home/bin/java"
+                 #"mac" "/Library/Java/JavaVirtualMachines/1.6.0.jdk/Contents/Home/bin/java"
                  (or (System/getenv "JAVA_CMD") "java")))
   :main nico.core)
