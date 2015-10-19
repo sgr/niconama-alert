@@ -1,21 +1,25 @@
-(defproject nicoalert "1.7.4"
+(defproject nicoalert "1.7.5"
   :description "NiconamaAlert.clj"
-  :dependencies [[org.clojure/clojure "1.6.0"]
+  :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [org.clojure/data.zip "0.1.1"]
-                 [org.clojure/java.jdbc "0.3.6"]
+                 [org.clojure/java.jdbc "0.4.2"]
                  [org.clojure/math.numeric-tower "0.0.4"]
                  [org.clojure/tools.logging "0.3.1"]
                  [seesaw "1.4.5"]
                  [slide "0.2.3"]
+<<<<<<< Updated upstream
                  [http-kit "2.1.18"]
+=======
+                 [clj-http "1.1.2" :exclusions [cheshire crouton org.clojure/tools.reader]]
+>>>>>>> Stashed changes
                  [config-file "0.1.0"]
                  [desktop-alert "0.5.2"]
                  [input-parser "0.1.1"]
-                 [enlive "1.1.5"]
-                 [org.xerial/sqlite-jdbc "3.8.7"]
-                 [org.apache.commons/commons-lang3 "3.3.2"]
-                 [net.sourceforge.htmlcleaner/htmlcleaner "2.10"]]
+                 [enlive "1.1.6"]
+                 [org.xerial/sqlite-jdbc "3.8.11.2"]
+                 [org.apache.commons/commons-lang3 "3.4"]
+                 [net.sourceforge.htmlcleaner/htmlcleaner "2.15"]]
   :exclusions [org.apache.ant/ant]
   :profiles {:dev     {:resource-paths ["resources" "test-data"]}
              :debug   {:debug true
