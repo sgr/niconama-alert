@@ -9,6 +9,7 @@
             [nico.string :as s])
   (:import [java.io InputStream StringReader]
            [java.net URI]
+           [java.text SimpleDateFormat]
            [java.util Calendar GregorianCalendar Locale TimeZone]
            [java.util.concurrent TimeUnit]
            [org.htmlcleaner CompactXmlSerializer HtmlCleaner TagNode]))
@@ -21,7 +22,7 @@
 (let [cleaner (let [c (HtmlCleaner.)]
                   (doto (.getProperties c)
                     (.setOmitComments true)
-                    (.setPruneTags "script, style"))
+                    (.setPruneTags "style"))
                   c)
       serializer (CompactXmlSerializer. (.getProperties cleaner))
       CS "utf-8"]
@@ -37,68 +38,51 @@
       (-> (URI. s-uri) .getPath (cs/split #"/") last)
       (catch Exception e (log/warnf "Malformed URI string %s" s-uri)))))
 
-(defn- open-start-time [[^String sday ^String sopen ^String sstart]]
-  (let [[yyyy MM dd] (map #(Integer/parseInt %) (rest (re-find #"(\d{4})/(\d{2})/(\d{2})" sday)))
-        [ohh omm] (if sopen (map #(Integer/parseInt %) (.split sopen ":")) [nil nil])
-        [shh smm] (if sstart (map #(Integer/parseInt %) (.split sstart ":")) [nil nil])
-        ;; 終了後の番組ページを開く場合は開演時刻しか表示されないため、sopenが開演時刻
-        [oc sc] (map #(doto % (.setTimeZone (TimeZone/getTimeZone "Asia/Tokyo")))
-                     (if sstart
-                       [(GregorianCalendar. yyyy (dec MM) dd ohh omm)
-                        (GregorianCalendar. yyyy (dec MM) dd shh smm)]
-                       [(GregorianCalendar. yyyy (dec MM) dd ohh omm)
-                        (GregorianCalendar. yyyy (dec MM) dd ohh omm)]))]
-    (when (and (= 23 ohh) (= 0 shh)) ;; 開場23:5x、開演00:0xの場合
+(defn- extract-start-time [open_time ^String start]
+  (let [sc (doto (GregorianCalendar.) (.setTimeInMillis open_time))
+        [shh smm] (if start (map #(Integer/parseInt %) (.split start ":")) [nil nil])]
+    (when (and (= 23 (.get sc Calendar/HOUR_OF_DAY)) (= 0 shh)) ;; 開場23:5x、開演00:0xの場合
       (.add sc Calendar/DAY_OF_MONTH 1))
-    [(-> oc .getTime .getTime) (-> sc .getTime .getTime)]))
+    (doto sc
+      (.set Calendar/HOUR_OF_DAY shh)
+      (.set Calendar/MINUTE smm))
+    (.getTimeInMillis sc)))
 
 (defn extract-pgm [xml]
   (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts xml))]
     (log/warnf "frequently access error: %s" (pr-str node))
-    (let [link (-> xml (html/select [(html/attr= :property "og:url")]) first :attrs :content)
+    (let [link (-> xml (html/select [(html/attr= :property "og:url")]) first :attrs :content s/nstr)
           id (-> link last-path-uri-str s/nstr)
-          base (-> xml (html/select [:base]) first :attrs :href)
-          infobox (-> xml (html/select [:div.infobox]) first)
-          title (-> infobox
-                    (html/select [:h2 (html/attr= :itemprop "name") :> html/text-node])
-                    first
-                    (s/unescape :html)
-                    s/nstr)
+          title (-> xml (html/select [(html/attr= :property "og:title")]) first :attrs :content s/nstr)
           description (-> xml (html/select [(html/attr= :property "og:description")]) first :attrs :content s/del-dup s/nstr)
-          [open_time start_time] (-> infobox
-                                     (html/select [:div.kaijo :> :strong :> html/text-node])
-                                     open-start-time)
-          thumbnail (-> xml (html/select [(html/attr= :itemprop "thumbnail")]) first :attrs :content s/nstr)
-          member_only (if (first (html/select infobox [:span.onlym])) 1 0)
-          type (cond
-                (not (empty? (html/select infobox [:div.com]))) :community
-                (not (empty? (html/select infobox [:div.chan]))) :channel
-                :else :official)
-          category (->> (html/select xml [:nobr :> :a.nicopedia :> html/text-node])
+          thumbnail (-> xml (html/select [(html/attr= :property "og:image")]) first :attrs :content s/nstr)
+          type (let [last-script (-> xml (html/select [:div.container :script]) last :content first)
+                     type-str (->> last-script (re-find #"(?i)provider_type: \"(.*)\"") second)]
+                 (-> type-str cs/lower-case keyword))
+          open_time (when-let [s (-> xml (html/select [(html/attr= :itemprop "datePublished")]) first :attrs :content)]
+                      (.. (SimpleDateFormat. "yyyy-MM-dd'T'HH:mmZ") (parse s) getTime))
+          start_time (when-let [start (if (contains? #{:channel :official} type)
+                                        (-> xml (html/select [:div.kaijo :> :strong :> html/text-node]) last)
+                                        (-> xml (html/select [:div.time :> :span :> html/text-node]) last))]
+                       (extract-start-time open_time start))
+          member_only (if (empty? (html/select xml [:span.community-only])) 0 1)
+          category (->> (html/select xml [:div#livetags :nobr :a.nicopedia html/text-node])
                         (cs/join ",")
                         s/nstr)
-          comm (-> infobox
-                   (html/select (condp = type
-                                  :community [:div.com]
-                                  :channel [:div.chan]
-                                  [:div.official])) ; こんなクラスはないから何も取れない
-                   first)
-          comm_id (when-let [selector (condp = type
-                                        :community [:a.community]
-                                        :channel [:div.shosai :> :a])]
-                    (-> xml (html/select selector) first :attrs :href last-path-uri-str s/nstr))
-          comm_name (when-let [selector (condp = type
-                                          :community [:div.shosai (html/attr= :itemprop "name")
-                                                      :> html/text-node]
-                                          :channel [:div.shosai :> :a :> html/text-node])]
-                      (-> comm (html/select selector) first (s/unescape :html) s/nstr))
-          owner_name (when-let [selector (condp = type
-                                           :community [:strong.nicopedia_nushi
-                                                       (html/attr= :itemprop "member")
-                                                       :> html/text-node]
-                                           :channel [:div.shosai (html/attr= :itemprop "name")
-                                                     :> html/text-node])]
-                       (-> comm (html/select selector) first (s/unescape :html) s/nstr))
+          comm_id (condp = type
+                    :community (-> xml (html/select [:div.com :div.shosai :a]) second :attrs :href last-path-uri-str s/nstr)
+                    :channel (-> xml (html/select [:div.chan :div.shosai :a]) first :attrs :href last-path-uri-str s/nstr)
+                    :official nil)
+          comm_name (condp = type
+                      :community (-> xml (html/select [:div.com (html/attr= :itemprop "name" ) :> html/text-node]) first (s/unescape :html) s/nstr)
+                      :channel (-> xml (html/select [:div.chan :div.shosai :a :> html/text-node]) first (s/unescape :html) s/nstr)
+                      :official nil)
+          owner_name (condp = type
+                       :community (-> xml (html/select [:div.com :strong.nicopedia_nushi (html/attr= :itemprop "member") :> html/text-node])
+                                      first (s/unescape :html) s/nstr)
+                       :channel (-> xml (html/select [:div.chan :div.shosai (html/attr= :itemprop "name") :> html/text-node])
+                                    first (s/unescape :html) s/nstr)
+                       :official nil)
           now (System/currentTimeMillis)]
       (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
         (pgm/->Pgm id title open_time start_time description category link thumbnail owner_name
@@ -115,7 +99,7 @@
                           rdr (-> is clean serialize (StringReader.))]
                 (extract-pgm (html/xml-resource rdr)))
               (catch Exception e
-                (log/warnf "failed fetching pgm info: %s, %s" pid (.getMessage e)))))]
+                (log/warnf e "failed fetching pgm info: %s, %s" pid (.getMessage e)))))]
     (loop [cnt 0]
       (if (< cnt LIMIT-RETRY)
         (if-let [pgm (fetch-pgm-aux pid cid)]
