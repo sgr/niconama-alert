@@ -12,9 +12,9 @@ niconama-alert.clj は、[ニコニコ生放送](http://live.nicovideo.jp/) か�
 ダウンロード
 ============================
 
-* [1.7.4 Windows 用インストーラー](https://drive.google.com/uc?export=download&id=0BwIJLE1B4O3mQ0xWT041dEM0ZjA) (Windows 7
+* [1.7.5 Windows 用インストーラー](https://drive.google.com/uc?export=download&id=0BwIJLE1B4O3mT2hFOG5CYUNUQVU) (Windows 7
 で動作確認)
-* [1.7.4 Mac OS X 用 DMG ファイル](https://drive.google.com/uc?export=download&id=0BwIJLE1B4O3mRjdWNHprckw5Zlk) (Mac OS X 
+* [1.7.5 Mac OS X 用 DMG ファイル](https://drive.google.com/uc?export=download&id=0BwIJLE1B4O3maWdLSUhXOTlOMUE) (Mac OS X 
 10.10で動作確認)
 
 対応OS用のバイナリがない場合は、[ソースコードからのビルド]({{ site.baseurl }}/install.html#howtobuild)をご覧ください。
