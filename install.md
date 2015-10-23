@@ -8,13 +8,17 @@ title: niconama-alert.clj download
 
 Mac OS X 10.11 でディスクイメージからApplicationsへコピーした後、実行しようとすると
 
-![“NicoNamaAlert”は壊れているため開けません。“ゴミ箱”に入れる必要があります。]({{ site.baseurl }}/images/warn_gk.png)
+![“NicoNamaAlert”は壊れているため開けません。“ゴミ箱”に入れる必要があります。]({{ site.baseurl }}/images/warn_gk1_el_capitan.png)
 
 というダイアログが表示される場合があります。
 このような場合は、Apple メニュー >「システム環境設定」>「セキュリティとプライバシー」>「一般」タブの
 「ダウンロードしたアプリケーションの実行許可」で「すべてのアプリケーションを許可」を
-__一時的__ に設定することで起動できるようになります。これは初回起動時だけ必要です。
+__一時的__ に設定することで起動できるようになります。
 
+![“NicoNamaAlert”はインターネットからダウンロードされたアプリケーションです。開いてもよろしいですか？]({{ site.baseurl }}/images/warn_gk2_el_capitan.png)
+
+
+この操作は初回起動時のみ必要です。
 また、初回起動時に
  
 ![“NicoNamaAlert”を開くには、以前の Java SE 6 ランタイムをインストールする必要があります。]({{ site.baseurl }}/images/warn_yosemite.png)
