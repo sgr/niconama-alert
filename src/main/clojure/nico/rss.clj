@@ -152,8 +152,10 @@
           ;; このcmd-db、vectorだとIOCマクロが作る状態配列(AtomicReferenceArray)にArrayChunkとして、
           ;; その下にcmd-dbのオブジェクトが参照されたまま残ってしまい、奇妙な形のメモリリークとなる。
           ;; なぜvectorだとダメなのかまでは追求しきれていない。
-          :cmd-db (list {:cmd :set-total :total (+ npgms real-total)}
-                        {:cmd :add-pgms :pgms pgms :force-search false})
+          :cmd-db (if (pos? real-total)
+                    (list {:cmd :set-total :total (+ npgms real-total)}
+                          {:cmd :add-pgms :pgms pgms :force-search false})
+                    {:cmd :add-pgms :pgms pgms :force-search false})
           :cmd-ui {:status :fetching-rss :page 0 :acc npgms :total nil}}
          {:page 0 :cats nil :result :error :npgms npgms
           :cmd-db {:cmd :set-total :total real-total}
