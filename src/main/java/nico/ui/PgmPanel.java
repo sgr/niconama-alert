@@ -58,9 +58,9 @@ public class PgmPanel extends JPanel {
 
     public static PgmPanel create(String id, String title, String link, String description,
 				  String owner_name, String comm_name, String comm_id, int type,
-				  int member_only, long open_time, Image thumbnail) {
+				  int member_only, long start_time, Image thumbnail) {
 	PgmPanel p = new PgmPanel();
-	p.setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, open_time, thumbnail);
+	p.setPgmInfo(id, title, link, description, owner_name, comm_name, comm_id, type, member_only, start_time, thumbnail);
 	return p;
     }
 
@@ -97,7 +97,7 @@ public class PgmPanel extends JPanel {
     private PgmPanelLayout _layout = null;
 
     private String _id = null;
-    private long _open_time = 0;
+    private long _start_time = 0;
     private Image _thumbnail = null;
     private ImageIcon _thumbnailIcon = null;
     private String _title = null;
@@ -151,7 +151,7 @@ public class PgmPanel extends JPanel {
 
     public void setPgmInfo(String id, String title, String link, String description,
 			   String owner_name, String comm_name, String comm_id, int type,
-			   int member_only, long open_time, Image thumbnail) {
+			   int member_only, long start_time, Image thumbnail) {
 	_repaintImmediately = false;
 	setId(id);
 	if (description.length() > 0) {
@@ -159,7 +159,7 @@ public class PgmPanel extends JPanel {
 	} else {
 	    setDescription(" ");
 	}
-	setOpenTime(open_time);
+	setStartTime(start_time);
 	setThumbnail(thumbnail);
 	setType(type);
 	setOnly(member_only == 0 ? false : true);
@@ -276,18 +276,18 @@ public class PgmPanel extends JPanel {
 	return _commName;
     }
 
-    public void setOpenTime(long open_time) {
-	_open_time = open_time;
-	_timeLabel.setText(relativeTimeString(_open_time));
-	_timeLabel.setToolTipText(odf.format(_open_time));
+    public void setStartTime(long start_time) {
+	_start_time = start_time;
+	_timeLabel.setText(relativeTimeString(_start_time));
+	_timeLabel.setToolTipText(odf.format(_start_time));
 	_layout.needLayout();
 	if (_repaintImmediately) {
 	    invalidate();
 	}
     }
 
-    public long getOpenTime() {
-	return _open_time;
+    public long getStartTime() {
+	return _start_time;
     }
 
     public void setThumbnail(Image thumbnail) {
@@ -396,7 +396,7 @@ public class PgmPanel extends JPanel {
     }
 
     public void paint(Graphics g) {
-	_timeLabel.setText(relativeTimeString(_open_time));
+	_timeLabel.setText(relativeTimeString(_start_time));
 	super.paint(g);
     }
 

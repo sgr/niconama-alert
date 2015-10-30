@@ -46,7 +46,7 @@
             (pgm-panel [pgm & {:keys [width height border]}]
               (let [^PgmPanel p (PgmPanel/create (:id pgm) (:title pgm) (:link pgm) (trim (:description pgm) 64)
                                                  (:owner_name pgm) (:comm_name pgm) (:comm_id pgm) (:type pgm)
-                                                 (:member_only pgm) (:open_time pgm) (:thumbnail_image pgm))]
+                                                 (:member_only pgm) (:start_time pgm) (:thumbnail_image pgm))]
                 (.setLinkHandlers p link-handlers)
                 (when width (.setWidth p width))
                 (when height (.setHeight p height))
@@ -58,8 +58,8 @@
                 (.setTitle p (:title pgm)))
               (when (< (-> p .getDescription count) (-> pgm :description (trim 64) count))
                 (.setDescription p (-> pgm :description (trim 64))))
-              (when (< (.getOpenTime p) (:open_time pgm))
-                (.setOpenTime p (:open_time pgm)))
+              (when (< (.getStartTime p) (:start_time pgm))
+                (.setStartTime p (:start_time pgm)))
               (when (and (nil? (.getThumbnail p)) (:thumbnail_image pgm))
                 (.setThumbnail p (:thumbnail_image pgm)))
               (doto p
