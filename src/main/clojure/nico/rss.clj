@@ -115,20 +115,28 @@
          (map #(pgm-fn % now))
          (filter #(and % (and (:id %) (:title %) (:open_time %) (:start_time %)))))))
 
-(defn- get-nico-rss [^String url extract-fn]
-  (if-let [response (net/http-get url {:as :stream})]
-    (condp = (:status response)
-      200 (try
-            (with-open [^InputStream is (-> url (net/http-get {:as :stream}) :body)
-                        ^InputStreamReader isr (s/clean-reader is)
-                        ^BufferedReader br (BufferedReader. isr)]
-              (when-let [rss (xml/parse (InputSource. br))]
-                (extract-fn rss)))
-            (catch Exception e
-              (log/warnf "failed extracting RSS from response %s, %s" url (.getMessage e))))
-      404 (log/debugf "The RSS is not found %s" (pr-str response))
-      (log/warnf "failed fetching RSS %s" (pr-str response)))
-    (log/warnf "timeouted fetching RSS %s" url)))
+(let [INTERVAL-MSEC 1000
+      last-fetched (atom 0)
+      o (Object.)]
+  (defn- get-nico-rss [^String url extract-fn]
+    (locking o
+      (let [rest-interval (- (+ INTERVAL-MSEC @last-fetched) (System/currentTimeMillis))]
+      (when (pos? rest-interval) (Thread/sleep rest-interval))
+      (let [response (net/http-get url {:as :stream})]
+        (reset! last-fetched (System/currentTimeMillis))
+        (if response
+          (condp = (:status response)
+            200 (try
+                  (with-open [^InputStream is (-> url (net/http-get {:as :stream}) :body)
+                              ^InputStreamReader isr (s/clean-reader is)
+                              ^BufferedReader br (BufferedReader. isr)]
+                    (when-let [rss (xml/parse (InputSource. br))]
+                      (extract-fn rss)))
+                  (catch Exception e
+                    (log/warnf "failed extracting RSS from response %s, %s" url (.getMessage e))))
+            404 (log/debugf "The RSS is not found %s" (pr-str response))
+            (log/warnf "failed fetching RSS %s" (pr-str response)))
+          (log/warnf "timeouted fetching RSS %s" url)))))))
 
 (defn- get-programs-from-rss
   ([] ; ページなしは公式の番組取得。RSSフォーマットが異なる。
