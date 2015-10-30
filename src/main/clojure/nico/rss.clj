@@ -223,20 +223,16 @@
           {:cmd :wait, :sec [残り待機回数], :total [全体待機回数]})"
   [oc-ui oc-db]
   (let [WAITING-INTERVAL-SEC 180 ; RSS取得サイクル一巡したらこの秒数だけ間隔あけて再開する
-        FETCH-INTERVAL-MSEC 100 ; RSS取得リクエストは最低このミリ秒数だけあけて行う
         FETCH-OFFICIAL-INTERVAL-MSEC 600000 ; 公式放送のRSSはそれほど頻繁にチェックする必要はないので間隔をあける
         cc (ca/chan)  ; control channel
         wc (ca/chan)] ; worker channel
 
-    (ca/go-loop [curr-cats nil ; ユーザー生放送カテゴリーごとの取得状況
-                 last-fetched 0]
+    (ca/go-loop [curr-cats nil] ; ユーザー生放送カテゴリーごとの取得状況
       (if-let [c (ca/<! wc)]
         (condp = (:cmd c)
           :fetch (let [page (:page c)
-                       rest-interval (- (+ FETCH-INTERVAL-MSEC last-fetched) (System/currentTimeMillis))
                        [report cats]
                        (try
-                         (when (pos? rest-interval) (Thread/sleep rest-interval))
                          (let [{:keys [page result cats npgms cmd-db cmd-ui]}
                                (condp = page
                                  0 (fetch)
@@ -254,15 +250,15 @@
                            (log/warnf "failed fetching RSS(%d) %s" page (.getMessage e))
                            [{:cmd :fetching-report :result :error :page page :npgms 0} nil]))]
                    (ca/>! cc report)
-                   (recur (or cats curr-cats) (System/currentTimeMillis)))
+                   (recur (or cats curr-cats)))
           :wait  (let [{:keys [sec total]} c]
                    (ca/>! oc-ui {:status :waiting-rss :sec sec :total total})
                    (Thread/sleep 1000)
                    (ca/>! cc {:cmd :waiting-report :sec sec :total total :result true})
-                   (recur nil 0))
+                   (recur nil))
           (do
             (log/warnf "Caught an unknown command: (%s)" (pr-str c))
-            (recur curr-cats last-fetched)))
+            (recur curr-cats)))
         (log/infof "Closed RSS worker channel")))
 
     (ca/go-loop [mode false
