@@ -214,7 +214,7 @@
    :wait  1秒待機する。したがって回数＝秒数である。
           {:cmd :wait, :sec [残り待機回数], :total [全体待機回数]})"
   [oc-ui oc-db]
-  (let [WAITING-INTERVAL-SEC 90 ; RSS取得サイクル一巡したらこの秒数だけ間隔あけて再開する
+  (let [WAITING-INTERVAL-SEC 180 ; RSS取得サイクル一巡したらこの秒数だけ間隔あけて再開する
         FETCH-INTERVAL-MSEC 100 ; RSS取得リクエストは最低このミリ秒数だけあけて行う
         FETCH-OFFICIAL-INTERVAL-MSEC 600000 ; 公式放送のRSSはそれほど頻繁にチェックする必要はないので間隔をあける
         cc (ca/chan)  ; control channel
