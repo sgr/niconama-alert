@@ -40,7 +40,8 @@
 
 (defn- extract-start-time [open_time ^String start]
   (let [sc (doto (GregorianCalendar.) (.setTimeInMillis open_time))
-        [shh smm] (if start (map #(Integer/parseInt %) (.split start ":")) [nil nil])]
+        [shh smm] (if start (map #(Integer/parseInt %) (.split start ":")) [nil nil])
+        shh (if (>= shh 24) (- shh 24) shh)]
     (when (and (= 23 (.get sc Calendar/HOUR_OF_DAY)) (= 0 shh)) ;; 開場23:5x、開演00:0xの場合
       (.add sc Calendar/DAY_OF_MONTH 1))
     (doto sc
