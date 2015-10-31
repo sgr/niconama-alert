@@ -15,10 +15,12 @@
 (defn del-dup
   "連続した空白や改行を一つにまとめる"
   [^String str]
-  (-> str
-      (s/replace #"(\s)+" " ")
-      (s/replace #"(\　)+" "　")
-      (s/replace #"(\n)+" "\n")))
+  (if str
+    (-> str
+        (s/replace #"(\s)+" " ")
+        (s/replace #"(\　)+" "　")
+        (s/replace #"(\n)+" "\n"))
+    ""))
 
 (defn unescape
   [^String str type]
