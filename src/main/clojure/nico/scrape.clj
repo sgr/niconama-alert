@@ -9,9 +9,9 @@
             [nico.string :as s])
   (:import [java.io InputStream StringReader]
            [java.net URI]
-           [java.text SimpleDateFormat]
            [java.util Calendar GregorianCalendar Locale TimeZone]
            [java.util.concurrent TimeUnit]
+           [org.apache.commons.lang3.time FastDateFormat]
            [org.htmlcleaner CompactXmlSerializer HtmlCleaner TagNode]))
 
 (def ^{:private true} BASE-URL "http://live.nicovideo.jp/watch/")
@@ -49,47 +49,48 @@
       (.set Calendar/MINUTE smm))
     (.getTimeInMillis sc)))
 
-(defn extract-pgm [xml]
-  (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts xml))]
-    (log/warnf "frequently access error: %s" (pr-str node))
-    (let [link (-> xml (html/select [(html/attr= :property "og:url")]) first :attrs :content s/nstr)
-          id (-> link last-path-uri-str s/nstr)
-          title (-> xml (html/select [(html/attr= :property "og:title")]) first :attrs :content s/nstr)
-          description (-> xml (html/select [(html/attr= :property "og:description")]) first :attrs :content s/del-dup s/nstr)
-          thumbnail (-> xml (html/select [(html/attr= :property "og:image")]) first :attrs :content s/nstr)
-          type (let [last-script (-> xml (html/select [:div.container :script]) last :content first)
-                     type-str (->> last-script (re-find #"(?i)provider_type: \"(.*)\"") second)]
-                 (-> type-str cs/lower-case keyword))
-          open_time (when-let [s (-> xml (html/select [(html/attr= :itemprop "datePublished")]) first :attrs :content)]
-                      (.. (SimpleDateFormat. "yyyy-MM-dd'T'HH:mmZ") (parse s) getTime))
-          start_time (when-let [start (if (contains? #{:channel :official} type)
-                                        (-> xml (html/select [:div.kaijo :> :strong :> html/text-node]) last)
-                                        (-> xml (html/select [:div.time :> :span :> html/text-node]) last))]
-                       (extract-start-time open_time start))
-          member_only (if (empty? (html/select xml [:span.community-only])) 0 1)
-          category (->> (html/select xml [:div#livetags :nobr :a.nicopedia html/text-node])
-                        (cs/join ",")
-                        s/nstr)
-          comm_id (condp = type
-                    :community (-> xml (html/select [:div.com :div.shosai :a]) second :attrs :href last-path-uri-str s/nstr)
-                    :channel (-> xml (html/select [:div.chan :div.shosai :a]) first :attrs :href last-path-uri-str s/nstr)
-                    :official nil)
-          comm_name (condp = type
-                      :community (-> xml (html/select [:div.com (html/attr= :itemprop "name" ) :> html/text-node]) first (s/unescape :html) s/nstr)
-                      :channel (-> xml (html/select [:div.chan :div.shosai :a :> html/text-node]) first (s/unescape :html) s/nstr)
+(let [fmt (FastDateFormat/getInstance "yyyy-MM-dd'T'HH:mmZ")]
+  (defn extract-pgm [xml]
+    (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts xml))]
+      (log/warnf "frequently access error: %s" (pr-str node))
+      (let [link (-> xml (html/select [(html/attr= :property "og:url")]) first :attrs :content s/nstr)
+            id (-> link last-path-uri-str s/nstr)
+            title (-> xml (html/select [(html/attr= :property "og:title")]) first :attrs :content s/nstr)
+            description (-> xml (html/select [(html/attr= :property "og:description")]) first :attrs :content s/del-dup s/nstr)
+            thumbnail (-> xml (html/select [(html/attr= :property "og:image")]) first :attrs :content s/nstr)
+            type (let [last-script (-> xml (html/select [:div.container :script]) last :content first)
+                       type-str (->> last-script (re-find #"(?i)provider_type: \"(.*)\"") second)]
+                   (-> type-str cs/lower-case keyword))
+            open_time (when-let [s (-> xml (html/select [(html/attr= :itemprop "datePublished")]) first :attrs :content)]
+                        (.. fmt (parse s) getTime))
+            start_time (when-let [start (if (contains? #{:channel :official} type)
+                                          (-> xml (html/select [:div.kaijo :> :strong :> html/text-node]) last)
+                                          (-> xml (html/select [:div.time :> :span :> html/text-node]) last))]
+                         (extract-start-time open_time start))
+            member_only (if (empty? (html/select xml [:span.community-only])) 0 1)
+            category (->> (html/select xml [:div#livetags :nobr :a.nicopedia html/text-node])
+                          (cs/join ",")
+                          s/nstr)
+            comm_id (condp = type
+                      :community (-> xml (html/select [:div.com :div.shosai :a]) second :attrs :href last-path-uri-str s/nstr)
+                      :channel (-> xml (html/select [:div.chan :div.shosai :a]) first :attrs :href last-path-uri-str s/nstr)
                       :official nil)
-          owner_name (condp = type
-                       :community (-> xml (html/select [:div.com :strong.nicopedia_nushi (html/attr= :itemprop "member") :> html/text-node])
+            comm_name (condp = type
+                        :community (-> xml (html/select [:div.com (html/attr= :itemprop "name" ) :> html/text-node]) first (s/unescape :html) s/nstr)
+                        :channel (-> xml (html/select [:div.chan :div.shosai :a :> html/text-node]) first (s/unescape :html) s/nstr)
+                        :official nil)
+            owner_name (condp = type
+                         :community (-> xml (html/select [:div.com :strong.nicopedia_nushi (html/attr= :itemprop "member") :> html/text-node])
+                                        first (s/unescape :html) s/nstr)
+                         :channel (-> xml (html/select [:div.chan :div.shosai (html/attr= :itemprop "name") :> html/text-node])
                                       first (s/unescape :html) s/nstr)
-                       :channel (-> xml (html/select [:div.chan :div.shosai (html/attr= :itemprop "name") :> html/text-node])
-                                    first (s/unescape :html) s/nstr)
-                       :official nil)
-          now (System/currentTimeMillis)]
-      (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
-        (pgm/->Pgm id title open_time start_time description category link thumbnail owner_name
-                   member_only ({:community 0 :channel 1 :official 2} type) comm_name comm_id now now)
-        (log/warnf "couldn't create pgm from scraped data: [%s %s %s %s %s, %s %s]"
-                   id title description link thumbnail open_time start_time)))))
+                         :official nil)
+            now (System/currentTimeMillis)]
+        (if (and (not-every? cs/blank? [id title link thumbnail]) description open_time start_time)
+          (pgm/->Pgm id title open_time start_time description category link thumbnail owner_name
+                     member_only ({:community 0 :channel 1 :official 2} type) comm_name comm_id now now)
+          (log/warnf "couldn't create pgm from scraped data: [%s %s %s %s %s, %s %s]"
+                     id title description link thumbnail open_time start_time))))))
 
 (defn- fetch-pgm
   "ニコ生の番組ページから番組情報を取得する。"
