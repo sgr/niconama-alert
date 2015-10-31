@@ -122,12 +122,14 @@
     (locking o
       (let [rest-interval (- (+ INTERVAL-MSEC @last-fetched) (System/currentTimeMillis))]
       (when (pos? rest-interval) (Thread/sleep rest-interval))
-      (let [response (net/http-get url {:as :stream})]
+      (let [response @(net/http-get url {:as :stream}) ;; calling synchronously
+            {:keys [status error]} response]
         (reset! last-fetched (System/currentTimeMillis))
-        (if response
-          (condp = (:status response)
+        (if error
+          (log/warnf "failed fetching RSS (%s) with an error (%s)" url error)
+          (condp = status
             200 (try
-                  (with-open [^InputStream is (-> url (net/http-get {:as :stream}) :body)
+                  (with-open [^InputStream is (:body response)
                               ^InputStreamReader isr (s/clean-reader is)
                               ^BufferedReader br (BufferedReader. isr)]
                     (when-let [rss (xml/parse (InputSource. br))]
@@ -135,8 +137,7 @@
                   (catch Exception e
                     (log/warnf "failed extracting RSS from response %s, %s" url (.getMessage e))))
             404 (log/debugf "The RSS is not found %s" (pr-str response))
-            (log/warnf "failed fetching RSS %s" (pr-str response)))
-          (log/warnf "timeouted fetching RSS %s" url)))))))
+            (log/warnf "failed fetching RSS %s" (pr-str response)))))))))
 
 (defn- get-programs-from-rss
   ([] ; ページなしは公式の番組取得。RSSフォーマットが異なる。

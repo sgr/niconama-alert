@@ -6,16 +6,11 @@
       HTTP-OPTS {:user-agent "NiconamaAlert.clj"
                  :timeout TIMEOUT-MSEC
                  :follow-redirects true}]
-  (defn- http-req
-    "指定されたurlにリクエストを行い、レスポンスがmapで返る。タイムアウトの場合nilが返る。"
-    [method url opts]
-    (let [ftr (method url (merge HTTP-OPTS (first opts)))]
-      (deref ftr TIMEOUT-MSEC nil)))
   (defn http-get
-    "指定されたurlにGETリクエストを行い、レスポンスがmapで返る。タイムアウトの場合nilが返る。"
+    "指定されたurlにGETリクエストを行い、レスポンスがFutureで返る。"
     [url & opts]
-    (http-req http/get url opts))
+    (http/get url (merge HTTP-OPTS (first opts))))
   (defn http-post
-    "指定されたurlにPOSTリクエストを行い、レスポンスがmapで返る。タイムアウトの場合nilが返る。"
+    "指定されたurlにPOSTリクエストを行い、レスポンスがFutureで返る。"
     [url & opts]
-    (http-req http/post url opts)))
+    (http/post url (merge HTTP-OPTS (first opts)))))

@@ -17,13 +17,13 @@
   (letfn [(get-ticket [email passwd] ;; 認証APIでチケットを得る
             (with-open [is (-> "https://secure.nicovideo.jp/secure/login?site=nicolive_antenna"
                                (net/http-post {:form-params {:mail email :password passwd} :as :stream})
-                               :body)]
+                               deref :body)]
               (let [zipped (-> is xml/parse zip/xml-zip)]
                 (dzx/xml1-> zipped :ticket dzx/text))))
           (get-alert-status1 [ticket]
             (with-open [is (-> (format "http://live.nicovideo.jp/api/getalertstatus?ticket=%s" ticket)
                                (net/http-get {:as :stream})
-                               :body)]
+                               deref :body)]
               (let [zipped (-> is xml/parse zip/xml-zip)]
                 {:user_id (dzx/xml1-> zipped :user_id dzx/text)
                  :user_name (dzx/xml1-> zipped :user_name dzx/text)
@@ -39,7 +39,7 @@
 (defn- get-stream-info [pid]
   (with-open [is (-> (format "http://live.nicovideo.jp/api/getstreaminfo/lv%s" pid)
                      (net/http-get {:as :stream})
-                     :body)]
+                     deref :body)]
     (-> is xml/parse zip/xml-zip)))
 
 (defn- create-pgm-from-getstreaminfo

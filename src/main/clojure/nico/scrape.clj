@@ -96,7 +96,7 @@
   [pid cid]
   (letfn [(fetch-pgm-aux [pid cid]
             (try
-              (with-open [is (-> (str BASE-URL pid) (net/http-get {:as :stream}) :body)
+              (with-open [is (-> (str BASE-URL pid) (net/http-get {:as :stream}) deref :body)
                           rdr (-> is clean serialize (StringReader.))]
                 (extract-pgm (html/xml-resource rdr)))
               (catch Exception e
@@ -128,7 +128,7 @@
   "ニコ生の総番組数を取得する。"
   []
   (try
-    (with-open [is (-> COUNT-URL (net/http-get {:as :stream}) :body)
+    (with-open [is (-> COUNT-URL (net/http-get {:as :stream}) deref :body)
                 rdr (-> is clean serialize (StringReader.))]
       (when-let [cnt (-> (html/xml-resource rdr)
                          (html/select [:div.score_search :strong.count :> html/text-node])

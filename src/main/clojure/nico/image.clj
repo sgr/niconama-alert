@@ -47,19 +47,21 @@
 (defn- image-from-url-aux
   "URLの指すイメージを返す。イメージが存在しない場合はfallback-imageを返し、それ以外のエラーの場合はnilを返す。"
   [^String url ^Image fallback-image read-fn]
-  (if-let [response (net/http-get url {:as :byte-array})]
-    (condp = (:status response)
-      200 (try
-            (read-fn (:body response))
-            (catch Exception e
-              (log/warnf "failed reading image from response %s, %s" url (.getMessage e))))
-      404 (try
-            (log/debugf "The image is not found %s" (pr-str response))
-            (read-fn (:body response))
-            (catch Exception e
-              (log/warnf "failed reading image from response %s, %s" url (.getMessage e))))
-      (log/warnf "failed fetching image %s" (pr-str response)))
-    (log/warnf "timeouted fetching image %s" url)))
+  (let [response @(net/http-get url {:as :byte-array})
+        {:keys [status error body]} response]
+    (if error
+      (log/warnf "failed fetching image (%s) with an error (%s)" url error)
+      (condp = status
+        200 (try
+              (read-fn body)
+              (catch Exception e
+                (log/warnf "failed reading image from response %s, %s" url (.getMessage e))))
+        404 (try
+              (log/debugf "The image is not found %s" (pr-str response))
+              (read-fn body)
+              (catch Exception e
+                (log/warnf "failed reading image from response %s, %s" url (.getMessage e))))
+        (log/warnf "failed fetching image %s" (pr-str response))))))
 
 (defn- image-from-url
   "URLの指すイメージを返す。イメージが存在しない場合はfallback-imageを返し、それ以外のエラーの場合はnilを返す。"
