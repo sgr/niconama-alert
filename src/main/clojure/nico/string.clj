@@ -12,34 +12,6 @@
   [^String str]
   (if (nil? str) "" (String. str)))
 
-(defn non-printable-char? [c]
-  (let [i (int c)]
-    ;; 9 (Horizontal Tab), 10 (Line feed), 13 (Carriage return) は目こぼしする
-    (or (<= 0 i 8) (= 11 i) (= 12 i) (<= 14 i 31) (= 127 i))))
-
-(defn ^InputStreamReader clean-reader
-  "XMLパーサーが受理しない文字を削除するInputStreamReaderを返す"
-  [^InputStream is]
-  (proxy [InputStreamReader] [is "UTF-8"]
-    (read
-      ([]
-         (loop [c (proxy-super read)]
-           (if (non-printable-char? c)
-             (recur (proxy-super read))
-             c)))
-      ([cbuf offset len]
-         (let [tbuf (char-array len)
-               l (proxy-super read tbuf 0 len)]
-           (if (pos? l)
-             (let [buf (->> tbuf (take l) (filter #(not (non-printable-char? %))) (map char))
-                   nl (count buf)]
-               ;; (when (not= nl l)
-               ;;   (let [ccs (->> tbuf (take l) (filter non-printable-char?) (map #(Integer/toHexString (int %))))]
-               ;;     (log/debugf "DETECTED NON PRINTABLE CHAR(S) (%d, %d, %s)" l nl (pr-str ccs))))
-               (doall (map-indexed (fn [i c] (aset-char cbuf (+ offset i) c)) buf))
-               nl)
-             l))))))
-
 (defn del-dup
   "連続した空白や改行を一つにまとめる"
   [^String str]

@@ -16,7 +16,8 @@
            [java.util.concurrent TimeUnit]
            [org.xml.sax InputSource]
            [org.apache.commons.lang3.time FastDateFormat]
-           [org.htmlcleaner HtmlCleaner]))
+           [org.htmlcleaner HtmlCleaner]
+           [nico.rss XmlReader]))
 
 (let [cleaner (HtmlCleaner.)]
   (defn- remove-tag [^String s]
@@ -130,7 +131,7 @@
           (condp = status
             200 (try
                   (with-open [^InputStream is (:body response)
-                              ^InputStreamReader isr (s/clean-reader is)
+                              ^InputStreamReader isr (XmlReader. is)
                               ^BufferedReader br (BufferedReader. isr)]
                     (when-let [rss (xml/parse (InputSource. br))]
                       (extract-fn rss)))
