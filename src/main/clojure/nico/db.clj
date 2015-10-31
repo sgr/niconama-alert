@@ -226,7 +226,7 @@
   (letfn [(gen-pgm [r]
             (assoc r :thumbnail_image (img/image (:thumbnail r))))
           (search-pgms [db q]
-            (jdbc/query db [q] :row-fn gen-pgm))
+            (do (jdbc/query db [q] :row-fn gen-pgm)))
           (search-pgms-by-queries [db]
             (->> @(:qs db)
                  (reduce (fn [m [id q]] (assoc m id (search-pgms db q))) {})))
