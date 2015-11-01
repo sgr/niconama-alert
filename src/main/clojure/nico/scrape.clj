@@ -51,8 +51,15 @@
 
 (let [fmt (FastDateFormat/getInstance "yyyy-MM-dd'T'HH:mmZ")]
   (defn extract-pgm [xml]
-    (if-let [node (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts xml))]
-      (log/warnf "frequently access error: %s" (pr-str node))
+    (cond
+      ;; アクセス集中などのサービス側のエラー
+      (or (-> xml (html/select [:div.ttl_error]) first) (-> xml (html/select [:div.Error_Box]) first))
+      (log/warnf "service error %s" (-> xml (html/select [:div.error_type]) first :attrs :content s/nstr))
+      ;; 短時間での連続アクセス
+      (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts xml))
+      (log/warnf "frequently access error")
+      ;; 番組ページ
+      :else
       (let [link (-> xml (html/select [(html/attr= :property "og:url")]) first :attrs :content s/nstr)
             id (-> link last-path-uri-str s/nstr)
             title (-> xml (html/select [(html/attr= :property "og:title")]) first :attrs :content s/nstr)
@@ -107,7 +114,7 @@
         (if-let [pgm (fetch-pgm-aux pid cid)]
           pgm
           (do
-            (log/warnf "retrying fetching pgm indo: %s" pid)
+            (log/warnf "retrying fetching pgm info: %s" pid)
             (.sleep TimeUnit/SECONDS INTERVAL-RETRY)
             (recur (inc cnt))))
         (log/warnf "reached retry limit. aborted fetching pgm info: %s" pid)))))
