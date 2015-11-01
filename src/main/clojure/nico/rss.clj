@@ -116,7 +116,7 @@
          (map #(pgm-fn % now))
          (filter #(and % (and (:id %) (:title %) (:open_time %) (:start_time %)))))))
 
-(let [INTERVAL-MSEC 1000
+(let [INTERVAL-MSEC 500
       last-fetched (atom 0)
       o (Object.)]
   (defn- get-nico-rss [^String url extract-fn]
