@@ -54,7 +54,7 @@
     (cond
       ;; アクセス集中などのサービス側のエラー
       (or (-> xml (html/select [:div.ttl_error]) first) (-> xml (html/select [:div.Error_Box]) first))
-      (log/warnf "service error %s" (-> xml (html/select [:div.error_type]) first :attrs :content s/nstr))
+      (log/warnf "service error (%s)" (-> xml (html/select [:div.error_type html/text-node]) first))
       ;; 短時間での連続アクセス
       (some #(re-find #"\*短時間での連続アクセス\*" %) (html/texts xml))
       (log/warnf "frequently access error")
