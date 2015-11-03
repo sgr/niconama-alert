@@ -1,7 +1,7 @@
-(defproject nicoalert "1.7.5"
+(defproject nicoalert "1.7.6"
   :description "NiconamaAlert.clj"
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [org.clojure/core.async "0.1.346.0-17112a-alpha"]
+                 [org.clojure/core.async "0.2.371"]
                  [org.clojure/data.zip "0.1.1"]
                  [org.clojure/java.jdbc "0.4.2"]
                  [org.clojure/math.numeric-tower "0.0.4"]

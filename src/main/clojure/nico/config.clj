@@ -12,7 +12,7 @@
            [java.util UUID]))
 
 (def APP-TITLE "niconama-alert.clj")
-(def APP-VERSION [1 7 4])
+(def APP-VERSION [1 7 6])
 (def CONFIG-VERSION [1 7 0])
 
 (def ^{:private true} DEFAULT-FRAME-WIDTH 895)
